@@ -1,0 +1,64 @@
+{
+  "summary": "Executed backend pytest regression (9 tests) and end-to-end Playwright validation on public URL for login, mode toggle, settings persistence, uploads, autosuggest, calculations, UPI QR, save bill flow, and print/PDF actions.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/bills/save",
+        "issue": "Invoice total calculation adds only IGST to grand total while CGST is still returned/displayed, causing tax-display vs payable mismatch.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Invoice totals rendering",
+        "issue": "UI shows both CGST and IGST rows but payable total aligns with IGST-only backend math, which can confuse final payable amount understanding.",
+        "affected_selectors": [
+          "[data-testid='cgst-row']",
+          "[data-testid='igst-row']",
+          "[data-testid='grand-total-value']"
+        ]
+      }
+    ],
+    "design_issues": [
+      {
+        "screen": "Control panel customer section",
+        "issues": [
+          "Uses native browser date input picker instead of a consistent custom date component styling."
+        ]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_billing_api.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Align invoice tax model: either include CGST in total or remove CGST row if IGST-only billing is intended.",
+    "Update totals labels/rules so displayed tax components always match backend-computed grand total.",
+    "Optionally replace native date picker with consistent component styling for design parity."
+  ],
+  "critical_code_review_comments": [
+    "compute_totals() in backend/server.py calculates cgst and igst but uses only igst in base_total (gst_applied = igst), creating a logic inconsistency.",
+    "Frontend mirrors same logic in App.js and therefore propagates tax inconsistency to UI and saved bill perception."
+  ],
+  "updated_files": [
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/test_billing_api.py",
+    "/app/tests/fixtures/test_upload.svg",
+    "/app/test_reports/iteration_1.json"
+  ],
+  "success_rate": {
+    "backend": "100%",
+    "frontend": "95%"
+  },
+  "seed_data_creation": "Created TEST_ prefixed customers and bills via API during automated tests.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Public URL validated end-to-end. Core flows pass. Focus next on tax-rule correction and re-validate grand total against displayed tax rows.",
+  "rca of the issue": "RCA: Both backend and frontend compute CGST and IGST for invoice mode, but payable computation adds only IGST. Repro: create invoice with taxable 1000 and card payment -> UI/API show CGST 15, IGST 30, MDR 20.6, but grand total is 1051.00 (includes IGST only). Mitigation: decide intended tax schema and make display + computation consistent in both layers."
+}
