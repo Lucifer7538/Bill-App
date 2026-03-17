@@ -291,13 +291,26 @@ export default function App() {
     event.preventDefault();
     setLoggingIn(true);
     try {
-      const response = await axios.post(`${API}/auth/login`, { passcode });
+      const response = await axios.post(
+        `${API}/auth/login`,
+        { passcode },
+        { timeout: 15000 },
+      );
       localStorage.setItem("jj_auth_token", response.data.access_token);
       setToken(response.data.access_token);
       setPasscode("");
       toast.success("Logged in successfully");
-    } catch {
-      toast.error("Wrong passcode.");
+    } catch (error) {
+      const statusCode = error?.response?.status;
+      const isNetworkOrSleep = !error?.response || error?.code === "ECONNABORTED";
+
+      if (statusCode === 401) {
+        toast.error("Wrong passcode.");
+      } else if (isNetworkOrSleep) {
+        toast.error("Server is waking up. Please wait 15-20 seconds and try again.");
+      } else {
+        toast.error("Login failed. Please try again.");
+      }
     } finally {
       setLoggingIn(false);
     }
