@@ -570,7 +570,32 @@ async def recent_bills(limit: int = Query(default=8, ge=1, le=50), _: str = Depe
     docs = await bills_collection.find({}, {"_id": 0}).sort("created_at", -1).to_list(limit)
     return docs
 
+@api_router.get("/bills/{invoice_number}")
+async def get_single_bill(invoice_number: str, _: str = Depends(require_auth)):
+    # Find the specific bill by its document_number (ignores the Mongo _id)
+    bill = await bills_collection.find_one({"document_number": invoice_number}, {"_id": 0})
+    
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+        
+    return bill
 
+
+@api_router.put("/bills/{invoice_number}")
+async def update_bill(invoice_number: str, updated_data: dict, _: str = Depends(require_auth)):
+    # Prevent the _id from being overwritten if it somehow gets passed
+    if "_id" in updated_data:
+        del updated_data["_id"]
+        
+    result = await bills_collection.update_one(
+        {"document_number": invoice_number},
+        {"$set": updated_data}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Bill not found")
+        
+    return {"message": "Bill updated successfully", "document_number": invoice_number}
 app.include_router(api_router)
 
 app.add_middleware(
