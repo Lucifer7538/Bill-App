@@ -63,6 +63,7 @@ export default function App() {
 
   const [mode, setMode] = useState("invoice");
   const [documentNumber, setDocumentNumber] = useState("");
+  const [editingDocNumber, setEditingDocNumber] = useState(null); // Tracks if editing an existing bill
   const [isNumberLoading, setIsNumberLoading] = useState(false);
   const [billDate, setBillDate] = useState(today());
   const [settings, setSettings] = useState(defaultSettings);
@@ -79,6 +80,11 @@ export default function App() {
 
   const [showSettings, setShowSettings] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [showRecentBills, setShowRecentBills] = useState(false); // Controls Recent Bills drawer
+  
+  const [recentBillsList, setRecentBillsList] = useState([]);
+  const [loadingRecent, setLoadingRecent] = useState(false);
+  
   const [savingBill, setSavingBill] = useState(false);
   const [printScale, setPrintScale] = useState(getInitialPrintScale);
   const [logoUploadName, setLogoUploadName] = useState("");
@@ -97,11 +103,12 @@ export default function App() {
       if (event.key !== "Escape") return;
       if (showSettings) setShowSettings(false);
       if (showAbout) setShowAbout(false);
+      if (showRecentBills) setShowRecentBills(false);
     };
 
     window.addEventListener("keydown", handleEsc);
     return () => window.removeEventListener("keydown", handleEsc);
-  }, [showSettings, showAbout]);
+  }, [showSettings, showAbout, showRecentBills]);
 
   useEffect(() => {
     localStorage.setItem("jj_print_scale", String(clampPrintScale(printScale)));
@@ -126,6 +133,24 @@ export default function App() {
 
     verify();
   }, [token]);
+
+  // Fetch recent bills when the drawer opens
+  useEffect(() => {
+    if (showRecentBills && token) {
+      const fetchRecent = async () => {
+        setLoadingRecent(true);
+        try {
+          const response = await axios.get(`${API}/bills/recent?limit=15`, { headers: authHeaders });
+          setRecentBillsList(response.data);
+        } catch {
+          toast.error("Failed to load recent bills.");
+        } finally {
+          setLoadingRecent(false);
+        }
+      };
+      fetchRecent();
+    }
+  }, [showRecentBills, token, API, authHeaders]);
 
   const loadSettings = async () => {
     const response = await axios.get(`${API}/settings`, { headers: authHeaders });
@@ -270,6 +295,7 @@ export default function App() {
   };
 
   const clearBill = async (nextMode = mode) => {
+    setEditingDocNumber(null); // Clear editing state
     setItems([createItem()]);
     setCustomer({ name: "", phone: "", address: "", email: "" });
     setSuggestions([]);
@@ -280,6 +306,45 @@ export default function App() {
     setNotes("");
     setBillDate(today());
     await reserveNumber(nextMode);
+  };
+
+  const loadBillForEditing = (bill) => {
+    setEditingDocNumber(bill.document_number);
+    setMode(bill.mode);
+    setDocumentNumber(bill.document_number);
+    setBillDate(bill.date || today());
+
+    setCustomer({
+      name: bill.customer?.name || "",
+      phone: bill.customer?.phone || "",
+      address: bill.customer?.address || "",
+      email: bill.customer?.email || "",
+    });
+
+    setPaymentMethod(bill.payment_method || "Cash");
+    setNotes(bill.notes || "");
+    
+    // Load adjustments
+    setDiscount(bill.totals?.discount ? String(bill.totals.discount) : "0");
+    setExchange(bill.totals?.exchange ? String(bill.totals.exchange) : "0");
+    setManualRoundOff(bill.totals?.round_off !== null && bill.totals?.round_off !== undefined ? String(bill.totals.round_off) : "");
+
+    // Safely map loaded items to local state format
+    const loadedItems = (bill.items || []).map((item) => ({
+      id: `${Date.now()}-${Math.random()}`,
+      description: item.description || "",
+      hsn: item.hsn || "",
+      weight: item.weight ? String(item.weight) : "",
+      quantity: item.quantity ? String(item.quantity) : "1",
+      rate_override: item.rate_override !== null && item.rate_override !== undefined ? String(item.rate_override) : "",
+      amount_override: item.amount_override !== null && item.amount_override !== undefined ? String(item.amount_override) : "",
+    }));
+
+    setItems(loadedItems.length > 0 ? loadedItems : [createItem()]);
+
+    setShowRecentBills(false); // Close drawer
+    toast.success(`Loaded ${bill.document_number} for editing`);
+    goToBillTop(); // Scroll up
   };
 
   const handleModeChange = async (nextMode) => {
@@ -417,9 +482,17 @@ export default function App() {
         })),
       };
 
-      await axios.post(`${API}/bills/save`, payload, { headers: authHeaders });
-      toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} saved successfully.`);
-      await reserveNumber(mode);
+      if (editingDocNumber) {
+        // UPDATE Existing Bill
+        await axios.put(`${API}/bills/${editingDocNumber}`, payload, { headers: authHeaders });
+        toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} updated successfully.`);
+        await clearBill(mode);
+      } else {
+        // SAVE New Bill
+        await axios.post(`${API}/bills/save`, payload, { headers: authHeaders });
+        toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} saved successfully.`);
+        await reserveNumber(mode);
+      }
     } catch {
       toast.error("Could not save bill. Fill customer name and at least one item.");
     } finally {
@@ -910,7 +983,10 @@ export default function App() {
 
           <div className="control-card action-grid" data-testid="action-buttons-section">
             <Button onClick={saveBill} disabled={savingBill} data-testid="save-bill-button">
-              {savingBill ? "Saving..." : "Save Bill"}
+              {savingBill ? "Saving..." : editingDocNumber ? `Update (${editingDocNumber})` : "Save Bill"}
+            </Button>
+            <Button onClick={() => setShowRecentBills(true)} variant="outline" data-testid="toggle-recent-bills-button">
+              Recent Bills
             </Button>
             <Button onClick={downloadPdf} data-testid="download-pdf-button">Download PDF</Button>
             <Button onClick={printBill} data-testid="print-bill-button">Print</Button>
@@ -927,6 +1003,49 @@ export default function App() {
         </aside>
       </main>
 
+      {/* RECENT BILLS DRAWER */}
+      {showRecentBills ? (
+        <section className="side-drawer no-print" data-testid="recent-bills-drawer">
+          <div className="drawer-header" data-testid="recent-bills-drawer-header">
+            <h3>Recent Bills</h3>
+            <Button
+              type="button"
+              variant="outline"
+              className="drawer-back-btn"
+              onClick={() => setShowRecentBills(false)}
+            >
+              <ArrowLeft className="drawer-back-icon" />
+              <span>Back</span>
+            </Button>
+          </div>
+          
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "15px" }}>
+            {loadingRecent ? (
+              <p>Loading recent bills...</p>
+            ) : recentBillsList.length === 0 ? (
+              <p>No recent bills found.</p>
+            ) : (
+              recentBillsList.map((b) => (
+                <div key={b.id} style={{ border: "1px solid var(--border)", padding: "12px", borderRadius: "8px", backgroundColor: "white" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                    <strong style={{ color: "var(--brand)" }}>{b.document_number}</strong>
+                    <span style={{ fontSize: "0.85rem", color: "#666" }}>{b.date}</span>
+                  </div>
+                  <div style={{ marginBottom: "8px", fontWeight: "500" }}>
+                    {b.customer?.name || "Unknown Customer"}
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <strong>₹{b.totals?.grand_total}</strong>
+                    <Button size="sm" onClick={() => loadBillForEditing(b)}>Edit</Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+      ) : null}
+
+      {/* SETTINGS DRAWER */}
       {showSettings ? (
         <section className="side-drawer no-print" data-testid="settings-drawer">
           <div className="drawer-header" data-testid="settings-drawer-header">
@@ -1066,6 +1185,7 @@ export default function App() {
         </section>
       ) : null}
 
+      {/* ABOUT DRAWER */}
       {showAbout ? (
         <section className="side-drawer no-print" data-testid="about-drawer">
           <div className="drawer-header" data-testid="about-drawer-header">
