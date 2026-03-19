@@ -422,12 +422,10 @@ async def save_bill(payload: BillDraftPayload, _: str = Depends(require_auth)):
 
 @api_router.put("/bills/{document_number}", response_model=BillSaveResponse)
 async def update_bill(document_number: str, payload: BillDraftPayload, _: str = Depends(require_auth)):
-    # 1. Check if the bill exists
     existing_bill = await bills_collection.find_one({"document_number": document_number})
     if not existing_bill:
         raise HTTPException(status_code=404, detail="Bill not found")
 
-    # 2. Recalculate totals and line items (identical to save logic)
     settings = await get_or_create_settings()
     line_entries, line_amounts = [], []
     for idx, item in enumerate(payload.items, start=1):
@@ -437,7 +435,6 @@ async def update_bill(document_number: str, payload: BillDraftPayload, _: str = 
     
     totals = compute_totals(payload, settings, line_amounts)
     
-    # 3. Update the document in MongoDB
     update_data = {
         "mode": payload.mode,
         "date": payload.date,
@@ -454,7 +451,6 @@ async def update_bill(document_number: str, payload: BillDraftPayload, _: str = 
         {"$set": update_data}
     )
     
-    # 4. Sync customer details just like we do in save_bill
     cust_doc = CustomerRecord(name=payload.customer_name, phone=payload.customer_phone, address=payload.customer_address, email=payload.customer_email).model_dump()
     await customers_collection.update_one({"phone": payload.customer_phone} if payload.customer_phone else {"name": payload.customer_name}, {"$set": cust_doc}, upsert=True)
     await sync_customer_supabase(cust_doc)
@@ -467,6 +463,15 @@ async def update_bill(document_number: str, payload: BillDraftPayload, _: str = 
         totals=totals, 
         message="Bill updated successfully"
     )
+
+@api_router.delete("/bills/{document_number}")
+async def delete_bill(document_number: str, _: str = Depends(require_auth)):
+    result = await bills_collection.delete_one({"document_number": document_number})
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Bill not found")
+        
+    return {"message": f"Bill {document_number} deleted successfully"}
 
 @api_router.get("/bills/recent")
 async def recent_bills(limit: int = Query(default=8, ge=1, le=50), _: str = Depends(require_auth)):
