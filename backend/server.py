@@ -470,13 +470,10 @@ async def update_bill(document_number: str, payload: BillDraftPayload, _: str = 
 @api_router.delete("/bills/{document_number}")
 async def delete_bill(document_number: str, _: str = Depends(require_auth)):
     result = await bills_collection.delete_one({"document_number": document_number})
-    
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Bill not found")
-        
     return {"message": f"Bill {document_number} deleted successfully"}
 
-# --- UPDATED GET RECENT BILLS WITH SEARCH ---
 @api_router.get("/bills/recent")
 async def recent_bills(
     limit: int = Query(default=15, ge=1, le=50), 
@@ -485,7 +482,6 @@ async def recent_bills(
 ):
     query = {}
     if search and search.strip():
-        # Do a case-insensitive search across document number, name, and phone
         regex = {"$regex": re.escape(search.strip()), "$options": "i"}
         query = {
             "$or": [
@@ -496,17 +492,13 @@ async def recent_bills(
         }
     return await bills_collection.find(query, {"_id": 0}).sort("created_at", -1).to_list(limit)
 
-# --- NEW RESET COUNTER ENDPOINT ---
 @api_router.post("/bills/reset-counter")
 async def reset_counter(payload: ResetCounterRequest, _: str = Depends(require_auth)):
-    # Reset local MongoDB Counter
     await counters_collection.update_one(
         {"mode": payload.mode},
         {"$set": {"value": 0}},
         upsert=True
     )
-    
-    # Reset Supabase Counter if enabled
     if SUPABASE_ENABLED:
         existing = await call_supabase_rest(
             "GET",
@@ -527,7 +519,6 @@ async def reset_counter(payload: ResetCounterRequest, _: str = Depends(require_a
                 supabase_counters_table,
                 payload={"mode": payload.mode, "value": 0, "updated_at": now_iso()}
             )
-            
     return {"message": f"{payload.mode.capitalize()} counter reset successfully"}
 
 @api_router.get("/bills/public/{document_number}")
@@ -546,6 +537,40 @@ async def get_public_bill(document_number: str):
         "bill": bill,
         "settings": settings_data
     }
+
+# --- NEW DATA MANAGEMENT ENDPOINTS ---
+
+@api_router.get("/system/storage")
+async def get_storage_stats(_: str = Depends(require_auth)):
+    """Check how much database storage is being used."""
+    try:
+        # Ask MongoDB for database stats
+        stats = await db.command("dbstats")
+        used_bytes = stats.get("dataSize", 0) 
+        # Assume standard 512 MB free tier limit for MongoDB Atlas
+        quota_bytes = 512 * 1024 * 1024 
+        percentage = min(100.0, (used_bytes / quota_bytes) * 100) if quota_bytes > 0 else 0
+        
+        return {
+            "used_bytes": used_bytes,
+            "quota_bytes": quota_bytes,
+            "percentage": round(percentage, 2)
+        }
+    except Exception as e:
+        logging.error(f"Error fetching db stats: {e}")
+        return {"used_bytes": 0, "quota_bytes": 512 * 1024 * 1024, "percentage": 0}
+
+@api_router.get("/bills/export")
+async def export_bills(_: str = Depends(require_auth)):
+    """Fetch every single bill in the database for local backup."""
+    bills = await bills_collection.find({}, {"_id": 0}).sort("created_at", -1).to_list(None)
+    return bills
+
+@api_router.delete("/bills/all")
+async def delete_all_bills(_: str = Depends(require_auth)):
+    """WARNING: Wipes all bills from the database to clear storage."""
+    result = await bills_collection.delete_many({})
+    return {"message": f"Successfully deleted {result.deleted_count} bills.", "deleted_count": result.deleted_count}
 
 app.include_router(api_router)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
