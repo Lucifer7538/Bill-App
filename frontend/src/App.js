@@ -134,13 +134,16 @@ export default function App() {
     verify();
   }, [token]);
 
-  // Fetch recent bills when the drawer opens
+  // Fetch recent bills when the drawer opens (BUG FIXED HERE - removed API and authHeaders from dependency array)
   useEffect(() => {
     if (showRecentBills && token) {
       const fetchRecent = async () => {
         setLoadingRecent(true);
         try {
-          const response = await axios.get(`${API}/bills/recent?limit=15`, { headers: authHeaders });
+          // Using axios.get directly with the token to avoid dependency loop issues
+          const response = await axios.get(`${API}/bills/recent?limit=15`, { 
+            headers: { Authorization: `Bearer ${token}` } 
+          });
           setRecentBillsList(response.data);
         } catch {
           toast.error("Failed to load recent bills.");
@@ -150,7 +153,7 @@ export default function App() {
       };
       fetchRecent();
     }
-  }, [showRecentBills, token, API, authHeaders]);
+  }, [showRecentBills, token]); 
 
   const loadSettings = async () => {
     const response = await axios.get(`${API}/settings`, { headers: authHeaders });
