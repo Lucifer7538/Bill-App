@@ -57,6 +57,10 @@ const getInitialPrintScale = () => {
 export default function App() {
   const [isCompactView, setIsCompactView] = useState(window.innerWidth <= 520);
   
+  // ✅ NEW: Tracker to see if the user has unsaved changes
+  const [isDirty, setIsDirty] = useState(false);
+  const markDirty = () => setIsDirty(true);
+  
   // --- PUBLIC VIEW STATE ---
   const [isPublicView, setIsPublicView] = useState(false);
   const [publicBill, setPublicBill] = useState(null);
@@ -84,7 +88,7 @@ export default function App() {
   const [exchange, setExchange] = useState("0");
   const [manualRoundOff, setManualRoundOff] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("Cash");
-  const [isPaymentDone, setIsPaymentDone] = useState(false); // ✅ NEW STATE FOR PAYMENT TOGGLE
+  const [isPaymentDone, setIsPaymentDone] = useState(false); 
   const [notes, setNotes] = useState("");
 
   const [showSettings, setShowSettings] = useState(false);
@@ -171,7 +175,6 @@ export default function App() {
     verify();
   }, [token, isPublicView]);
 
-  // LIVE SEARCH & FETCH RECENT BILLS
   useEffect(() => {
     if (showRecentBills && token && !isPublicView) {
       const fetchRecent = async () => {
@@ -192,7 +195,6 @@ export default function App() {
     }
   }, [showRecentBills, token, isPublicView, billSearchQuery]); 
 
-  // FETCH STORAGE STATS WHEN SETTINGS OPENS
   useEffect(() => {
     if (showSettings && token && !isPublicView) {
       const fetchStorageStats = async () => {
@@ -340,6 +342,7 @@ export default function App() {
   const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
 
   const updateItem = (id, key, value) => {
+    markDirty(); // ✅ Flags the form as dirty
     setItems((prev) => prev.map((item) => (item.id === id ? { ...item, [key]: value } : item)));
   };
 
@@ -352,9 +355,10 @@ export default function App() {
     setExchange("0");
     setManualRoundOff("");
     setPaymentMethod("Cash");
-    setIsPaymentDone(false); // ✅ Reset payment toggle
+    setIsPaymentDone(false); 
     setNotes("");
     setBillDate(today());
+    setIsDirty(false); // ✅ Resets dirty flag
     await reserveNumber(nextMode);
   };
 
@@ -372,7 +376,7 @@ export default function App() {
     });
 
     setPaymentMethod(bill.payment_method || "Cash");
-    setIsPaymentDone(bill.is_payment_done || false); // ✅ Load payment toggle state
+    setIsPaymentDone(bill.is_payment_done || false); 
     setNotes(bill.notes || "");
     
     setDiscount(bill.totals?.discount ? String(bill.totals.discount) : "0");
@@ -391,6 +395,7 @@ export default function App() {
 
     setItems(loadedItems.length > 0 ? loadedItems : [createItem()]);
 
+    setIsDirty(false); // ✅ Loaded bills aren't dirty until edited
     setShowRecentBills(false);
     toast.success(`Loaded ${bill.document_number} for editing`);
     goToBillTop();
@@ -409,7 +414,6 @@ export default function App() {
     }
   };
 
-  // ✅ NEW: Instant Payment Toggle directly from the Recent Bills Drawer
   const handleQuickPaymentToggle = async (bill) => {
     const newStatus = !bill.is_payment_done;
     try {
@@ -421,11 +425,9 @@ export default function App() {
       
       toast.success(`Payment marked as ${newStatus ? 'DONE ✅' : 'PENDING ⏳'}`);
       
-      // Update local state if it's the currently editing bill
       if (editingDocNumber === bill.document_number) {
         setIsPaymentDone(newStatus);
       }
-      // Update recent bills list locally
       setRecentBillsList(prev => 
         prev.map(b => b.document_number === bill.document_number ? { ...b, is_payment_done: newStatus } : b)
       );
@@ -450,18 +452,15 @@ export default function App() {
     }
   };
 
-  // --- BACKUP & DELETE ALL DATA LOGIC ---
   const handleBackupBills = async () => {
     try {
       toast.info("Preparing backup file...");
       const res = await axios.get(`${API}/bills/export`, { headers: { Authorization: `Bearer ${token}` } });
       
-      // Convert JSON data to a Blob file
       const dataStr = JSON.stringify(res.data, null, 2);
       const blob = new Blob([dataStr], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       
-      // Create an invisible link and click it to download
       const link = document.createElement("a");
       link.href = url;
       link.download = `Jalaram_Bills_Backup_${today()}.json`;
@@ -491,7 +490,6 @@ export default function App() {
       toast.success("All bills have been successfully wiped from the server.");
       setRecentBillsList([]);
       
-      // Refresh the storage progress bar
       const res = await axios.get(`${API}/system/storage`, { headers: { Authorization: `Bearer ${token}` } });
       setStorageStats(res.data);
     } catch (error) {
@@ -500,7 +498,16 @@ export default function App() {
     }
   };
 
+  // ✅ EDITED: Protect toggle with dirty state warning
   const handleModeChange = async (nextMode) => {
+    if (mode === nextMode) return;
+    
+    if (isDirty) {
+      if (!window.confirm("⚠️ You have unsaved changes!\n\nIf you switch modes now, your current data will be lost. Do you want to continue?")) {
+        return; 
+      }
+    }
+    
     setMode(nextMode);
     await clearBill(nextMode);
   };
@@ -602,6 +609,7 @@ export default function App() {
     }
   };
 
+  // ✅ EDITED: Save no longer clears the page, it swaps into "Edit" mode instantly
   const saveBill = async () => {
     setSavingBill(true);
     try {
@@ -614,7 +622,7 @@ export default function App() {
         customer_address: customer.address,
         customer_email: customer.email,
         payment_method: paymentMethod,
-        is_payment_done: isPaymentDone, // ✅ Included payment status in Save Payload
+        is_payment_done: isPaymentDone,
         discount: num(discount),
         exchange: num(exchange),
         round_off: manualRoundOff === "" ? null : num(manualRoundOff),
@@ -632,11 +640,15 @@ export default function App() {
       if (editingDocNumber) {
         await axios.put(`${API}/bills/${editingDocNumber}`, payload, { headers: authHeaders });
         toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} updated successfully.`);
-        await clearBill(mode);
+        setIsDirty(false); // ✅ Form is clean again
       } else {
-        await axios.post(`${API}/bills/save`, payload, { headers: authHeaders });
+        const res = await axios.post(`${API}/bills/save`, payload, { headers: authHeaders });
         toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} saved successfully.`);
-        await reserveNumber(mode);
+        setIsDirty(false); // ✅ Form is clean again
+        
+        // Lock the generated number onto the screen so it stays for printing!
+        setEditingDocNumber(res.data.document_number);
+        setDocumentNumber(res.data.document_number);
       }
     } catch {
       toast.error("Could not save bill. Fill customer name and at least one item.");
@@ -684,9 +696,6 @@ export default function App() {
   };
 
 
-  // ==========================================
-  // RENDER: PUBLIC VIEW (CUSTOMER FACING)
-  // ==========================================
   if (isPublicView) {
     if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
     if (publicBill === "NOT_FOUND" || !publicBill) return <div className="loading-screen">Bill not found or has been deleted.</div>;
@@ -712,10 +721,7 @@ export default function App() {
           </Button>
         </div>
 
-        {/* ✅ ADDED position relative and zIndex for the Watermark */}
         <section id="public-bill-root" className="bill-sheet" style={{ "--print-scale-factor": 1, position: 'relative', zIndex: 1 }}>
-          
-          {/* ✅ RENDER PUBLIC WATERMARK HERE */}
           {publicBill.is_payment_done && (
             <div className="watermark-done">
               PAYMENT DONE
@@ -869,9 +875,6 @@ export default function App() {
     );
   }
 
-  // ==========================================
-  // RENDER: DASHBOARD (ADMIN FACING)
-  // ==========================================
   if (checkingSession) {
     return <div className="loading-screen">Loading billing dashboard...</div>;
   }
@@ -920,10 +923,8 @@ export default function App() {
 
       <main className="main-layout">
         
-        {/* ✅ ADDED position relative and zIndex for the Watermark preview */}
         <section id="bill-print-root" className="bill-sheet" style={{ "--print-scale-factor": (printScale / 100).toFixed(3), position: 'relative', zIndex: 1 }}>
           
-          {/* ✅ RENDER DASHBOARD WATERMARK HERE */}
           {isPaymentDone && (
             <div className="watermark-done">
               PAYMENT DONE
@@ -1074,11 +1075,12 @@ export default function App() {
         <aside className="controls no-print">
           <div className="control-card">
             <h3>Customer Details</h3>
-            <Input value={customer.name} onChange={(e) => setCustomer((prev) => ({ ...prev, name: e.target.value }))} placeholder="Customer name" />
-            <Input value={customer.phone} onChange={(e) => setCustomer((prev) => ({ ...prev, phone: e.target.value }))} placeholder="Phone" />
-            <Input value={customer.address} onChange={(e) => setCustomer((prev) => ({ ...prev, address: e.target.value }))} placeholder="Address" />
-            <Input value={customer.email} onChange={(e) => setCustomer((prev) => ({ ...prev, email: e.target.value }))} placeholder="Email" />
-            <Input type="text" value={billDate} onChange={(e) => setBillDate(e.target.value)} placeholder="YYYY-MM-DD" />
+            {/* ✅ EDITED: Added markDirty() to all these inputs */}
+            <Input value={customer.name} onChange={(e) => { setCustomer((prev) => ({ ...prev, name: e.target.value })); markDirty(); }} placeholder="Customer name" />
+            <Input value={customer.phone} onChange={(e) => { setCustomer((prev) => ({ ...prev, phone: e.target.value })); markDirty(); }} placeholder="Phone" />
+            <Input value={customer.address} onChange={(e) => { setCustomer((prev) => ({ ...prev, address: e.target.value })); markDirty(); }} placeholder="Address" />
+            <Input value={customer.email} onChange={(e) => { setCustomer((prev) => ({ ...prev, email: e.target.value })); markDirty(); }} placeholder="Email" />
+            <Input type="text" value={billDate} onChange={(e) => { setBillDate(e.target.value); markDirty(); }} placeholder="YYYY-MM-DD" />
 
             {suggestions.length > 0 && (
               <div className="suggestions">
@@ -1090,6 +1092,7 @@ export default function App() {
                     onClick={() => {
                       setCustomer({ name: entry.name, phone: entry.phone, address: entry.address, email: entry.email });
                       setSuggestions([]);
+                      markDirty();
                     }}
                   >
                     {entry.name} · {entry.phone}
@@ -1109,34 +1112,33 @@ export default function App() {
                 <Input value={item.quantity} onChange={(e) => updateItem(item.id, "quantity", e.target.value)} placeholder="Qty" />
                 <Input value={item.rate_override} onChange={(e) => updateItem(item.id, "rate_override", e.target.value)} placeholder="Rate override" />
                 <Input value={item.amount_override} onChange={(e) => updateItem(item.id, "amount_override", e.target.value)} placeholder="Amount override" />
-                <Button type="button" variant="outline" onClick={() => setItems((prev) => prev.filter((row) => row.id !== item.id))} disabled={items.length === 1}>Remove</Button>
+                <Button type="button" variant="outline" onClick={() => { setItems((prev) => prev.filter((row) => row.id !== item.id)); markDirty(); }} disabled={items.length === 1}>Remove</Button>
               </div>
             ))}
-            <Button type="button" onClick={() => setItems((prev) => [...prev, createItem()])}>Add Item</Button>
+            <Button type="button" onClick={() => { setItems((prev) => [...prev, createItem()]); markDirty(); }}>Add Item</Button>
           </div>
 
           <div className="control-card">
             <h3>Adjustments</h3>
-            <Input value={discount} onChange={(e) => setDiscount(e.target.value)} placeholder="Discount" />
-            <Input value={exchange} onChange={(e) => setExchange(e.target.value)} placeholder="Exchange" />
-            <Input value={manualRoundOff} onChange={(e) => setManualRoundOff(e.target.value)} placeholder="Manual round off (optional)" />
+            <Input value={discount} onChange={(e) => { setDiscount(e.target.value); markDirty(); }} placeholder="Discount" />
+            <Input value={exchange} onChange={(e) => { setExchange(e.target.value); markDirty(); }} placeholder="Exchange" />
+            <Input value={manualRoundOff} onChange={(e) => { setManualRoundOff(e.target.value); markDirty(); }} placeholder="Manual round off (optional)" />
 
             <label htmlFor="payment-method-select" className="select-label">Payment Method</label>
-            <select id="payment-method-select" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className="native-select">
+            <select id="payment-method-select" value={paymentMethod} onChange={(e) => { setPaymentMethod(e.target.value); markDirty(); }} className="native-select">
               <option value="Cash">Cash</option>
               <option value="UPI">UPI</option>
               <option value="Card">Card</option>
             </select>
 
-            {/* ✅ NEW: Main Form Payment Toggle */}
             <div 
               style={{ marginTop: "15px", padding: "12px", backgroundColor: isPaymentDone ? "#dcfce7" : "#fef3c7", border: `1.5px solid ${isPaymentDone ? "#22c55e" : "#f59e0b"}`, borderRadius: "8px", display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", transition: "all 0.2s" }} 
-              onClick={() => setIsPaymentDone(!isPaymentDone)}
+              onClick={() => { setIsPaymentDone(!isPaymentDone); markDirty(); }}
             >
               <input 
                 type="checkbox" 
                 checked={isPaymentDone} 
-                onChange={(e) => setIsPaymentDone(e.target.checked)} 
+                onChange={(e) => { setIsPaymentDone(e.target.checked); markDirty(); }} 
                 onClick={(e) => e.stopPropagation()} 
                 style={{ width: "20px", height: "20px", cursor: "pointer" }} 
               />
@@ -1145,7 +1147,7 @@ export default function App() {
               </strong>
             </div>
 
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes" className="notes-box" style={{ marginTop: "15px" }} />
+            <textarea value={notes} onChange={(e) => { setNotes(e.target.value); markDirty(); }} placeholder="Notes" className="notes-box" style={{ marginTop: "15px" }} />
           </div>
 
           <div className="control-card action-grid">
@@ -1157,7 +1159,13 @@ export default function App() {
             <Button onClick={() => window.print()}>Print</Button>
             <Button onClick={shareWhatsApp}>WhatsApp Link</Button>
             <Button onClick={shareEmail}>Email Link</Button>
-            <Button onClick={() => clearBill()} variant="outline">New Bill</Button>
+            
+            {/* ✅ EDITED: Protected New Bill Button */}
+            <Button onClick={() => {
+              if (isDirty && !window.confirm("⚠️ You have unsaved changes. Clear screen and start a new bill anyway?")) return;
+              clearBill();
+            }} variant="outline">New Bill</Button>
+            
             <Button onClick={() => setShowSettings((prev) => !prev)} variant="outline">Settings</Button>
             <Button onClick={() => setShowAbout((prev) => !prev)} variant="outline">About</Button>
           </div>
@@ -1204,7 +1212,6 @@ export default function App() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <strong>₹{b.totals?.grand_total}</strong>
                     
-                    {/* ✅ ADDED: Quick Payment Toggle inside Recent Bills */}
                     <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                       
                       <label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85rem", cursor: "pointer", marginRight: "5px", padding: "4px 8px", backgroundColor: b.is_payment_done ? "#dcfce7" : "#fef3c7", color: b.is_payment_done ? "#166534" : "#b45309", borderRadius: "5px", fontWeight: "bold" }}>
@@ -1218,7 +1225,10 @@ export default function App() {
                       </label>
 
                       <Button size="sm" variant="destructive" style={{ backgroundColor: "#ef4444", color: "white" }} onClick={() => handleDeleteBill(b)}>Delete</Button>
-                      <Button size="sm" onClick={() => loadBillForEditing(b)}>Edit</Button>
+                      <Button size="sm" onClick={() => {
+                        if (isDirty && !window.confirm("⚠️ You have unsaved changes. Discard them and load this old bill?")) return;
+                        loadBillForEditing(b);
+                      }}>Edit</Button>
                     </div>
                   </div>
                 </div>
@@ -1269,11 +1279,9 @@ export default function App() {
 
           <Button onClick={saveSettings}>Save Settings</Button>
 
-          {/* NEW: DATABASE STORAGE AND BACKUP SECTION */}
           <div style={{ marginTop: "30px", padding: "15px", border: "1px solid #e2e8f0", borderRadius: "8px", backgroundColor: "#f8fafc" }}>
             <h4 style={{ margin: "0 0 10px 0", color: "#1e293b" }}>Database Storage & Backup</h4>
             
-            {/* Storage Progress Bar */}
             <div style={{ marginBottom: "15px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginBottom: "5px", color: "#475569" }}>
                 <span>Storage Used: {(storageStats.used_bytes / 1024).toFixed(2)} KB</span>
@@ -1289,7 +1297,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Backup and Delete Buttons */}
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
               <Button type="button" variant="outline" onClick={handleBackupBills}>
                 ⬇️ Download Backup (JSON)
@@ -1302,7 +1309,6 @@ export default function App() {
         </section>
       )}
 
-      {/* ABOUT DRAWER */}
       {showAbout && (
         <section className="side-drawer no-print">
           <div className="drawer-header">
