@@ -420,6 +420,54 @@ async def save_bill(payload: BillDraftPayload, _: str = Depends(require_auth)):
     
     return BillSaveResponse(bill_id=bill_id, mode=payload.mode, document_number=doc_num, date=payload.date, totals=totals, message="Bill saved successfully")
 
+@api_router.put("/bills/{document_number}", response_model=BillSaveResponse)
+async def update_bill(document_number: str, payload: BillDraftPayload, _: str = Depends(require_auth)):
+    # 1. Check if the bill exists
+    existing_bill = await bills_collection.find_one({"document_number": document_number})
+    if not existing_bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+
+    # 2. Recalculate totals and line items (identical to save logic)
+    settings = await get_or_create_settings()
+    line_entries, line_amounts = [], []
+    for idx, item in enumerate(payload.items, start=1):
+        computed = compute_item_amount(item, payload.mode, settings)
+        line_amounts.append(computed["amount"])
+        line_entries.append({**item.model_dump(), "sl_no": idx, "rate": computed["effective_rate"], "amount": computed["amount"]})
+    
+    totals = compute_totals(payload, settings, line_amounts)
+    
+    # 3. Update the document in MongoDB
+    update_data = {
+        "mode": payload.mode,
+        "date": payload.date,
+        "customer": {"name": payload.customer_name, "phone": payload.customer_phone, "address": payload.customer_address, "email": payload.customer_email},
+        "payment_method": payload.payment_method,
+        "notes": payload.notes,
+        "items": line_entries,
+        "totals": totals.model_dump(),
+        "updated_at": now_iso()
+    }
+    
+    await bills_collection.update_one(
+        {"document_number": document_number},
+        {"$set": update_data}
+    )
+    
+    # 4. Sync customer details just like we do in save_bill
+    cust_doc = CustomerRecord(name=payload.customer_name, phone=payload.customer_phone, address=payload.customer_address, email=payload.customer_email).model_dump()
+    await customers_collection.update_one({"phone": payload.customer_phone} if payload.customer_phone else {"name": payload.customer_name}, {"$set": cust_doc}, upsert=True)
+    await sync_customer_supabase(cust_doc)
+    
+    return BillSaveResponse(
+        bill_id=existing_bill["id"], 
+        mode=payload.mode, 
+        document_number=document_number, 
+        date=payload.date, 
+        totals=totals, 
+        message="Bill updated successfully"
+    )
+
 @api_router.get("/bills/recent")
 async def recent_bills(limit: int = Query(default=8, ge=1, le=50), _: str = Depends(require_auth)):
     return await bills_collection.find({}, {"_id": 0}).sort("created_at", -1).to_list(limit)
