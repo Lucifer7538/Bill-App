@@ -106,11 +106,15 @@ class BillDraftPayload(BaseModel):
     customer_address: str = ""
     customer_email: str = ""
     payment_method: Literal["Cash", "UPI", "Card"] = "Cash"
+    is_payment_done: bool = False  # ✅ Added Payment Status Flag
     discount: float = 0
     exchange: float = 0
     round_off: Optional[float] = None
     notes: str = ""
     items: List[LineItemPayload] = Field(default_factory=list)
+
+class PaymentToggle(BaseModel):  # ✅ Added model for toggling payment
+    is_payment_done: bool
 
 class NumberResponse(BaseModel):
     document_number: str
@@ -410,10 +414,12 @@ async def save_bill(payload: BillDraftPayload, _: str = Depends(require_auth)):
     doc_num = payload.document_number or await reserve_document_number(payload.mode)
     bill_id = str(uuid.uuid4())
     
+    # ✅ Included is_payment_done when saving
     bill_doc = {
         "id": bill_id, "mode": payload.mode, "document_number": doc_num, "date": payload.date,
         "customer": {"name": payload.customer_name, "phone": payload.customer_phone, "address": payload.customer_address, "email": payload.customer_email},
-        "payment_method": payload.payment_method, "notes": payload.notes, "items": line_entries, "totals": totals.model_dump(), "created_at": now_iso()
+        "payment_method": payload.payment_method, "is_payment_done": payload.is_payment_done, 
+        "notes": payload.notes, "items": line_entries, "totals": totals.model_dump(), "created_at": now_iso()
     }
     await bills_collection.insert_one(bill_doc)
     
@@ -438,11 +444,13 @@ async def update_bill(document_number: str, payload: BillDraftPayload, _: str = 
     
     totals = compute_totals(payload, settings, line_amounts)
     
+    # ✅ Included is_payment_done when updating
     update_data = {
         "mode": payload.mode,
         "date": payload.date,
         "customer": {"name": payload.customer_name, "phone": payload.customer_phone, "address": payload.customer_address, "email": payload.customer_email},
         "payment_method": payload.payment_method,
+        "is_payment_done": payload.is_payment_done,
         "notes": payload.notes,
         "items": line_entries,
         "totals": totals.model_dump(),
@@ -466,6 +474,17 @@ async def update_bill(document_number: str, payload: BillDraftPayload, _: str = 
         totals=totals, 
         message="Bill updated successfully"
     )
+
+# --- ✅ NEW: ENDPOINT TO TOGGLE PAYMENT STATUS ---
+@api_router.put("/bills/{document_number}/toggle-payment")
+async def toggle_payment_status(document_number: str, payload: PaymentToggle, _: str = Depends(require_auth)):
+    result = await bills_collection.update_one(
+        {"document_number": document_number},
+        {"$set": {"is_payment_done": payload.is_payment_done, "updated_at": now_iso()}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Bill not found")
+    return {"message": f"Payment status updated to {payload.is_payment_done}"}
 
 @api_router.delete("/bills/{document_number}")
 async def delete_bill(document_number: str, _: str = Depends(require_auth)):
