@@ -105,8 +105,10 @@ class BillDraftPayload(BaseModel):
     customer_phone: str = ""
     customer_address: str = ""
     customer_email: str = ""
-    payment_method: Literal["Cash", "UPI", "Card"] = "Cash"
+    payment_method: Literal["Cash", "UPI", "Card", "Split"] = "Cash"
     is_payment_done: bool = False
+    split_cash: float = 0
+    split_upi: float = 0
     discount: float = 0
     exchange: float = 0
     round_off: Optional[float] = None
@@ -387,7 +389,6 @@ async def update_settings(payload: SettingsPayload, _: str = Depends(require_aut
     await settings_collection.update_one({"key": "app_settings"}, {"$set": {**payload.model_dump(), "updated_at": now_iso()}}, upsert=True)
     return payload
 
-# ✅ EDITED: Now it only PEEKS at the next number, it does not reserve it!
 @api_router.get("/bills/next-number", response_model=NumberResponse)
 async def get_next_number(mode: Literal["invoice", "estimate"] = Query(...), _: str = Depends(require_auth)):
     prefix = "INV" if mode == "invoice" else "EST"
@@ -422,7 +423,6 @@ async def suggest_customers(query: str = Query(..., min_length=2), _: str = Depe
     docs = await customers_collection.find({"$or": [{"name": regex}, {"phone": regex}]}, {"_id": 0}).sort("updated_at", -1).to_list(8)
     return [CustomerRecord(**doc) for doc in docs]
 
-# ✅ EDITED: Saving a NEW bill officially reserves the number here
 @api_router.post("/bills/save", response_model=BillSaveResponse)
 async def save_bill(payload: BillDraftPayload, _: str = Depends(require_auth)):
     settings = await get_or_create_settings()
@@ -434,7 +434,7 @@ async def save_bill(payload: BillDraftPayload, _: str = Depends(require_auth)):
     
     totals = compute_totals(payload, settings, line_amounts)
     
-    # 🚨 Always reserve a fresh number for new bills
+    # Always reserve a fresh number for new bills
     doc_num = await reserve_document_number(payload.mode) 
     bill_id = str(uuid.uuid4())
     
@@ -442,6 +442,7 @@ async def save_bill(payload: BillDraftPayload, _: str = Depends(require_auth)):
         "id": bill_id, "mode": payload.mode, "document_number": doc_num, "date": payload.date,
         "customer": {"name": payload.customer_name, "phone": payload.customer_phone, "address": payload.customer_address, "email": payload.customer_email},
         "payment_method": payload.payment_method, "is_payment_done": payload.is_payment_done, 
+        "split_cash": payload.split_cash, "split_upi": payload.split_upi,
         "notes": payload.notes, "items": line_entries, "totals": totals.model_dump(), "created_at": now_iso()
     }
     await bills_collection.insert_one(bill_doc)
@@ -473,6 +474,8 @@ async def update_bill(document_number: str, payload: BillDraftPayload, _: str = 
         "customer": {"name": payload.customer_name, "phone": payload.customer_phone, "address": payload.customer_address, "email": payload.customer_email},
         "payment_method": payload.payment_method,
         "is_payment_done": payload.is_payment_done,
+        "split_cash": payload.split_cash,
+        "split_upi": payload.split_upi,
         "notes": payload.notes,
         "items": line_entries,
         "totals": totals.model_dump(),
