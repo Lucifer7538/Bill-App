@@ -106,14 +106,14 @@ class BillDraftPayload(BaseModel):
     customer_address: str = ""
     customer_email: str = ""
     payment_method: Literal["Cash", "UPI", "Card"] = "Cash"
-    is_payment_done: bool = False  # ✅ Added Payment Status Flag
+    is_payment_done: bool = False
     discount: float = 0
     exchange: float = 0
     round_off: Optional[float] = None
     notes: str = ""
     items: List[LineItemPayload] = Field(default_factory=list)
 
-class PaymentToggle(BaseModel):  # ✅ Added model for toggling payment
+class PaymentToggle(BaseModel):
     is_payment_done: bool
 
 class NumberResponse(BaseModel):
@@ -387,9 +387,30 @@ async def update_settings(payload: SettingsPayload, _: str = Depends(require_aut
     await settings_collection.update_one({"key": "app_settings"}, {"$set": {**payload.model_dump(), "updated_at": now_iso()}}, upsert=True)
     return payload
 
+# ✅ EDITED: Now it only PEEKS at the next number, it does not reserve it!
 @api_router.get("/bills/next-number", response_model=NumberResponse)
 async def get_next_number(mode: Literal["invoice", "estimate"] = Query(...), _: str = Depends(require_auth)):
-    return NumberResponse(document_number=await reserve_document_number(mode))
+    prefix = "INV" if mode == "invoice" else "EST"
+    
+    # Peek in Supabase
+    if SUPABASE_ENABLED:
+        get_response = await call_supabase_rest(
+            "GET",
+            supabase_counters_table,
+            params={"mode": f"eq.{mode}", "select": "value", "limit": "1"},
+            prefer=None,
+        )
+        if get_response is not None and get_response.json():
+            rows = get_response.json()
+            if rows:
+                next_val = int(rows[0].get("value", 0)) + 1
+                return NumberResponse(document_number=f"{prefix}-{next_val:04d}")
+        return NumberResponse(document_number=f"{prefix}-0001")
+        
+    # Peek in Local MongoDB
+    doc = await counters_collection.find_one({"mode": mode})
+    next_val = int(doc.get("value", 0)) + 1 if doc else 1
+    return NumberResponse(document_number=f"{prefix}-{next_val:04d}")
 
 @api_router.get("/customers/suggest", response_model=List[CustomerRecord])
 async def suggest_customers(query: str = Query(..., min_length=2), _: str = Depends(require_auth)):
@@ -401,6 +422,7 @@ async def suggest_customers(query: str = Query(..., min_length=2), _: str = Depe
     docs = await customers_collection.find({"$or": [{"name": regex}, {"phone": regex}]}, {"_id": 0}).sort("updated_at", -1).to_list(8)
     return [CustomerRecord(**doc) for doc in docs]
 
+# ✅ EDITED: Saving a NEW bill officially reserves the number here
 @api_router.post("/bills/save", response_model=BillSaveResponse)
 async def save_bill(payload: BillDraftPayload, _: str = Depends(require_auth)):
     settings = await get_or_create_settings()
@@ -411,10 +433,11 @@ async def save_bill(payload: BillDraftPayload, _: str = Depends(require_auth)):
         line_entries.append({**item.model_dump(), "sl_no": idx, "rate": computed["effective_rate"], "amount": computed["amount"]})
     
     totals = compute_totals(payload, settings, line_amounts)
-    doc_num = payload.document_number or await reserve_document_number(payload.mode)
+    
+    # 🚨 Always reserve a fresh number for new bills
+    doc_num = await reserve_document_number(payload.mode) 
     bill_id = str(uuid.uuid4())
     
-    # ✅ Included is_payment_done when saving
     bill_doc = {
         "id": bill_id, "mode": payload.mode, "document_number": doc_num, "date": payload.date,
         "customer": {"name": payload.customer_name, "phone": payload.customer_phone, "address": payload.customer_address, "email": payload.customer_email},
@@ -444,7 +467,6 @@ async def update_bill(document_number: str, payload: BillDraftPayload, _: str = 
     
     totals = compute_totals(payload, settings, line_amounts)
     
-    # ✅ Included is_payment_done when updating
     update_data = {
         "mode": payload.mode,
         "date": payload.date,
@@ -475,7 +497,6 @@ async def update_bill(document_number: str, payload: BillDraftPayload, _: str = 
         message="Bill updated successfully"
     )
 
-# --- ✅ NEW: ENDPOINT TO TOGGLE PAYMENT STATUS ---
 @api_router.put("/bills/{document_number}/toggle-payment")
 async def toggle_payment_status(document_number: str, payload: PaymentToggle, _: str = Depends(require_auth)):
     result = await bills_collection.update_one(
@@ -557,16 +578,11 @@ async def get_public_bill(document_number: str):
         "settings": settings_data
     }
 
-# --- NEW DATA MANAGEMENT ENDPOINTS ---
-
 @api_router.get("/system/storage")
 async def get_storage_stats(_: str = Depends(require_auth)):
-    """Check how much database storage is being used."""
     try:
-        # Ask MongoDB for database stats
         stats = await db.command("dbstats")
         used_bytes = stats.get("dataSize", 0) 
-        # Assume standard 512 MB free tier limit for MongoDB Atlas
         quota_bytes = 512 * 1024 * 1024 
         percentage = min(100.0, (used_bytes / quota_bytes) * 100) if quota_bytes > 0 else 0
         
@@ -581,13 +597,11 @@ async def get_storage_stats(_: str = Depends(require_auth)):
 
 @api_router.get("/bills/export")
 async def export_bills(_: str = Depends(require_auth)):
-    """Fetch every single bill in the database for local backup."""
     bills = await bills_collection.find({}, {"_id": 0}).sort("created_at", -1).to_list(None)
     return bills
 
 @api_router.delete("/bills/all")
 async def delete_all_bills(_: str = Depends(require_auth)):
-    """WARNING: Wipes all bills from the database to clear storage."""
     result = await bills_collection.delete_many({})
     return {"message": f"Successfully deleted {result.deleted_count} bills.", "deleted_count": result.deleted_count}
 
