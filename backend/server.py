@@ -66,10 +66,16 @@ class AuthTokenResponse(BaseModel):
     token_type: str = "bearer"
     expires_at: str
 
+# ✅ UPDATED: Includes new Theme Colors, Font Sizes, and Multiple Branch Addresses
 class SettingsPayload(BaseModel):
     shop_name: str = "Jalaram Jewellers"
     tagline: str = "The Silver Specialist"
-    address: str = "Shop No.14, BMC Market Complex, Market Building, Near Petrol Pump, Unit-2 BBSR-9"
+    address: str = "" # Kept for backward compatibility with older bills
+    branch_1_address: str = "Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2"
+    branch_1_url: str = "https://maps.app.goo.gl/phoory4FrNUpFU7a6"
+    branch_2_address: str = "Branch - 2 : Shop No.14, BMC Market Complex, Market Building, Near Petrol Pump, Unit-2, BBSR-9"
+    branch_2_url: str = "https://maps.app.goo.gl/Tjn7Rm744hvetoe57"
+    address_color: str = "#475569"
     phone_numbers: List[str] = Field(default_factory=lambda: ["+91 9583221115", "+91 9776177296", "+91 7538977527"])
     email: str = "jalaramjewellers26@gmail.com"
     gstin: str = "21AAUFJ1925F1ZH"
@@ -80,6 +86,8 @@ class SettingsPayload(BaseModel):
     about_qr_data_url: Optional[str] = None
     invoice_upi_id: str = "eazypay.0000048595@icici"
     estimate_upi_id: str = "7538977527@ybl"
+    theme_color: str = "#000000"
+    shop_name_size: int = 26
 
 class CustomerRecord(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
