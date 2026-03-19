@@ -57,7 +57,6 @@ const getInitialPrintScale = () => {
 export default function App() {
   const [isCompactView, setIsCompactView] = useState(window.innerWidth <= 520);
   
-  // ✅ NEW: Tracker to see if the user has unsaved changes
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
   
@@ -87,7 +86,9 @@ export default function App() {
   const [discount, setDiscount] = useState("0");
   const [exchange, setExchange] = useState("0");
   const [manualRoundOff, setManualRoundOff] = useState("");
+  
   const [paymentMethod, setPaymentMethod] = useState("Cash");
+  const [splitCash, setSplitCash] = useState(""); // ✅ For Split payments
   const [isPaymentDone, setIsPaymentDone] = useState(false); 
   const [notes, setNotes] = useState("");
 
@@ -337,12 +338,16 @@ export default function App() {
     };
   }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff]);
 
+  // ✅ SMART QR LOGIC FOR DASHBOARD
+  const upiAmountToPay = paymentMethod === "Split" ? Math.max(0, computed.grandTotal - num(splitCash)) : computed.grandTotal;
+  const showDashboardUpi = !isPaymentDone && (paymentMethod === "UPI" || (paymentMethod === "Split" && upiAmountToPay > 0));
+  
   const upiId = mode === "invoice" ? settings.invoice_upi_id : settings.estimate_upi_id;
-  const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(computed.grandTotal)}&cu=INR`;
+  const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
   const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
 
   const updateItem = (id, key, value) => {
-    markDirty(); // ✅ Flags the form as dirty
+    markDirty();
     setItems((prev) => prev.map((item) => (item.id === id ? { ...item, [key]: value } : item)));
   };
 
@@ -355,10 +360,11 @@ export default function App() {
     setExchange("0");
     setManualRoundOff("");
     setPaymentMethod("Cash");
+    setSplitCash("");
     setIsPaymentDone(false); 
     setNotes("");
     setBillDate(today());
-    setIsDirty(false); // ✅ Resets dirty flag
+    setIsDirty(false);
     await reserveNumber(nextMode);
   };
 
@@ -376,6 +382,7 @@ export default function App() {
     });
 
     setPaymentMethod(bill.payment_method || "Cash");
+    setSplitCash(bill.split_cash !== null && bill.split_cash !== undefined ? String(bill.split_cash) : "");
     setIsPaymentDone(bill.is_payment_done || false); 
     setNotes(bill.notes || "");
     
@@ -395,7 +402,7 @@ export default function App() {
 
     setItems(loadedItems.length > 0 ? loadedItems : [createItem()]);
 
-    setIsDirty(false); // ✅ Loaded bills aren't dirty until edited
+    setIsDirty(false);
     setShowRecentBills(false);
     toast.success(`Loaded ${bill.document_number} for editing`);
     goToBillTop();
@@ -498,7 +505,6 @@ export default function App() {
     }
   };
 
-  // ✅ EDITED: Protect toggle with dirty state warning
   const handleModeChange = async (nextMode) => {
     if (mode === nextMode) return;
     
@@ -609,7 +615,6 @@ export default function App() {
     }
   };
 
-  // ✅ EDITED: Save no longer clears the page, it swaps into "Edit" mode instantly
   const saveBill = async () => {
     setSavingBill(true);
     try {
@@ -623,6 +628,8 @@ export default function App() {
         customer_email: customer.email,
         payment_method: paymentMethod,
         is_payment_done: isPaymentDone,
+        split_cash: num(splitCash),
+        split_upi: Math.max(0, computed.grandTotal - num(splitCash)),
         discount: num(discount),
         exchange: num(exchange),
         round_off: manualRoundOff === "" ? null : num(manualRoundOff),
@@ -640,13 +647,11 @@ export default function App() {
       if (editingDocNumber) {
         await axios.put(`${API}/bills/${editingDocNumber}`, payload, { headers: authHeaders });
         toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} updated successfully.`);
-        setIsDirty(false); // ✅ Form is clean again
+        setIsDirty(false);
       } else {
         const res = await axios.post(`${API}/bills/save`, payload, { headers: authHeaders });
         toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} saved successfully.`);
-        setIsDirty(false); // ✅ Form is clean again
-        
-        // Lock the generated number onto the screen so it stays for printing!
+        setIsDirty(false);
         setEditingDocNumber(res.data.document_number);
         setDocumentNumber(res.data.document_number);
       }
@@ -700,9 +705,13 @@ export default function App() {
     if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
     if (publicBill === "NOT_FOUND" || !publicBill) return <div className="loading-screen">Bill not found or has been deleted.</div>;
 
-    const upiId = publicBill.mode === "invoice" ? publicSettings.invoice_upi_id : publicSettings.estimate_upi_id;
-    const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(publicSettings.shop_name)}&am=${money(publicBill.totals.grand_total)}&cu=INR`;
-    const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
+    // ✅ SMART QR LOGIC FOR PUBLIC VIEW
+    const publicUpiAmountToPay = publicBill.payment_method === "Split" ? num(publicBill.split_upi) : publicBill.totals.grand_total;
+    const showPublicUpi = !publicBill.is_payment_done && (publicBill.payment_method === "UPI" || (publicBill.payment_method === "Split" && publicUpiAmountToPay > 0));
+
+    const publicUpiId = publicBill.mode === "invoice" ? publicSettings.invoice_upi_id : publicSettings.estimate_upi_id;
+    const publicUpiUri = `upi://pay?pa=${publicUpiId}&pn=${encodeURIComponent(publicSettings.shop_name)}&am=${money(publicUpiAmountToPay)}&cu=INR&tn=Bill_${publicBill.document_number}`;
+    const publicDynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(publicUpiUri)}&size=220`;
 
     const splitAmount = (amt) => {
       const rupees = Math.floor(amt);
@@ -828,14 +837,39 @@ export default function App() {
 
               <div className="payment-method-view">
                 <span>Payment Method:</span>
-                <strong>{publicBill.payment_method}</strong>
+                <strong>
+                  {publicBill.payment_method === "Split" 
+                    ? `Split (Cash: ₹${money(publicBill.split_cash)}, UPI: ₹${money(publicUpiAmountToPay)})` 
+                    : publicBill.payment_method}
+                </strong>
               </div>
 
-              <div className="payment-qr-box">
-                <p className="scan-title">Scan Here For Payment</p>
-                <img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" />
-                <p className="upi-id">UPI: {upiId}</p>
-              </div>
+              {/* ✅ Conditional Public QR and Button */}
+              {showPublicUpi && (
+                <div className="payment-qr-box">
+                  <p className="scan-title">Scan Here For Payment</p>
+                  <img src={publicDynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" />
+                  <p className="upi-id">UPI: {publicUpiId}</p>
+                  
+                  <a 
+                    href={publicUpiUri} 
+                    style={{
+                      display: "block",
+                      marginTop: "15px",
+                      padding: "12px 20px",
+                      backgroundColor: "#16a34a",
+                      color: "white",
+                      textDecoration: "none",
+                      fontWeight: "bold",
+                      borderRadius: "8px",
+                      textAlign: "center",
+                      boxShadow: "0 4px 6px rgba(0,0,0,0.1)"
+                    }}
+                  >
+                    📱 Pay ₹{money(publicUpiAmountToPay)} via UPI App
+                  </a>
+                </div>
+              )}
             </div>
 
             {publicBill.mode === "invoice" ? (
@@ -1028,14 +1062,21 @@ export default function App() {
 
               <div className="payment-method-view">
                 <span>Payment Method:</span>
-                <strong>{paymentMethod}</strong>
+                <strong>
+                  {paymentMethod === "Split" 
+                    ? `Split (Cash: ₹${money(splitCash)}, UPI: ₹${money(upiAmountToPay)})` 
+                    : paymentMethod}
+                </strong>
               </div>
 
-              <div className="payment-qr-box">
-                <p className="scan-title">Scan Here For Payment</p>
-                <img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" />
-                <p className="upi-id">UPI: {upiId}</p>
-              </div>
+              {/* ✅ Conditional Dashboard QR */}
+              {showDashboardUpi && (
+                <div className="payment-qr-box">
+                  <p className="scan-title">Scan Here For Payment</p>
+                  <img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" />
+                  <p className="upi-id">UPI: {upiId}</p>
+                </div>
+              )}
             </div>
 
             {mode === "invoice" ? (
@@ -1075,7 +1116,6 @@ export default function App() {
         <aside className="controls no-print">
           <div className="control-card">
             <h3>Customer Details</h3>
-            {/* ✅ EDITED: Added markDirty() to all these inputs */}
             <Input value={customer.name} onChange={(e) => { setCustomer((prev) => ({ ...prev, name: e.target.value })); markDirty(); }} placeholder="Customer name" />
             <Input value={customer.phone} onChange={(e) => { setCustomer((prev) => ({ ...prev, phone: e.target.value })); markDirty(); }} placeholder="Phone" />
             <Input value={customer.address} onChange={(e) => { setCustomer((prev) => ({ ...prev, address: e.target.value })); markDirty(); }} placeholder="Address" />
@@ -1129,7 +1169,16 @@ export default function App() {
               <option value="Cash">Cash</option>
               <option value="UPI">UPI</option>
               <option value="Card">Card</option>
+              <option value="Split">Split (Cash + UPI)</option>
             </select>
+
+            {/* ✅ Split Cash Input */}
+            {paymentMethod === "Split" && (
+              <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+                <Input value={splitCash} onChange={(e) => { setSplitCash(e.target.value); markDirty(); }} placeholder="Cash Received ₹" />
+                <Input value={`UPI: ₹${money(Math.max(0, computed.grandTotal - num(splitCash)))}`} disabled style={{ backgroundColor: "#f1f5f9" }} />
+              </div>
+            )}
 
             <div 
               style={{ marginTop: "15px", padding: "12px", backgroundColor: isPaymentDone ? "#dcfce7" : "#fef3c7", border: `1.5px solid ${isPaymentDone ? "#22c55e" : "#f59e0b"}`, borderRadius: "8px", display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", transition: "all 0.2s" }} 
@@ -1159,13 +1208,10 @@ export default function App() {
             <Button onClick={() => window.print()}>Print</Button>
             <Button onClick={shareWhatsApp}>WhatsApp Link</Button>
             <Button onClick={shareEmail}>Email Link</Button>
-            
-            {/* ✅ EDITED: Protected New Bill Button */}
             <Button onClick={() => {
               if (isDirty && !window.confirm("⚠️ You have unsaved changes. Clear screen and start a new bill anyway?")) return;
               clearBill();
             }} variant="outline">New Bill</Button>
-            
             <Button onClick={() => setShowSettings((prev) => !prev)} variant="outline">Settings</Button>
             <Button onClick={() => setShowAbout((prev) => !prev)} variant="outline">About</Button>
           </div>
@@ -1184,14 +1230,12 @@ export default function App() {
 
           <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "15px" }}>
             
-            {/* Search Bar */}
             <Input 
               placeholder="Search by Name, Phone, or Inv No..." 
               value={billSearchQuery} 
               onChange={(e) => setBillSearchQuery(e.target.value)} 
             />
 
-            {/* Counter Reset Buttons */}
             <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
               <Button size="sm" variant="outline" onClick={() => handleResetCounter("invoice")} style={{ flex: 1 }}>Reset Invoice No.</Button>
               <Button size="sm" variant="outline" onClick={() => handleResetCounter("estimate")} style={{ flex: 1 }}>Reset Estimate No.</Button>
