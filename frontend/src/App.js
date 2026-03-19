@@ -56,6 +56,14 @@ const getInitialPrintScale = () => {
 
 export default function App() {
   const [isCompactView, setIsCompactView] = useState(window.innerWidth <= 520);
+  
+  // --- PUBLIC VIEW STATE ---
+  const [isPublicView, setIsPublicView] = useState(false);
+  const [publicBill, setPublicBill] = useState(null);
+  const [publicSettings, setPublicSettings] = useState(null);
+  const [publicLoading, setPublicLoading] = useState(false);
+
+  // --- AUTH & DASHBOARD STATE ---
   const [passcode, setPasscode] = useState("");
   const [token, setToken] = useState(localStorage.getItem("jj_auth_token") || "");
   const [checkingSession, setCheckingSession] = useState(Boolean(localStorage.getItem("jj_auth_token")));
@@ -63,7 +71,7 @@ export default function App() {
 
   const [mode, setMode] = useState("invoice");
   const [documentNumber, setDocumentNumber] = useState("");
-  const [editingDocNumber, setEditingDocNumber] = useState(null); // Tracks if editing an existing bill
+  const [editingDocNumber, setEditingDocNumber] = useState(null);
   const [isNumberLoading, setIsNumberLoading] = useState(false);
   const [billDate, setBillDate] = useState(today());
   const [settings, setSettings] = useState(defaultSettings);
@@ -80,7 +88,7 @@ export default function App() {
 
   const [showSettings, setShowSettings] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
-  const [showRecentBills, setShowRecentBills] = useState(false); // Controls Recent Bills drawer
+  const [showRecentBills, setShowRecentBills] = useState(false);
   
   const [recentBillsList, setRecentBillsList] = useState([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
@@ -91,6 +99,30 @@ export default function App() {
   const [aboutUploadName, setAboutUploadName] = useState("");
   const [cloudStatus, setCloudStatus] = useState({ provider: "supabase", enabled: false, mode: "loading" });
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+
+  // CHECK FOR PUBLIC LINK ON LOAD
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const viewDoc = params.get("view");
+    
+    if (viewDoc) {
+      setIsPublicView(true);
+      setPublicLoading(true);
+      const fetchPublicBill = async () => {
+        try {
+          const res = await axios.get(`${API}/bills/public/${viewDoc}`);
+          setPublicBill(res.data.bill);
+          setPublicSettings(res.data.settings);
+        } catch (err) {
+          console.error("Error fetching public bill:", err);
+          setPublicBill("NOT_FOUND");
+        } finally {
+          setPublicLoading(false);
+        }
+      };
+      fetchPublicBill();
+    }
+  }, []);
 
   useEffect(() => {
     const handleResize = () => setIsCompactView(window.innerWidth <= 520);
@@ -115,12 +147,12 @@ export default function App() {
   }, [printScale]);
 
   useEffect(() => {
+    if (isPublicView) return; // Skip session verify if looking at a public bill
     const verify = async () => {
       if (!token) {
         setCheckingSession(false);
         return;
       }
-
       try {
         await axios.get(`${API}/auth/verify`, { headers: authHeaders });
       } catch {
@@ -130,13 +162,11 @@ export default function App() {
         setCheckingSession(false);
       }
     };
-
     verify();
-  }, [token]);
+  }, [token, isPublicView]);
 
-  // Fetch recent bills when the drawer opens
   useEffect(() => {
-    if (showRecentBills && token) {
+    if (showRecentBills && token && !isPublicView) {
       const fetchRecent = async () => {
         setLoadingRecent(true);
         try {
@@ -152,7 +182,7 @@ export default function App() {
       };
       fetchRecent();
     }
-  }, [showRecentBills, token]); 
+  }, [showRecentBills, token, isPublicView]); 
 
   const loadSettings = async () => {
     const response = await axios.get(`${API}/settings`, { headers: authHeaders });
@@ -190,6 +220,7 @@ export default function App() {
   };
 
   useEffect(() => {
+    if (isPublicView) return;
     const bootstrap = async () => {
       if (!token) return;
       try {
@@ -200,22 +231,17 @@ export default function App() {
         toast.error("Could not load billing settings.");
       }
     };
-
     bootstrap();
-  }, [token]);
+  }, [token, isPublicView]);
 
   useEffect(() => {
-    if (!token) return;
-
-    const interval = setInterval(() => {
-      fetchCloudStatus();
-    }, 30000);
-
+    if (!token || isPublicView) return;
+    const interval = setInterval(() => { fetchCloudStatus(); }, 30000);
     return () => clearInterval(interval);
-  }, [token]);
+  }, [token, isPublicView]);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || isPublicView) return;
     const query = customer.phone.trim().length >= 2 ? customer.phone.trim() : customer.name.trim();
     if (query.length < 2) {
       setSuggestions([]);
@@ -235,7 +261,7 @@ export default function App() {
     }, 250);
 
     return () => clearTimeout(timer);
-  }, [customer.phone, customer.name, token]);
+  }, [customer.phone, customer.name, token, isPublicView]);
 
   const computed = useMemo(() => {
     const baseRate = num(settings.silver_rate_per_10g) / 10 + num(settings.making_charge_per_gram);
@@ -287,9 +313,7 @@ export default function App() {
   }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff]);
 
   const upiId = mode === "invoice" ? settings.invoice_upi_id : settings.estimate_upi_id;
-  const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(
-    computed.grandTotal,
-  )}&cu=INR`;
+  const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(computed.grandTotal)}&cu=INR`;
   const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
 
   const updateItem = (id, key, value) => {
@@ -297,7 +321,7 @@ export default function App() {
   };
 
   const clearBill = async (nextMode = mode) => {
-    setEditingDocNumber(null); // Clear editing state
+    setEditingDocNumber(null);
     setItems([createItem()]);
     setCustomer({ name: "", phone: "", address: "", email: "" });
     setSuggestions([]);
@@ -326,12 +350,10 @@ export default function App() {
     setPaymentMethod(bill.payment_method || "Cash");
     setNotes(bill.notes || "");
     
-    // Load adjustments
     setDiscount(bill.totals?.discount ? String(bill.totals.discount) : "0");
     setExchange(bill.totals?.exchange ? String(bill.totals.exchange) : "0");
     setManualRoundOff(bill.totals?.round_off !== null && bill.totals?.round_off !== undefined ? String(bill.totals.round_off) : "");
 
-    // Safely map loaded items to local state format
     const loadedItems = (bill.items || []).map((item) => ({
       id: `${Date.now()}-${Math.random()}`,
       description: item.description || "",
@@ -344,30 +366,17 @@ export default function App() {
 
     setItems(loadedItems.length > 0 ? loadedItems : [createItem()]);
 
-    setShowRecentBills(false); // Close drawer
+    setShowRecentBills(false);
     toast.success(`Loaded ${bill.document_number} for editing`);
-    goToBillTop(); // Scroll up
+    goToBillTop();
   };
 
-  // NEW DELETE FUNCTION
   const handleDeleteBill = async (bill) => {
-    // 1. Ask for confirmation so you don't delete by accident!
-    if (!window.confirm(`Are you sure you want to permanently delete ${bill.document_number}?`)) {
-      return;
-    }
-
+    if (!window.confirm(`Are you sure you want to permanently delete ${bill.document_number}?`)) return;
     try {
-      // 2. Send the delete request to the backend
       await axios.delete(`${API}/bills/${bill.document_number}`, { headers: { Authorization: `Bearer ${token}` } });
-      
-      // 3. Remove the bill from the drawer list instantly
       setRecentBillsList((prev) => prev.filter((b) => b.document_number !== bill.document_number));
-      
-      // 4. If you happen to be editing the bill you just deleted, clear the form
-      if (editingDocNumber === bill.document_number) {
-        clearBill(mode);
-      }
-      
+      if (editingDocNumber === bill.document_number) clearBill(mode);
       toast.success(`${bill.document_number} deleted successfully.`);
     } catch (error) {
       console.error("Delete error:", error);
@@ -384,11 +393,7 @@ export default function App() {
     event.preventDefault();
     setLoggingIn(true);
     try {
-      const response = await axios.post(
-        `${API}/auth/login`,
-        { passcode },
-        { timeout: 15000 },
-      );
+      const response = await axios.post(`${API}/auth/login`, { passcode }, { timeout: 15000 });
       localStorage.setItem("jj_auth_token", response.data.access_token);
       setToken(response.data.access_token);
       setPasscode("");
@@ -396,7 +401,6 @@ export default function App() {
     } catch (error) {
       const statusCode = error?.response?.status;
       const isNetworkOrSleep = !error?.response || error?.code === "ECONNABORTED";
-
       if (statusCode === 401) {
         toast.error("Wrong passcode.");
       } else if (isNetworkOrSleep) {
@@ -448,7 +452,6 @@ export default function App() {
   const handleLogoUpload = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
     try {
       const dataUrl = await optimizeImageDataUrl(file);
       localStorage.setItem("jj_logo_data_url", dataUrl);
@@ -463,7 +466,6 @@ export default function App() {
   const handleAboutQrUpload = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
     try {
       const dataUrl = await optimizeImageDataUrl(file);
       localStorage.setItem("jj_about_qr_data_url", dataUrl);
@@ -511,12 +513,10 @@ export default function App() {
       };
 
       if (editingDocNumber) {
-        // UPDATE Existing Bill
         await axios.put(`${API}/bills/${editingDocNumber}`, payload, { headers: authHeaders });
         toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} updated successfully.`);
         await clearBill(mode);
       } else {
-        // SAVE New Bill
         await axios.post(`${API}/bills/save`, payload, { headers: authHeaders });
         toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} saved successfully.`);
         await reserveNumber(mode);
@@ -528,35 +528,34 @@ export default function App() {
     }
   };
 
-  const downloadPdf = async () => {
-    const node = document.getElementById("bill-print-root");
+  const downloadPdf = async (elementId, filename) => {
+    const node = document.getElementById(elementId);
     if (!node) return;
-
     const canvas = await html2canvas(node, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
     const imageData = canvas.toDataURL("image/png");
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = (canvas.height * pageWidth) / canvas.width;
     pdf.addImage(imageData, "PNG", 0, 0, pageWidth, pageHeight);
-    pdf.save(`${documentNumber || mode}-bill.pdf`);
+    pdf.save(`${filename}.pdf`);
   };
 
-  const printBill = () => window.print();
-
   const shareWhatsApp = () => {
-    const text = `Hello ${customer.name || "Customer"}, ${
+    const link = `${window.location.origin}/?view=${documentNumber}`;
+    const text = `Hello ${customer.name || "Customer"},\n\nHere is your ${
       mode === "invoice" ? "Invoice" : "Estimate"
-    } ${documentNumber} amount is ₹${money(computed.grandTotal)}. Thank you - ${settings.shop_name}`;
+    } ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`;
     const cleanedPhone = customer.phone.replace(/\D/g, "");
     const url = `https://wa.me/${cleanedPhone || "91"}?text=${encodeURIComponent(text)}`;
     window.open(url, "_blank");
   };
 
   const shareEmail = () => {
+    const link = `${window.location.origin}/?view=${documentNumber}`;
     const subject = `${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber}`;
-    const body = `Dear ${customer.name || "Customer"},\n\nAmount: ₹${money(
-      computed.grandTotal,
-    )}\nDocument: ${documentNumber}\n\nThank you,\n${settings.shop_name}`;
+    const body = `Dear ${customer.name || "Customer"},\n\nHere is your ${
+      mode === "invoice" ? "Invoice" : "Estimate"
+    } ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`;
     window.location.href = `mailto:${customer.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
@@ -567,25 +566,199 @@ export default function App() {
     }
   };
 
+
+  // ==========================================
+  // RENDER: PUBLIC VIEW (CUSTOMER FACING)
+  // ==========================================
+  if (isPublicView) {
+    if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
+    if (publicBill === "NOT_FOUND" || !publicBill) return <div className="loading-screen">Bill not found or has been deleted.</div>;
+
+    const upiId = publicBill.mode === "invoice" ? publicSettings.invoice_upi_id : publicSettings.estimate_upi_id;
+    const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(publicSettings.shop_name)}&am=${money(publicBill.totals.grand_total)}&cu=INR`;
+    const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
+
+    const splitAmount = (amt) => {
+      const rupees = Math.floor(amt);
+      const paise = Math.round((amt - rupees) * 100).toString().padStart(2, "0");
+      return { rupees, paise };
+    };
+
+    return (
+      <div className="billing-app" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px' }}>
+        <div className="no-print" style={{ marginBottom: '20px', display: 'flex', gap: '15px' }}>
+          <Button onClick={() => downloadPdf("public-bill-root", publicBill.document_number)}>
+            Download PDF
+          </Button>
+          <Button variant="outline" onClick={() => window.print()}>
+            Print Bill
+          </Button>
+        </div>
+
+        <section id="public-bill-root" className="bill-sheet" style={{ "--print-scale-factor": 1 }}>
+          <div className="bill-header">
+            <div className="logo-area">
+              {publicSettings.logo_data_url ? (
+                <img src={publicSettings.logo_data_url} alt="Shop Logo" className="shop-logo" />
+              ) : (
+                <div className="shop-logo-fallback">JJ</div>
+              )}
+              <h2 className="sheet-shop-title">{publicSettings.shop_name}</h2>
+              <p className="sheet-tagline">{publicSettings.tagline}</p>
+            </div>
+
+            <div className="contact-area">
+              <p className="contact-address">{publicSettings.address}</p>
+              <p className="contact-phones">{publicSettings.phone_numbers.join(" | ")}</p>
+              <p>{publicSettings.email}</p>
+              {publicBill.mode === "invoice" && <p>GSTIN: {publicSettings.gstin}</p>}
+            </div>
+          </div>
+
+          <div className="sheet-banner">
+            {publicBill.mode === "invoice" ? "TAX INVOICE" : "ESTIMATE"}
+          </div>
+
+          <div className="meta-grid">
+            <p><strong>{publicBill.mode === "invoice" ? "Invoice No" : "Estimate No"}:</strong> {publicBill.document_number}</p>
+            <p><strong>Date:</strong> {publicBill.date}</p>
+          </div>
+
+          <div className="customer-box">
+            <p><strong>Name:</strong> {publicBill.customer?.name || "-"}</p>
+            <p><strong>Address:</strong> {publicBill.customer?.address || "-"}</p>
+            <p><strong>Phone:</strong> {publicBill.customer?.phone || "-"}</p>
+          </div>
+
+          <table className="bill-table">
+            <thead>
+              {isCompactView ? (
+                <tr><th>#</th><th>Item</th><th>Wt / Rate</th><th>Amount</th></tr>
+              ) : publicBill.mode === "invoice" ? (
+                <tr><th>Sl. No.</th><th>DESCRIPTION</th><th>HSN</th><th>WEIGHT IN GRAMS</th><th>RATE PER GRAM Rs.</th><th>AMOUNT Ps.</th></tr>
+              ) : (
+                <tr><th>SI. No.</th><th>Particulars</th><th>Weight</th><th>Quantity / Rate</th><th>Amount Rupees.</th><th>PS.</th></tr>
+              )}
+            </thead>
+            <tbody>
+              {publicBill.items.map((item, idx) => {
+                const { rupees, paise } = splitAmount(item.amount);
+                return (
+                  <tr key={idx}>
+                    {isCompactView ? (
+                      <>
+                        <td>{item.sl_no}</td>
+                        <td><strong>{item.description || "-"}</strong>{publicBill.mode === "invoice" && <div>HSN: {item.hsn || "-"}</div>}</td>
+                        <td>{money(item.weight)}g × ₹{money(item.rate)}</td>
+                        <td>{rupees}.{paise}</td>
+                      </>
+                    ) : (
+                      <>
+                        <td>{item.sl_no}</td>
+                        <td>{item.description || "-"}</td>
+                        <td>{publicBill.mode === "invoice" ? item.hsn || "-" : money(item.weight)}</td>
+                        <td>{publicBill.mode === "invoice" ? money(item.weight) : `${money(item.quantity)} × ${money(item.rate)}`}</td>
+                        <td>{money(item.rate)}</td>
+                        <td>{rupees}.{paise}</td>
+                      </>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          <div className="sheet-bottom-stack">
+            <div className="totals">
+              <div className="totals-row">
+                <span>{publicBill.mode === "invoice" ? "Taxable Amt." : "TOTAL"}</span>
+                <strong>₹{money(publicBill.totals.taxable_amount || publicBill.totals.subtotal)}</strong>
+              </div>
+
+              {publicBill.mode === "invoice" ? (
+                <>
+                  <div className="totals-row"><span>CGST@ 1.5%</span><strong>₹{money(publicBill.totals.cgst)}</strong></div>
+                  <div className="totals-row"><span>IGST@ 3%</span><strong>₹{money(publicBill.totals.igst)}</strong></div>
+                </>
+              ) : (
+                <>
+                  <div className="totals-row"><span>DISCOUNT</span><strong>₹{money(publicBill.totals.discount)}</strong></div>
+                  <div className="totals-row"><span>EXCHANGE</span><strong>₹{money(publicBill.totals.exchange)}</strong></div>
+                </>
+              )}
+
+              <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(publicBill.totals.mdr)}</strong></div>
+              <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(publicBill.totals.round_off)}</strong></div>
+              <div className="totals-row total-highlight">
+                <span>GRAND TOTAL</span>
+                <strong>₹{money(publicBill.totals.grand_total)}</strong>
+              </div>
+
+              <div className="payment-method-view">
+                <span>Payment Method:</span>
+                <strong>{publicBill.payment_method}</strong>
+              </div>
+
+              <div className="payment-qr-box">
+                <p className="scan-title">Scan Here For Payment</p>
+                <img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" />
+                <p className="upi-id">UPI: {upiId}</p>
+              </div>
+            </div>
+
+            {publicBill.mode === "invoice" ? (
+              <div className="declaration">
+                <p className="section-title">DECLARATION</p>
+                <p>We declare that this bill shows the actual price of items and all details are correct.</p>
+                <div className="about-qr">
+                  <p className="section-title">About Us QR</p>
+                  {(publicSettings.about_qr_data_url || STATIC_ABOUT_QR_URL) && (
+                    <img src={publicSettings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="About us QR" className="about-qr-image" />
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="policies">
+                <p className="section-title">POLICIES, T&amp;C</p>
+                <ul className="policies-list">
+                  <li>6 Months of repair and polishing warranty only on silver ornaments.</li>
+                  <li>You can replace purchased items within 7 days for manufacturing defects.</li>
+                </ul>
+                <div className="about-qr">
+                  <p className="section-title">About Us QR</p>
+                  {(publicSettings.about_qr_data_url || STATIC_ABOUT_QR_URL) && (
+                    <img src={publicSettings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="About us QR" className="about-qr-image" />
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <footer className="sheet-footer">
+            <p>Authorised Signature</p>
+            <p>Thanking you.</p>
+          </footer>
+        </section>
+      </div>
+    );
+  }
+
+  // ==========================================
+  // RENDER: DASHBOARD (ADMIN FACING)
+  // ==========================================
   if (checkingSession) {
-    return <div className="loading-screen" data-testid="session-checking-state">Loading billing dashboard...</div>;
+    return <div className="loading-screen">Loading billing dashboard...</div>;
   }
 
   if (!token) {
     return (
       <div className="login-shell">
         <Toaster position="bottom-right" />
-        <form className="login-card" onSubmit={handleLogin} data-testid="login-form">
-          <h1 className="login-title" data-testid="login-title">Jalaram Jewellers</h1>
-          <p className="login-subtitle" data-testid="login-subtitle">Enter passcode to access billing panel</p>
-          <Input
-            type="password"
-            value={passcode}
-            onChange={(event) => setPasscode(event.target.value)}
-            placeholder="Enter passcode"
-            data-testid="login-passcode-input"
-          />
-          <Button type="submit" disabled={loggingIn} data-testid="login-submit-button">
+        <form className="login-card" onSubmit={handleLogin}>
+          <h1 className="login-title">Jalaram Jewellers</h1>
+          <p className="login-subtitle">Enter passcode to access billing panel</p>
+          <Input type="password" value={passcode} onChange={(e) => setPasscode(e.target.value)} placeholder="Enter passcode" />
+          <Button type="submit" disabled={loggingIn}>
             {loggingIn ? "Checking..." : "Login"}
           </Button>
         </form>
@@ -597,150 +770,92 @@ export default function App() {
     <div className="billing-app">
       <Toaster position="bottom-right" />
 
-      <header className="top-bar no-print" data-testid="app-top-bar">
+      <header className="top-bar no-print">
         <div className="brand-block">
-          <h1 className="brand-title" data-testid="shop-name-display">{settings.shop_name}</h1>
-          <p className="brand-tagline" data-testid="shop-tagline-display">{settings.tagline}</p>
+          <h1 className="brand-title">{settings.shop_name}</h1>
+          <p className="brand-tagline">{settings.tagline}</p>
         </div>
 
-        <div className="mode-toggle" data-testid="mode-toggle-container">
-          <Button
-            onClick={() => handleModeChange("invoice")}
-            className={mode === "invoice" ? "mode-active" : "mode-inactive"}
-            data-testid="invoice-mode-button"
-          >
-            Invoice Mode
-          </Button>
-          <Button
-            onClick={() => handleModeChange("estimate")}
-            className={mode === "estimate" ? "mode-active" : "mode-inactive"}
-            data-testid="estimate-mode-button"
-          >
-            Estimate Mode
-          </Button>
+        <div className="mode-toggle">
+          <Button onClick={() => handleModeChange("invoice")} className={mode === "invoice" ? "mode-active" : "mode-inactive"}>Invoice Mode</Button>
+          <Button onClick={() => handleModeChange("estimate")} className={mode === "estimate" ? "mode-active" : "mode-inactive"}>Estimate Mode</Button>
         </div>
 
-        <div
-          className={`cloud-badge ${cloudStatus.enabled ? "cloud-badge-live" : "cloud-badge-fallback"}`}
-          data-testid="cloud-sync-status-badge"
-        >
-          <span className="cloud-dot" data-testid="cloud-sync-status-dot" />
-          <span data-testid="cloud-sync-status-text">
-            Cloud Sync: {cloudStatus.enabled ? "Live" : "Fallback"}
-          </span>
+        <div className={`cloud-badge ${cloudStatus.enabled ? "cloud-badge-live" : "cloud-badge-fallback"}`}>
+          <span className="cloud-dot" />
+          <span>Cloud Sync: {cloudStatus.enabled ? "Live" : "Fallback"}</span>
         </div>
 
-        <div className="top-actions" data-testid="top-actions-group">
-          <Button variant="outline" onClick={goToBillTop} data-testid="back-to-top-button">
-            Back
-          </Button>
-          <Button variant="outline" onClick={handleLogout} data-testid="logout-button">
-            Logout
-          </Button>
+        <div className="top-actions">
+          <Button variant="outline" onClick={goToBillTop}>Back</Button>
+          <Button variant="outline" onClick={handleLogout}>Logout</Button>
         </div>
       </header>
 
       <main className="main-layout">
-        <section
-          id="bill-print-root"
-          className="bill-sheet"
-          data-testid="bill-preview-container"
-          style={{ "--print-scale-factor": (printScale / 100).toFixed(3) }}
-        >
+        <section id="bill-print-root" className="bill-sheet" style={{ "--print-scale-factor": (printScale / 100).toFixed(3) }}>
           <div className="bill-header">
-            <div className="logo-area" data-testid="logo-display-area">
+            <div className="logo-area">
               {settings.logo_data_url ? (
-                <img src={settings.logo_data_url} alt="Shop Logo" className="shop-logo" data-testid="shop-logo-image" />
+                <img src={settings.logo_data_url} alt="Shop Logo" className="shop-logo" />
               ) : (
-                <div className="shop-logo-fallback" data-testid="shop-logo-fallback">JJ</div>
+                <div className="shop-logo-fallback">JJ</div>
               )}
-              <h2 className="sheet-shop-title" data-testid="sheet-shop-title">{settings.shop_name}</h2>
-              <p className="sheet-tagline" data-testid="sheet-tagline">{settings.tagline}</p>
+              <h2 className="sheet-shop-title">{settings.shop_name}</h2>
+              <p className="sheet-tagline">{settings.tagline}</p>
             </div>
 
             <div className="contact-area">
-              <p className="contact-address" data-testid="sheet-address">{settings.address}</p>
-              <p className="contact-phones" data-testid="sheet-phone-list">{settings.phone_numbers.join(" | ")}</p>
-              <p data-testid="sheet-email">{settings.email}</p>
-              {mode === "invoice" ? <p data-testid="sheet-gstin">GSTIN: {settings.gstin}</p> : null}
+              <p className="contact-address">{settings.address}</p>
+              <p className="contact-phones">{settings.phone_numbers.join(" | ")}</p>
+              <p>{settings.email}</p>
+              {mode === "invoice" && <p>GSTIN: {settings.gstin}</p>}
             </div>
           </div>
 
-          <div className="sheet-banner" data-testid="sheet-mode-banner">
+          <div className="sheet-banner">
             {mode === "invoice" ? "TAX INVOICE" : "ESTIMATE"}
           </div>
 
           <div className="meta-grid">
-            <p data-testid="document-number-display">
-              <strong>{mode === "invoice" ? "Invoice No" : "Estimate No"}:</strong>{" "}
-              {isNumberLoading ? "Generating..." : documentNumber || "-"}
-            </p>
-            <p data-testid="document-date-display">
-              <strong>Date:</strong> {billDate}
-            </p>
+            <p><strong>{mode === "invoice" ? "Invoice No" : "Estimate No"}:</strong> {isNumberLoading ? "Generating..." : documentNumber || "-"}</p>
+            <p><strong>Date:</strong> {billDate}</p>
           </div>
 
-          <div className="customer-box" data-testid="customer-info-display-box">
-            <p data-testid="customer-name-display"><strong>Name:</strong> {customer.name || "-"}</p>
-            <p data-testid="customer-address-display"><strong>Address:</strong> {customer.address || "-"}</p>
-            <p data-testid="customer-phone-display"><strong>Phone:</strong> {customer.phone || "-"}</p>
+          <div className="customer-box">
+            <p><strong>Name:</strong> {customer.name || "-"}</p>
+            <p><strong>Address:</strong> {customer.address || "-"}</p>
+            <p><strong>Phone:</strong> {customer.phone || "-"}</p>
           </div>
 
-          <table className="bill-table" data-testid="bill-items-table">
+          <table className="bill-table">
             <thead>
               {isCompactView ? (
-                <tr>
-                  <th data-testid="compact-col-sl">#</th>
-                  <th data-testid="compact-col-item">Item</th>
-                  <th data-testid="compact-col-weight-rate">Wt / Rate</th>
-                  <th data-testid="compact-col-amount">Amount</th>
-                </tr>
+                <tr><th>#</th><th>Item</th><th>Wt / Rate</th><th>Amount</th></tr>
               ) : mode === "invoice" ? (
-                <tr>
-                  <th data-testid="invoice-col-sl">Sl. No.</th>
-                  <th data-testid="invoice-col-description">DESCRIPTION</th>
-                  <th data-testid="invoice-col-hsn">HSN</th>
-                  <th data-testid="invoice-col-weight">WEIGHT IN GRAMS</th>
-                  <th data-testid="invoice-col-rate">RATE PER GRAM Rs.</th>
-                  <th data-testid="invoice-col-amount">AMOUNT Ps.</th>
-                </tr>
+                <tr><th>Sl. No.</th><th>DESCRIPTION</th><th>HSN</th><th>WEIGHT IN GRAMS</th><th>RATE PER GRAM Rs.</th><th>AMOUNT Ps.</th></tr>
               ) : (
-                <tr>
-                  <th data-testid="estimate-col-sl">SI. No.</th>
-                  <th data-testid="estimate-col-particulars">Particulars</th>
-                  <th data-testid="estimate-col-weight">Weight</th>
-                  <th data-testid="estimate-col-quantity-rate">Quantity / Rate</th>
-                  <th data-testid="estimate-col-amount">Amount Rupees.</th>
-                  <th data-testid="estimate-col-ps">PS.</th>
-                </tr>
+                <tr><th>SI. No.</th><th>Particulars</th><th>Weight</th><th>Quantity / Rate</th><th>Amount Rupees.</th><th>PS.</th></tr>
               )}
             </thead>
-
             <tbody>
               {computed.items.map((item) => (
-                <tr key={item.id} data-testid={`bill-row-${item.slNo}`}>
+                <tr key={item.id}>
                   {isCompactView ? (
                     <>
-                      <td data-testid={`bill-row-sl-${item.slNo}`}>{item.slNo}</td>
-                      <td data-testid={`bill-row-description-${item.slNo}`}>
-                        <strong>{item.description || "-"}</strong>
-                        {mode === "invoice" ? <div>HSN: {item.hsn || "-"}</div> : null}
-                      </td>
-                      <td data-testid={`bill-row-weight-${item.slNo}`}>
-                        {money(item.weight)}g × ₹{money(item.rate)}
-                      </td>
-                      <td data-testid={`bill-row-amount-${item.slNo}`}>{item.rupees}.{item.paise}</td>
+                      <td>{item.slNo}</td>
+                      <td><strong>{item.description || "-"}</strong>{mode === "invoice" && <div>HSN: {item.hsn || "-"}</div>}</td>
+                      <td>{money(item.weight)}g × ₹{money(item.rate)}</td>
+                      <td>{item.rupees}.{item.paise}</td>
                     </>
                   ) : (
                     <>
-                      <td data-testid={`bill-row-sl-${item.slNo}`}>{item.slNo}</td>
-                      <td data-testid={`bill-row-description-${item.slNo}`}>{item.description || "-"}</td>
-                      <td data-testid={`bill-row-hsn-${item.slNo}`}>{mode === "invoice" ? item.hsn || "-" : money(item.weight)}</td>
-                      <td data-testid={`bill-row-weight-${item.slNo}`}>
-                        {mode === "invoice" ? money(item.weight) : `${money(item.quantity)} × ${money(item.rate)}`}
-                      </td>
-                      <td data-testid={`bill-row-rate-${item.slNo}`}>{money(item.rate)}</td>
-                      <td data-testid={`bill-row-amount-${item.slNo}`}>{item.rupees}.{item.paise}</td>
+                      <td>{item.slNo}</td>
+                      <td>{item.description || "-"}</td>
+                      <td>{mode === "invoice" ? item.hsn || "-" : money(item.weight)}</td>
+                      <td>{mode === "invoice" ? money(item.weight) : `${money(item.quantity)} × ${money(item.rate)}`}</td>
+                      <td>{money(item.rate)}</td>
+                      <td>{item.rupees}.{item.paise}</td>
                     </>
                   )}
                 </tr>
@@ -749,301 +864,160 @@ export default function App() {
           </table>
 
           <div className="sheet-bottom-stack">
-            <div className="totals" data-testid="totals-section">
-              <div className="totals-row" data-testid="subtotal-row">
+            <div className="totals">
+              <div className="totals-row">
                 <span>{mode === "invoice" ? "Taxable Amt." : "TOTAL"}</span>
                 <strong>₹{money(computed.taxable)}</strong>
               </div>
 
               {mode === "invoice" ? (
                 <>
-                  <div className="totals-row" data-testid="cgst-row">
-                    <span>CGST@ 1.5%</span>
-                    <strong>₹{money(computed.cgst)}</strong>
-                  </div>
-                  <div className="totals-row" data-testid="igst-row">
-                    <span>IGST@ 3%</span>
-                    <strong>₹{money(computed.igst)}</strong>
-                  </div>
+                  <div className="totals-row"><span>CGST@ 1.5%</span><strong>₹{money(computed.cgst)}</strong></div>
+                  <div className="totals-row"><span>IGST@ 3%</span><strong>₹{money(computed.igst)}</strong></div>
                 </>
               ) : (
                 <>
-                  <div className="totals-row" data-testid="discount-row">
-                    <span>DISCOUNT</span>
-                    <strong>₹{money(discount)}</strong>
-                  </div>
-                  <div className="totals-row" data-testid="exchange-row">
-                    <span>EXCHANGE</span>
-                    <strong>₹{money(exchange)}</strong>
-                  </div>
+                  <div className="totals-row"><span>DISCOUNT</span><strong>₹{money(discount)}</strong></div>
+                  <div className="totals-row"><span>EXCHANGE</span><strong>₹{money(exchange)}</strong></div>
                 </>
               )}
 
-              <div className="totals-row" data-testid="mdr-row">
-                <span>MDR (Card 2%)</span>
-                <strong>₹{money(computed.mdr)}</strong>
-              </div>
-              <div className="totals-row" data-testid="round-off-row">
-                <span>ROUNDED OFF</span>
-                <strong>₹{money(computed.roundOff)}</strong>
-              </div>
-              <div className="totals-row total-highlight" data-testid="grand-total-row">
+              <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(computed.mdr)}</strong></div>
+              <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(computed.roundOff)}</strong></div>
+              <div className="totals-row total-highlight">
                 <span>GRAND TOTAL</span>
-                <strong data-testid="grand-total-value">₹{money(computed.grandTotal)}</strong>
+                <strong>₹{money(computed.grandTotal)}</strong>
               </div>
 
-              <div className="payment-method-view" data-testid="payment-method-display">
+              <div className="payment-method-view">
                 <span>Payment Method:</span>
                 <strong>{paymentMethod}</strong>
               </div>
 
-              <div className="payment-qr-box" data-testid="dynamic-upi-qr-section">
-                <p className="scan-title" data-testid="scan-here-text">Scan Here For Payment</p>
-                <img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" data-testid="dynamic-upi-qr-image" />
-                <p className="upi-id" data-testid="active-upi-id">UPI: {upiId}</p>
+              <div className="payment-qr-box">
+                <p className="scan-title">Scan Here For Payment</p>
+                <img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" />
+                <p className="upi-id">UPI: {upiId}</p>
               </div>
             </div>
 
             {mode === "invoice" ? (
-              <div className="declaration" data-testid="declaration-section">
+              <div className="declaration">
                 <p className="section-title">DECLARATION</p>
                 <p>We declare that this bill shows the actual price of items and all details are correct.</p>
-
-                <div className="about-qr" data-testid="about-qr-display-container">
+                <div className="about-qr">
                   <p className="section-title">About Us QR</p>
-                  <img
-                    src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL}
-                    alt="About us QR"
-                    className="about-qr-image"
-                    data-testid="about-static-qr-image"
-                  />
+                  {(settings.about_qr_data_url || STATIC_ABOUT_QR_URL) && (
+                    <img src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="About us QR" className="about-qr-image" />
+                  )}
                 </div>
               </div>
             ) : (
-              <div className="policies" data-testid="policies-section">
+              <div className="policies">
                 <p className="section-title">POLICIES, T&amp;C</p>
-                <ul className="policies-list" data-testid="policies-list">
+                <ul className="policies-list">
                   <li>6 Months of repair and polishing warranty only on silver ornaments.</li>
                   <li>You can replace purchased items within 7 days for manufacturing defects.</li>
                 </ul>
-
-                <div className="about-qr" data-testid="about-qr-display-container">
+                <div className="about-qr">
                   <p className="section-title">About Us QR</p>
-                  <img
-                    src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL}
-                    alt="About us QR"
-                    className="about-qr-image"
-                    data-testid="about-static-qr-image"
-                  />
+                  {(settings.about_qr_data_url || STATIC_ABOUT_QR_URL) && (
+                    <img src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="About us QR" className="about-qr-image" />
+                  )}
                 </div>
               </div>
             )}
           </div>
 
-          <footer className="sheet-footer" data-testid="sheet-footer">
-            <p data-testid="signature-placeholder">Authorised Signature</p>
-            <p data-testid="thanks-note">Thanking you.</p>
+          <footer className="sheet-footer">
+            <p>Authorised Signature</p>
+            <p>Thanking you.</p>
           </footer>
         </section>
 
-        <aside className="controls no-print" data-testid="control-panel">
-          <div className="control-card" data-testid="customer-form-section">
+        <aside className="controls no-print">
+          <div className="control-card">
             <h3>Customer Details</h3>
-            <Input
-              value={customer.name}
-              onChange={(event) => setCustomer((prev) => ({ ...prev, name: event.target.value }))}
-              placeholder="Customer name"
-              data-testid="customer-name-input"
-            />
-            <Input
-              value={customer.phone}
-              onChange={(event) => setCustomer((prev) => ({ ...prev, phone: event.target.value }))}
-              placeholder="Phone"
-              data-testid="customer-phone-input"
-            />
-            <Input
-              value={customer.address}
-              onChange={(event) => setCustomer((prev) => ({ ...prev, address: event.target.value }))}
-              placeholder="Address"
-              data-testid="customer-address-input"
-            />
-            <Input
-              value={customer.email}
-              onChange={(event) => setCustomer((prev) => ({ ...prev, email: event.target.value }))}
-              placeholder="Email"
-              data-testid="customer-email-input"
-            />
-            <Input
-              type="text"
-              value={billDate}
-              onChange={(event) => setBillDate(event.target.value)}
-              placeholder="YYYY-MM-DD"
-              data-testid="bill-date-input"
-            />
+            <Input value={customer.name} onChange={(e) => setCustomer((prev) => ({ ...prev, name: e.target.value }))} placeholder="Customer name" />
+            <Input value={customer.phone} onChange={(e) => setCustomer((prev) => ({ ...prev, phone: e.target.value }))} placeholder="Phone" />
+            <Input value={customer.address} onChange={(e) => setCustomer((prev) => ({ ...prev, address: e.target.value }))} placeholder="Address" />
+            <Input value={customer.email} onChange={(e) => setCustomer((prev) => ({ ...prev, email: e.target.value }))} placeholder="Email" />
+            <Input type="text" value={billDate} onChange={(e) => setBillDate(e.target.value)} placeholder="YYYY-MM-DD" />
 
-            {suggestions.length > 0 ? (
-              <div className="suggestions" data-testid="customer-suggestions-list">
+            {suggestions.length > 0 && (
+              <div className="suggestions">
                 {suggestions.map((entry) => (
                   <button
                     key={entry.id}
                     type="button"
                     className="suggestion-item"
                     onClick={() => {
-                      setCustomer({
-                        name: entry.name,
-                        phone: entry.phone,
-                        address: entry.address,
-                        email: entry.email,
-                      });
+                      setCustomer({ name: entry.name, phone: entry.phone, address: entry.address, email: entry.email });
                       setSuggestions([]);
                     }}
-                    data-testid={`customer-suggestion-${entry.id}`}
                   >
                     {entry.name} · {entry.phone}
                   </button>
                 ))}
               </div>
-            ) : null}
+            )}
           </div>
 
-          <div className="control-card" data-testid="item-editor-section">
+          <div className="control-card">
             <h3>Item Lines</h3>
-            {items.map((item, index) => (
-              <div key={item.id} className="item-row-editor" data-testid={`item-editor-row-${index + 1}`}>
-                <Input
-                  value={item.description}
-                  onChange={(event) => updateItem(item.id, "description", event.target.value)}
-                  placeholder="Description"
-                  data-testid={`item-description-input-${index + 1}`}
-                />
-                <Input
-                  value={item.hsn}
-                  onChange={(event) => updateItem(item.id, "hsn", event.target.value)}
-                  placeholder="HSN"
-                  data-testid={`item-hsn-input-${index + 1}`}
-                />
-                <Input
-                  value={item.weight}
-                  onChange={(event) => updateItem(item.id, "weight", event.target.value)}
-                  placeholder="Weight"
-                  data-testid={`item-weight-input-${index + 1}`}
-                />
-                <Input
-                  value={item.quantity}
-                  onChange={(event) => updateItem(item.id, "quantity", event.target.value)}
-                  placeholder="Qty"
-                  data-testid={`item-quantity-input-${index + 1}`}
-                />
-                <Input
-                  value={item.rate_override}
-                  onChange={(event) => updateItem(item.id, "rate_override", event.target.value)}
-                  placeholder="Rate override"
-                  data-testid={`item-rate-override-input-${index + 1}`}
-                />
-                <Input
-                  value={item.amount_override}
-                  onChange={(event) => updateItem(item.id, "amount_override", event.target.value)}
-                  placeholder="Amount override"
-                  data-testid={`item-amount-override-input-${index + 1}`}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setItems((prev) => prev.filter((row) => row.id !== item.id))}
-                  disabled={items.length === 1}
-                  data-testid={`remove-item-button-${index + 1}`}
-                >
-                  Remove
-                </Button>
+            {items.map((item) => (
+              <div key={item.id} className="item-row-editor">
+                <Input value={item.description} onChange={(e) => updateItem(item.id, "description", e.target.value)} placeholder="Description" />
+                <Input value={item.hsn} onChange={(e) => updateItem(item.id, "hsn", e.target.value)} placeholder="HSN" />
+                <Input value={item.weight} onChange={(e) => updateItem(item.id, "weight", e.target.value)} placeholder="Weight" />
+                <Input value={item.quantity} onChange={(e) => updateItem(item.id, "quantity", e.target.value)} placeholder="Qty" />
+                <Input value={item.rate_override} onChange={(e) => updateItem(item.id, "rate_override", e.target.value)} placeholder="Rate override" />
+                <Input value={item.amount_override} onChange={(e) => updateItem(item.id, "amount_override", e.target.value)} placeholder="Amount override" />
+                <Button type="button" variant="outline" onClick={() => setItems((prev) => prev.filter((row) => row.id !== item.id))} disabled={items.length === 1}>Remove</Button>
               </div>
             ))}
-            <Button
-              type="button"
-              onClick={() => setItems((prev) => [...prev, createItem()])}
-              data-testid="add-item-button"
-            >
-              Add Item
-            </Button>
+            <Button type="button" onClick={() => setItems((prev) => [...prev, createItem()])}>Add Item</Button>
           </div>
 
-          <div className="control-card" data-testid="adjustments-section">
+          <div className="control-card">
             <h3>Adjustments</h3>
-            <Input
-              value={discount}
-              onChange={(event) => setDiscount(event.target.value)}
-              placeholder="Discount"
-              data-testid="discount-input"
-            />
-            <Input
-              value={exchange}
-              onChange={(event) => setExchange(event.target.value)}
-              placeholder="Exchange"
-              data-testid="exchange-input"
-            />
-            <Input
-              value={manualRoundOff}
-              onChange={(event) => setManualRoundOff(event.target.value)}
-              placeholder="Manual round off (optional)"
-              data-testid="round-off-input"
-            />
+            <Input value={discount} onChange={(e) => setDiscount(e.target.value)} placeholder="Discount" />
+            <Input value={exchange} onChange={(e) => setExchange(e.target.value)} placeholder="Exchange" />
+            <Input value={manualRoundOff} onChange={(e) => setManualRoundOff(e.target.value)} placeholder="Manual round off (optional)" />
 
             <label htmlFor="payment-method-select" className="select-label">Payment Method</label>
-            <select
-              id="payment-method-select"
-              value={paymentMethod}
-              onChange={(event) => setPaymentMethod(event.target.value)}
-              className="native-select"
-              data-testid="payment-method-select"
-            >
+            <select id="payment-method-select" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className="native-select">
               <option value="Cash">Cash</option>
               <option value="UPI">UPI</option>
               <option value="Card">Card</option>
             </select>
 
-            <textarea
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-              placeholder="Notes"
-              className="notes-box"
-              data-testid="notes-textarea"
-            />
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes" className="notes-box" />
           </div>
 
-          <div className="control-card action-grid" data-testid="action-buttons-section">
-            <Button onClick={saveBill} disabled={savingBill} data-testid="save-bill-button">
+          <div className="control-card action-grid">
+            <Button onClick={saveBill} disabled={savingBill}>
               {savingBill ? "Saving..." : editingDocNumber ? `Update (${editingDocNumber})` : "Save Bill"}
             </Button>
-            <Button onClick={() => setShowRecentBills(true)} variant="outline" data-testid="toggle-recent-bills-button">
-              Recent Bills
-            </Button>
-            <Button onClick={downloadPdf} data-testid="download-pdf-button">Download PDF</Button>
-            <Button onClick={printBill} data-testid="print-bill-button">Print</Button>
-            <Button onClick={shareWhatsApp} data-testid="share-whatsapp-button">WhatsApp</Button>
-            <Button onClick={shareEmail} data-testid="share-email-button">Email</Button>
-            <Button onClick={() => clearBill()} variant="outline" data-testid="new-bill-button">New Bill</Button>
-            <Button onClick={() => setShowSettings((prev) => !prev)} variant="outline" data-testid="toggle-settings-button">
-              Settings
-            </Button>
-            <Button onClick={() => setShowAbout((prev) => !prev)} variant="outline" data-testid="toggle-about-button">
-              About
-            </Button>
+            <Button onClick={() => setShowRecentBills(true)} variant="outline">Recent Bills</Button>
+            <Button onClick={() => downloadPdf("bill-print-root", documentNumber || mode)}>Download PDF</Button>
+            <Button onClick={printBill}>Print</Button>
+            <Button onClick={shareWhatsApp}>WhatsApp Link</Button>
+            <Button onClick={shareEmail}>Email Link</Button>
+            <Button onClick={() => clearBill()} variant="outline">New Bill</Button>
+            <Button onClick={() => setShowSettings((prev) => !prev)} variant="outline">Settings</Button>
+            <Button onClick={() => setShowAbout((prev) => !prev)} variant="outline">About</Button>
           </div>
         </aside>
       </main>
 
       {/* RECENT BILLS DRAWER */}
-      {showRecentBills ? (
-        <section className="side-drawer no-print" data-testid="recent-bills-drawer">
-          <div className="drawer-header" data-testid="recent-bills-drawer-header">
+      {showRecentBills && (
+        <section className="side-drawer no-print">
+          <div className="drawer-header">
             <h3>Recent Bills</h3>
-            <Button
-              type="button"
-              variant="outline"
-              className="drawer-back-btn"
-              onClick={() => setShowRecentBills(false)}
-            >
-              <ArrowLeft className="drawer-back-icon" />
-              <span>Back</span>
+            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowRecentBills(false)}>
+              <ArrowLeft className="drawer-back-icon" /><span>Back</span>
             </Button>
           </div>
           
@@ -1059,20 +1033,11 @@ export default function App() {
                     <strong style={{ color: "var(--brand)" }}>{b.document_number}</strong>
                     <span style={{ fontSize: "0.85rem", color: "#666" }}>{b.date}</span>
                   </div>
-                  <div style={{ marginBottom: "8px", fontWeight: "500" }}>
-                    {b.customer?.name || "Unknown Customer"}
-                  </div>
+                  <div style={{ marginBottom: "8px", fontWeight: "500" }}>{b.customer?.name || "Unknown Customer"}</div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <strong>₹{b.totals?.grand_total}</strong>
                     <div style={{ display: "flex", gap: "8px" }}>
-                      <Button 
-                        size="sm" 
-                        variant="destructive" 
-                        style={{ backgroundColor: "#ef4444", color: "white" }} 
-                        onClick={() => handleDeleteBill(b)}
-                      >
-                        Delete
-                      </Button>
+                      <Button size="sm" variant="destructive" style={{ backgroundColor: "#ef4444", color: "white" }} onClick={() => handleDeleteBill(b)}>Delete</Button>
                       <Button size="sm" onClick={() => loadBillForEditing(b)}>Edit</Button>
                     </div>
                   </div>
@@ -1081,198 +1046,74 @@ export default function App() {
             )}
           </div>
         </section>
-      ) : null}
+      )}
 
-      {/* SETTINGS DRAWER */}
-      {showSettings ? (
-        <section className="side-drawer no-print" data-testid="settings-drawer">
-          <div className="drawer-header" data-testid="settings-drawer-header">
+      {/* SETTINGS DRAWER (Now includes About QR Upload) */}
+      {showSettings && (
+        <section className="side-drawer no-print">
+          <div className="drawer-header">
             <h3>Settings</h3>
-            <Button
-              type="button"
-              variant="outline"
-              className="drawer-back-btn"
-              onClick={() => setShowSettings(false)}
-              data-testid="settings-back-button"
-            >
-              <ArrowLeft className="drawer-back-icon" />
-              <span>Back</span>
+            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowSettings(false)}>
+              <ArrowLeft className="drawer-back-icon" /><span>Back</span>
             </Button>
           </div>
-          <Input
-            value={settings.shop_name}
-            onChange={(event) => setSettings((prev) => ({ ...prev, shop_name: event.target.value }))}
-            placeholder="Shop name"
-            data-testid="settings-shop-name-input"
-          />
-          <Input
-            value={settings.tagline}
-            onChange={(event) => setSettings((prev) => ({ ...prev, tagline: event.target.value }))}
-            placeholder="Tagline"
-            data-testid="settings-tagline-input"
-          />
-          <Input
-            value={settings.address}
-            onChange={(event) => setSettings((prev) => ({ ...prev, address: event.target.value }))}
-            placeholder="Address"
-            data-testid="settings-address-input"
-          />
-          <Input
-            value={settings.phone_numbers.join(",")}
-            onChange={(event) =>
-              setSettings((prev) => ({
-                ...prev,
-                phone_numbers: event.target.value
-                  .split(",")
-                  .map((item) => item.trim())
-                  .filter(Boolean),
-              }))
-            }
-            placeholder="Phone numbers comma separated"
-            data-testid="settings-phone-input"
-          />
-          <Input
-            value={settings.email}
-            onChange={(event) => setSettings((prev) => ({ ...prev, email: event.target.value }))}
-            placeholder="Email"
-            data-testid="settings-email-input"
-          />
-          <Input
-            value={settings.silver_rate_per_10g}
-            onChange={(event) => setSettings((prev) => ({ ...prev, silver_rate_per_10g: num(event.target.value) }))}
-            placeholder="Silver Rate per 10g"
-            data-testid="settings-silver-rate-input"
-          />
-          <Input
-            value={settings.making_charge_per_gram}
-            onChange={(event) => setSettings((prev) => ({ ...prev, making_charge_per_gram: num(event.target.value) }))}
-            placeholder="Making Charge per gram"
-            data-testid="settings-making-charge-input"
-          />
-          <Input
-            value={settings.formula_note}
-            onChange={(event) => setSettings((prev) => ({ ...prev, formula_note: event.target.value }))}
-            placeholder="Formula note"
-            data-testid="settings-formula-note-input"
-          />
-          <Input
-            value={settings.invoice_upi_id}
-            onChange={(event) => setSettings((prev) => ({ ...prev, invoice_upi_id: event.target.value }))}
-            placeholder="Invoice mode UPI"
-            data-testid="settings-invoice-upi-input"
-          />
-          <Input
-            value={settings.estimate_upi_id}
-            onChange={(event) => setSettings((prev) => ({ ...prev, estimate_upi_id: event.target.value }))}
-            placeholder="Estimate mode UPI"
-            data-testid="settings-estimate-upi-input"
-          />
+          <Input value={settings.shop_name} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name: e.target.value }))} placeholder="Shop name" />
+          <Input value={settings.tagline} onChange={(e) => setSettings((prev) => ({ ...prev, tagline: e.target.value }))} placeholder="Tagline" />
+          <Input value={settings.address} onChange={(e) => setSettings((prev) => ({ ...prev, address: e.target.value }))} placeholder="Address" />
+          <Input value={settings.phone_numbers.join(",")} onChange={(e) => setSettings((prev) => ({ ...prev, phone_numbers: e.target.value.split(",").map((item) => item.trim()).filter(Boolean) }))} placeholder="Phone numbers comma separated" />
+          <Input value={settings.email} onChange={(e) => setSettings((prev) => ({ ...prev, email: e.target.value }))} placeholder="Email" />
+          <Input value={settings.silver_rate_per_10g} onChange={(e) => setSettings((prev) => ({ ...prev, silver_rate_per_10g: num(e.target.value) }))} placeholder="Silver Rate per 10g" />
+          <Input value={settings.making_charge_per_gram} onChange={(e) => setSettings((prev) => ({ ...prev, making_charge_per_gram: num(e.target.value) }))} placeholder="Making Charge per gram" />
+          <Input value={settings.formula_note} onChange={(e) => setSettings((prev) => ({ ...prev, formula_note: e.target.value }))} placeholder="Formula note" />
+          <Input value={settings.invoice_upi_id} onChange={(e) => setSettings((prev) => ({ ...prev, invoice_upi_id: e.target.value }))} placeholder="Invoice mode UPI" />
+          <Input value={settings.estimate_upi_id} onChange={(e) => setSettings((prev) => ({ ...prev, estimate_upi_id: e.target.value }))} placeholder="Estimate mode UPI" />
 
-          <label className="select-label" htmlFor="print-scale-range">
-            Auto Print Scale: {printScale.toFixed(1)}%
-          </label>
-          <input
-            id="print-scale-range"
-            type="range"
-            min="98"
-            max="102"
-            step="0.1"
-            value={printScale}
-            onChange={(event) => setPrintScale(clampPrintScale(Number(event.target.value)))}
-            data-testid="print-scale-range-input"
-          />
-          <Input
-            type="number"
-            min="98"
-            max="102"
-            step="0.1"
-            value={printScale}
-            onChange={(event) => setPrintScale(clampPrintScale(Number(event.target.value)))}
-            data-testid="print-scale-number-input"
-          />
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setPrintScale(100)}
-            data-testid="print-scale-reset-button"
-          >
-            Reset Print Scale (100%)
-          </Button>
+          <label className="select-label" htmlFor="print-scale-range">Auto Print Scale: {printScale.toFixed(1)}%</label>
+          <input id="print-scale-range" type="range" min="98" max="102" step="0.1" value={printScale} onChange={(e) => setPrintScale(clampPrintScale(Number(e.target.value)))} />
+          <Input type="number" min="98" max="102" step="0.1" value={printScale} onChange={(e) => setPrintScale(clampPrintScale(Number(e.target.value)))} />
+          <Button type="button" variant="outline" onClick={() => setPrintScale(100)}>Reset Print Scale (100%)</Button>
 
-          <label className="file-label" htmlFor="logo-upload-input">Upload Logo</label>
-          <input
-            id="logo-upload-input"
-            type="file"
-            accept=".png,.jpg,.jpeg,.webp,.svg,image/*"
-            onChange={handleLogoUpload}
-            data-testid="settings-logo-upload-input"
-          />
-          <p className="upload-hint" data-testid="logo-upload-filename">
-            {logoUploadName ? `Selected: ${logoUploadName}` : "No logo selected yet"}
-          </p>
-          {settings.logo_data_url ? (
-            <img
-              src={settings.logo_data_url}
-              alt="Logo preview"
-              className="settings-logo-preview"
-              data-testid="settings-logo-preview"
-            />
-          ) : null}
+          {/* Logo Upload Section */}
+          <div style={{ marginTop: "15px", padding: "10px", border: "1px dashed #ccc", borderRadius: "8px" }}>
+            <label className="file-label" htmlFor="logo-upload-input">Upload Shop Logo</label>
+            <input id="logo-upload-input" type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/*" onChange={handleLogoUpload} />
+            <p className="upload-hint">{logoUploadName ? `Selected: ${logoUploadName}` : "No logo selected yet"}</p>
+            {settings.logo_data_url && <img src={settings.logo_data_url} alt="Logo preview" className="settings-logo-preview" style={{ maxWidth: "100px", marginTop: "10px" }} />}
+          </div>
 
-          <Button onClick={saveSettings} data-testid="settings-save-button">Save Settings</Button>
+          {/* About QR Upload Section (Moved from About Drawer) */}
+          <div style={{ marginTop: "15px", padding: "10px", border: "1px dashed #ccc", borderRadius: "8px", marginBottom: "15px" }}>
+            <label className="file-label" htmlFor="about-qr-upload-input">Upload About Us QR</label>
+            <input id="about-qr-upload-input" type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/*" onChange={handleAboutQrUpload} />
+            <p className="upload-hint">{aboutUploadName ? `Selected: ${aboutUploadName}` : "No QR selected yet"}</p>
+            {(settings.about_qr_data_url || STATIC_ABOUT_QR_URL) && <img src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="QR preview" className="settings-logo-preview" style={{ maxWidth: "100px", marginTop: "10px" }} />}
+          </div>
+
+          <Button onClick={saveSettings}>Save Settings</Button>
         </section>
-      ) : null}
+      )}
 
       {/* ABOUT DRAWER */}
-      {showAbout ? (
-        <section className="side-drawer no-print" data-testid="about-drawer">
-          <div className="drawer-header" data-testid="about-drawer-header">
-            <h3>About & QR</h3>
-            <Button
-              type="button"
-              variant="outline"
-              className="drawer-back-btn"
-              onClick={() => setShowAbout(false)}
-              data-testid="about-back-button"
-            >
-              <ArrowLeft className="drawer-back-icon" />
-              <span>Back</span>
+      {showAbout && (
+        <section className="side-drawer no-print">
+          <div className="drawer-header">
+            <h3>About This App</h3>
+            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowAbout(false)}>
+              <ArrowLeft className="drawer-back-icon" /><span>Back</span>
             </Button>
           </div>
-          <p data-testid="about-text-content">
-            This app stores your logo and About QR in local storage so they remain available on every bill.
-          </p>
-          <img
-            src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL}
-            alt="Static About QR"
-            className="about-preview"
-            data-testid="about-qr-preview-image"
-          />
-          <label className="file-label" htmlFor="about-qr-upload-input">Upload About QR</label>
-          <input
-            id="about-qr-upload-input"
-            type="file"
-            accept=".png,.jpg,.jpeg,.webp,.svg,image/*"
-            onChange={handleAboutQrUpload}
-            data-testid="about-qr-upload-input"
-          />
-          <p className="upload-hint" data-testid="about-qr-upload-filename">
-            {aboutUploadName ? `Selected: ${aboutUploadName}` : "No QR selected yet"}
-          </p>
-
-          <div className="cloud-note" data-testid="cloud-setup-note">
-            <h4>Cloud Database Setup (Next Phase)</h4>
+          
+          <div className="cloud-note" style={{ marginTop: "15px" }}>
+            <h4>Cloud Database Setup</h4>
             <ol>
               <li>Create Supabase project and get project URL + service role key.</li>
               <li>Add them in backend <code>SUPABASE_URL</code> and <code>SUPABASE_SERVICE_ROLE_KEY</code>.</li>
               <li>Create <code>customers</code> and <code>number_counters</code> tables as in README.</li>
             </ol>
-            <p className="cloud-status-text" data-testid="cloud-status-text">
-              Cloud status: {cloudStatus.enabled ? "Connected" : "Placeholder mode"} ({cloudStatus.mode})
-            </p>
+            <p className="cloud-status-text">Cloud status: {cloudStatus.enabled ? "Connected" : "Placeholder mode"} ({cloudStatus.mode})</p>
           </div>
         </section>
-      ) : null}
+      )}
     </div>
   );
 }
