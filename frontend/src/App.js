@@ -25,19 +25,25 @@ const createItem = () => ({
 const defaultSettings = {
   shop_name: "Jalaram Jewellers",
   tagline: "The Silver Specialist",
-  address:
-    "Shop No.14, BMC Market Complex, Market Building, Near Petrol Pump, Unit-2 BBSR-9",
+  address: "", 
+  branch_1_address: "Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2",
+  branch_1_url: "https://maps.app.goo.gl/phoory4FrNUpFU7a6",
+  branch_2_address: "Branch - 2 : Shop No.14, BMC Market Complex, Market Building, Near Petrol Pump, Unit-2, BBSR-9",
+  branch_2_url: "https://maps.app.goo.gl/Tjn7Rm744hvetoe57",
+  address_color: "#475569",
+  address_size: 14,
   phone_numbers: ["+91 9583221115", "+91 9776177296", "+91 7538977527"],
   email: "jalaramjewellers26@gmail.com",
   gstin: "21AAUFJ1925F1ZH",
   silver_rate_per_10g: 1200,
   making_charge_per_gram: 80,
-  formula_note:
-    "Line total = Weight × ((Silver rate per 10g / 10) + Making charge per gram)",
+  formula_note: "Line total = Weight × ((Silver rate per 10g / 10) + Making charge per gram)",
   logo_data_url: "",
   about_qr_data_url: STATIC_ABOUT_QR_URL,
   invoice_upi_id: "eazypay.0000048595@icici",
   estimate_upi_id: "7538977527@ybl",
+  theme_color: "#000000",
+  shop_name_size: 26,
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -88,7 +94,7 @@ export default function App() {
   const [manualRoundOff, setManualRoundOff] = useState("");
   
   const [paymentMethod, setPaymentMethod] = useState("Cash");
-  const [splitCash, setSplitCash] = useState(""); // ✅ For Split payments
+  const [splitCash, setSplitCash] = useState("");
   const [isPaymentDone, setIsPaymentDone] = useState(false); 
   const [notes, setNotes] = useState("");
 
@@ -123,7 +129,7 @@ export default function App() {
         try {
           const res = await axios.get(`${API}/bills/public/${viewDoc}`);
           setPublicBill(res.data.bill);
-          setPublicSettings(res.data.settings);
+          setPublicSettings({ ...defaultSettings, ...res.data.settings });
         } catch (err) {
           console.error("Error fetching public bill:", err);
           setPublicBill("NOT_FOUND");
@@ -711,7 +717,6 @@ export default function App() {
 
     const publicUpiId = publicBill.mode === "invoice" ? publicSettings.invoice_upi_id : publicSettings.estimate_upi_id;
     const publicUpiUri = `upi://pay?pa=${publicUpiId}&pn=${encodeURIComponent(publicSettings.shop_name)}&am=${money(publicUpiAmountToPay)}&cu=INR&tn=Bill_${publicBill.document_number}`;
-    const publicDynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(publicUpiUri)}&size=220`;
 
     const splitAmount = (amt) => {
       const rupees = Math.floor(amt);
@@ -744,12 +749,21 @@ export default function App() {
               ) : (
                 <div className="shop-logo-fallback">JJ</div>
               )}
-              <h2 className="sheet-shop-title">{publicSettings.shop_name}</h2>
+              <h2 className="sheet-shop-title" style={{ color: publicSettings.theme_color, fontSize: `${publicSettings.shop_name_size}px` }}>
+                {publicSettings.shop_name}
+              </h2>
               <p className="sheet-tagline">{publicSettings.tagline}</p>
             </div>
 
             <div className="contact-area">
-              <p className="contact-address">{publicSettings.address}</p>
+              <div className="contact-address" style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '6px' }}>
+                <a href={publicSettings.branch_1_url} target="_blank" rel="noopener noreferrer" style={{ color: publicSettings.address_color || "#475569", fontSize: `${publicSettings.address_size || 14}px`, textDecoration: 'none' }}>
+                  {publicSettings.branch_1_address}
+                </a>
+                <a href={publicSettings.branch_2_url} target="_blank" rel="noopener noreferrer" style={{ color: publicSettings.address_color || "#475569", fontSize: `${publicSettings.address_size || 14}px`, textDecoration: 'none' }}>
+                  {publicSettings.branch_2_address}
+                </a>
+              </div>
               <p className="contact-phones">{publicSettings.phone_numbers.join(" | ")}</p>
               <p>{publicSettings.email}</p>
               {publicBill.mode === "invoice" && <p>GSTIN: {publicSettings.gstin}</p>}
@@ -844,18 +858,16 @@ export default function App() {
                 </strong>
               </div>
 
-              {/* ✅ Conditional Public QR and Button */}
+              {/* ✅ DIGITAL VIEW: Only shows clickable buttons, NO QR CODES! */}
               {showPublicUpi && (
                 <div className="payment-qr-box">
-                  <p className="scan-title">Scan Here For Payment</p>
-                  <img src={publicDynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" />
-                  <p className="upi-id">UPI: {publicUpiId}</p>
+                  <p className="scan-title" style={{ marginBottom: "15px" }}>Click Below to Pay</p>
                   
+                  {/* MAIN UPI BUTTON */}
                   <a 
                     href={publicUpiUri} 
                     style={{
                       display: "block",
-                      marginTop: "15px",
                       padding: "12px 20px",
                       backgroundColor: "#16a34a",
                       color: "white",
@@ -868,33 +880,43 @@ export default function App() {
                   >
                     📱 Pay ₹{money(publicUpiAmountToPay)} via UPI App
                   </a>
+
+                  {/* DIRECT APP BUTTONS */}
+                  <div style={{ marginTop: "20px" }}>
+                    <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "10px", fontWeight: "bold" }}>
+                      Or select your app directly:
+                    </p>
+                    <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
+                      <a href={publicUpiUri.replace("upi://pay", "phonepe://pay")} style={{ padding: "8px 16px", backgroundColor: "#5f259f", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>PhonePe</a>
+                      <a href={publicUpiUri.replace("upi://pay", "tez://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#1a73e8", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>G-Pay</a>
+                      <a href={publicUpiUri.replace("upi://pay", "paytmmp://pay")} style={{ padding: "8px 16px", backgroundColor: "#00baf2", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>Paytm</a>
+                      <a href={publicUpiUri.replace("upi://pay", "credpay://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#212121", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>CRED</a>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
 
+            {/* ✅ DIGITAL VIEW: Replaced About QR with clickable buttons */}
             {publicBill.mode === "invoice" ? (
               <div className="declaration">
                 <p className="section-title">DECLARATION</p>
                 <p>We declare that this bill shows the actual price of items and all details are correct.</p>
-                <div className="about-qr">
-                  <p className="section-title">About Us QR</p>
-                  {(publicSettings.about_qr_data_url || STATIC_ABOUT_QR_URL) && (
-                    <img src={publicSettings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="About us QR" className="about-qr-image" />
-                  )}
+                <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                  <a href="https://g.page/r/CbhDWqmvMY8REBM/review" target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>⭐ Leave Feedback</a>
+                  <a href="https://linktr.ee/JalaramJewellers" target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "12px", backgroundColor: "#1e293b", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>ℹ️ About Us</a>
                 </div>
               </div>
             ) : (
               <div className="policies">
-                <p className="section-title">POLICIES, T&amp;C</p>
+                <p className="section-title">POLICIES, T&C</p>
                 <ul className="policies-list">
                   <li>6 Months of repair and polishing warranty only on silver ornaments.</li>
                   <li>You can replace purchased items within 7 days for manufacturing defects.</li>
                 </ul>
-                <div className="about-qr">
-                  <p className="section-title">About Us QR</p>
-                  {(publicSettings.about_qr_data_url || STATIC_ABOUT_QR_URL) && (
-                    <img src={publicSettings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="About us QR" className="about-qr-image" />
-                  )}
+                <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                  <a href="https://g.page/r/CbhDWqmvMY8REBM/review" target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>⭐ Leave Feedback</a>
+                  <a href="https://linktr.ee/JalaramJewellers" target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "12px", backgroundColor: "#1e293b", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>ℹ️ About Us</a>
                 </div>
               </div>
             )}
@@ -972,12 +994,21 @@ export default function App() {
               ) : (
                 <div className="shop-logo-fallback">JJ</div>
               )}
-              <h2 className="sheet-shop-title">{settings.shop_name}</h2>
+              <h2 className="sheet-shop-title" style={{ color: settings.theme_color, fontSize: `${settings.shop_name_size}px` }}>
+                {settings.shop_name}
+              </h2>
               <p className="sheet-tagline">{settings.tagline}</p>
             </div>
 
             <div className="contact-area">
-              <p className="contact-address">{settings.address}</p>
+              <div className="contact-address" style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '6px' }}>
+                <a href={settings.branch_1_url} target="_blank" rel="noopener noreferrer" style={{ color: settings.address_color || "#475569", fontSize: `${settings.address_size || 14}px`, textDecoration: 'none' }}>
+                  {settings.branch_1_address}
+                </a>
+                <a href={settings.branch_2_url} target="_blank" rel="noopener noreferrer" style={{ color: settings.address_color || "#475569", fontSize: `${settings.address_size || 14}px`, textDecoration: 'none' }}>
+                  {settings.branch_2_address}
+                </a>
+              </div>
               <p className="contact-phones">{settings.phone_numbers.join(" | ")}</p>
               <p>{settings.email}</p>
               {mode === "invoice" && <p>GSTIN: {settings.gstin}</p>}
@@ -1092,7 +1123,7 @@ export default function App() {
               </div>
             ) : (
               <div className="policies">
-                <p className="section-title">POLICIES, T&amp;C</p>
+                <p className="section-title">POLICIES, T&C</p>
                 <ul className="policies-list">
                   <li>6 Months of repair and polishing warranty only on silver ornaments.</li>
                   <li>You can replace purchased items within 7 days for manufacturing defects.</li>
@@ -1293,7 +1324,19 @@ export default function App() {
           </div>
           <Input value={settings.shop_name} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name: e.target.value }))} placeholder="Shop name" />
           <Input value={settings.tagline} onChange={(e) => setSettings((prev) => ({ ...prev, tagline: e.target.value }))} placeholder="Tagline" />
-          <Input value={settings.address} onChange={(e) => setSettings((prev) => ({ ...prev, address: e.target.value }))} placeholder="Address" />
+          
+          <div style={{ padding: "10px", border: "1px solid var(--border)", borderRadius: "8px", marginBottom: "10px", marginTop: "10px" }}>
+            <h4 style={{ margin: "0 0 10px 0", fontSize: "0.9rem" }}>Branch 1</h4>
+            <Input value={settings.branch_1_address} onChange={(e) => setSettings((prev) => ({ ...prev, branch_1_address: e.target.value }))} placeholder="Branch 1 Address" style={{ marginBottom: "8px" }} />
+            <Input value={settings.branch_1_url} onChange={(e) => setSettings((prev) => ({ ...prev, branch_1_url: e.target.value }))} placeholder="Branch 1 Google Maps URL" />
+          </div>
+
+          <div style={{ padding: "10px", border: "1px solid var(--border)", borderRadius: "8px", marginBottom: "10px" }}>
+            <h4 style={{ margin: "0 0 10px 0", fontSize: "0.9rem" }}>Branch 2</h4>
+            <Input value={settings.branch_2_address} onChange={(e) => setSettings((prev) => ({ ...prev, branch_2_address: e.target.value }))} placeholder="Branch 2 Address" style={{ marginBottom: "8px" }} />
+            <Input value={settings.branch_2_url} onChange={(e) => setSettings((prev) => ({ ...prev, branch_2_url: e.target.value }))} placeholder="Branch 2 Google Maps URL" />
+          </div>
+
           <Input value={settings.phone_numbers.join(",")} onChange={(e) => setSettings((prev) => ({ ...prev, phone_numbers: e.target.value.split(",").map((item) => item.trim()).filter(Boolean) }))} placeholder="Phone numbers comma separated" />
           <Input value={settings.email} onChange={(e) => setSettings((prev) => ({ ...prev, email: e.target.value }))} placeholder="Email" />
           <Input value={settings.silver_rate_per_10g} onChange={(e) => setSettings((prev) => ({ ...prev, silver_rate_per_10g: num(e.target.value) }))} placeholder="Silver Rate per 10g" />
@@ -1301,6 +1344,51 @@ export default function App() {
           <Input value={settings.formula_note} onChange={(e) => setSettings((prev) => ({ ...prev, formula_note: e.target.value }))} placeholder="Formula note" />
           <Input value={settings.invoice_upi_id} onChange={(e) => setSettings((prev) => ({ ...prev, invoice_upi_id: e.target.value }))} placeholder="Invoice mode UPI" />
           <Input value={settings.estimate_upi_id} onChange={(e) => setSettings((prev) => ({ ...prev, estimate_upi_id: e.target.value }))} placeholder="Estimate mode UPI" />
+
+          {/* ✅ Theme Color, Address Color, and Font Size Controls */}
+          <div style={{ display: "flex", gap: "10px", marginTop: "10px", marginBottom: "15px" }}>
+            <div style={{ flex: 1 }}>
+              <label className="select-label" style={{ fontSize: "0.8rem" }}>Theme Color</label>
+              <input 
+                type="color" 
+                value={settings.theme_color || "#000000"} 
+                onChange={(e) => setSettings((prev) => ({ ...prev, theme_color: e.target.value }))} 
+                style={{ width: "100%", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "6px" }}
+              />
+            </div>
+
+            <div style={{ flex: 1 }}>
+              <label className="select-label" style={{ fontSize: "0.8rem" }}>Address Color</label>
+              <input 
+                type="color" 
+                value={settings.address_color || "#475569"} 
+                onChange={(e) => setSettings((prev) => ({ ...prev, address_color: e.target.value }))} 
+                style={{ width: "100%", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "6px" }}
+              />
+            </div>
+            
+            <div style={{ flex: 1 }}>
+              <label className="select-label" style={{ fontSize: "0.8rem" }}>Name Size</label>
+              <Input 
+                type="number" 
+                min="16" max="60" 
+                value={settings.shop_name_size || 26} 
+                onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_size: Number(e.target.value) }))} 
+                style={{ padding: "0 5px", textAlign: "center" }}
+              />
+            </div>
+
+            <div style={{ flex: 1 }}>
+              <label className="select-label" style={{ fontSize: "0.8rem" }}>Address Size</label>
+              <Input 
+                type="number" 
+                min="10" max="30" 
+                value={settings.address_size || 14} 
+                onChange={(e) => setSettings((prev) => ({ ...prev, address_size: Number(e.target.value) }))} 
+                style={{ padding: "0 5px", textAlign: "center" }}
+              />
+            </div>
+          </div>
 
           <label className="select-label" htmlFor="print-scale-range">Auto Print Scale: {printScale.toFixed(1)}%</label>
           <input id="print-scale-range" type="range" min="98" max="102" step="0.1" value={printScale} onChange={(e) => setPrintScale(clampPrintScale(Number(e.target.value)))} />
