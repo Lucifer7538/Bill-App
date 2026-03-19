@@ -569,6 +569,26 @@ body {
   padding: 6px;
 }
 
+/* --- ✅ NEW: WATERMARK STYLES --- */
+.watermark-done {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-45deg);
+    font-size: 5rem;
+    font-weight: 900;
+    color: #22c55e;
+    opacity: 0.15;
+    pointer-events: none;
+    z-index: 0;
+    letter-spacing: 5px;
+    border: 8px solid #22c55e;
+    padding: 10px 30px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    user-select: none;
+}
+
 @media (max-width: 1200px) {
   .main-layout {
     grid-template-columns: 1fr;
@@ -810,6 +830,13 @@ body {
     width: 120px;
     height: 120px;
   }
+  
+  /* Make the watermark smaller on mobile screens */
+  .watermark-done {
+    font-size: 3rem;
+    padding: 5px 15px;
+    border-width: 5px;
+  }
 }
 
 @media print {
@@ -948,5 +975,13 @@ body {
   .sheet-footer {
     margin-top: 3px;
     padding-top: 3px;
+  }
+
+  /* --- ✅ NEW: ENSURE WATERMARK PRINTS IN COLOR --- */
+  .watermark-done {
+    color: #22c55e !important;
+    border-color: #22c55e !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 }
