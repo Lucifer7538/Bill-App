@@ -94,6 +94,9 @@ export default function App() {
   const [recentBillsList, setRecentBillsList] = useState([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
   const [billSearchQuery, setBillSearchQuery] = useState("");
+
+  // --- STORAGE DATA STATE ---
+  const [storageStats, setStorageStats] = useState({ used_bytes: 0, quota_bytes: 524288000, percentage: 0 });
   
   const [savingBill, setSavingBill] = useState(false);
   const [printScale, setPrintScale] = useState(getInitialPrintScale);
@@ -183,12 +186,25 @@ export default function App() {
           setLoadingRecent(false);
         }
       };
-      
-      // Debounce the search so it doesn't spam the server while typing
       const timer = setTimeout(fetchRecent, 300);
       return () => clearTimeout(timer);
     }
   }, [showRecentBills, token, isPublicView, billSearchQuery]); 
+
+  // FETCH STORAGE STATS WHEN SETTINGS OPENS
+  useEffect(() => {
+    if (showSettings && token && !isPublicView) {
+      const fetchStorageStats = async () => {
+        try {
+          const res = await axios.get(`${API}/system/storage`, { headers: { Authorization: `Bearer ${token}` } });
+          setStorageStats(res.data);
+        } catch (error) {
+          console.error("Failed to load storage stats");
+        }
+      };
+      fetchStorageStats();
+    }
+  }, [showSettings, token, isPublicView]);
 
   const loadSettings = async () => {
     const response = await axios.get(`${API}/settings`, { headers: authHeaders });
@@ -390,21 +406,68 @@ export default function App() {
     }
   };
 
-  // --- NEW: RESET COUNTER LOGIC ---
   const handleResetCounter = async (resetMode) => {
     if (!window.confirm(`Are you SURE you want to restart the ${resetMode.toUpperCase()} counter back to 0001? Old bills will remain, but new ones will start from 1.`)) return;
     
     try {
       await axios.post(`${API}/bills/reset-counter`, { mode: resetMode }, { headers: { Authorization: `Bearer ${token}` } });
       toast.success(`${resetMode.toUpperCase()} counter has been reset to 0001.`);
-      
-      // If we reset the mode we are currently working in, reserve a fresh number
       if (mode === resetMode) {
         await reserveNumber(mode);
       }
     } catch (error) {
       console.error("Reset error:", error);
       toast.error(`Failed to reset the ${resetMode} counter.`);
+    }
+  };
+
+  // --- NEW: BACKUP & DELETE ALL DATA LOGIC ---
+  const handleBackupBills = async () => {
+    try {
+      toast.info("Preparing backup file...");
+      const res = await axios.get(`${API}/bills/export`, { headers: { Authorization: `Bearer ${token}` } });
+      
+      // Convert JSON data to a Blob file
+      const dataStr = JSON.stringify(res.data, null, 2);
+      const blob = new Blob([dataStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      
+      // Create an invisible link and click it to download
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Jalaram_Bills_Backup_${today()}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success("Backup downloaded successfully!");
+    } catch (error) {
+      console.error("Backup error:", error);
+      toast.error("Failed to download backup.");
+    }
+  };
+
+  const handleDeleteAllBills = async () => {
+    const confirm1 = window.confirm("🚨 WARNING! This will permanently delete ALL bills from your database. Have you downloaded your backup first?");
+    if (!confirm1) return;
+    
+    const userInput = window.prompt("Type the word 'DELETE' to confirm wiping all bills:");
+    if (userInput !== "DELETE") {
+      toast.error("Deletion cancelled.");
+      return;
+    }
+
+    try {
+      await axios.delete(`${API}/bills/all`, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success("All bills have been successfully wiped from the server.");
+      setRecentBillsList([]);
+      
+      // Refresh the storage progress bar
+      const res = await axios.get(`${API}/system/storage`, { headers: { Authorization: `Bearer ${token}` } });
+      setStorageStats(res.data);
+    } catch (error) {
+      console.error("Delete all error:", error);
+      toast.error("Failed to delete bills.");
     }
   };
 
@@ -1086,7 +1149,7 @@ export default function App() {
         </section>
       )}
 
-      {/* SETTINGS DRAWER */}
+      {/* SETTINGS DRAWER WITH STORAGE MANAGEMENT */}
       {showSettings && (
         <section className="side-drawer no-print">
           <div className="drawer-header">
@@ -1126,6 +1189,37 @@ export default function App() {
           </div>
 
           <Button onClick={saveSettings}>Save Settings</Button>
+
+          {/* NEW: DATABASE STORAGE AND BACKUP SECTION */}
+          <div style={{ marginTop: "30px", padding: "15px", border: "1px solid #e2e8f0", borderRadius: "8px", backgroundColor: "#f8fafc" }}>
+            <h4 style={{ margin: "0 0 10px 0", color: "#1e293b" }}>Database Storage & Backup</h4>
+            
+            {/* Storage Progress Bar */}
+            <div style={{ marginBottom: "15px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginBottom: "5px", color: "#475569" }}>
+                <span>Storage Used: {(storageStats.used_bytes / 1024).toFixed(2)} KB</span>
+                <span>{storageStats.percentage}% of 512 MB</span>
+              </div>
+              <div style={{ width: "100%", backgroundColor: "#cbd5e1", borderRadius: "4px", height: "10px", overflow: "hidden" }}>
+                <div style={{ 
+                  width: `${storageStats.percentage}%`, 
+                  backgroundColor: storageStats.percentage > 80 ? "#ef4444" : "#10b981", 
+                  height: "100%", 
+                  transition: "width 0.5s ease" 
+                }}></div>
+              </div>
+            </div>
+
+            {/* Backup and Delete Buttons */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              <Button type="button" variant="outline" onClick={handleBackupBills}>
+                ⬇️ Download Backup (JSON)
+              </Button>
+              <Button type="button" variant="destructive" style={{ backgroundColor: "#ef4444", color: "white" }} onClick={handleDeleteAllBills}>
+                ⚠️ Wipe All Bills (Clear Storage)
+              </Button>
+            </div>
+          </div>
         </section>
       )}
 
