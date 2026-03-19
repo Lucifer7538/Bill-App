@@ -134,6 +134,9 @@ class BillSaveResponse(BaseModel):
     totals: BillTotals
     message: str
 
+class ResetCounterRequest(BaseModel):
+    mode: Literal["invoice", "estimate"]
+
 class VerifySessionResponse(BaseModel):
     valid: bool
 
@@ -473,11 +476,60 @@ async def delete_bill(document_number: str, _: str = Depends(require_auth)):
         
     return {"message": f"Bill {document_number} deleted successfully"}
 
+# --- UPDATED GET RECENT BILLS WITH SEARCH ---
 @api_router.get("/bills/recent")
-async def recent_bills(limit: int = Query(default=8, ge=1, le=50), _: str = Depends(require_auth)):
-    return await bills_collection.find({}, {"_id": 0}).sort("created_at", -1).to_list(limit)
+async def recent_bills(
+    limit: int = Query(default=15, ge=1, le=50), 
+    search: Optional[str] = Query(None), 
+    _: str = Depends(require_auth)
+):
+    query = {}
+    if search and search.strip():
+        # Do a case-insensitive search across document number, name, and phone
+        regex = {"$regex": re.escape(search.strip()), "$options": "i"}
+        query = {
+            "$or": [
+                {"document_number": regex},
+                {"customer.name": regex},
+                {"customer.phone": regex}
+            ]
+        }
+    return await bills_collection.find(query, {"_id": 0}).sort("created_at", -1).to_list(limit)
 
-# --- PUBLIC ENDPOINT ---
+# --- NEW RESET COUNTER ENDPOINT ---
+@api_router.post("/bills/reset-counter")
+async def reset_counter(payload: ResetCounterRequest, _: str = Depends(require_auth)):
+    # Reset local MongoDB Counter
+    await counters_collection.update_one(
+        {"mode": payload.mode},
+        {"$set": {"value": 0}},
+        upsert=True
+    )
+    
+    # Reset Supabase Counter if enabled
+    if SUPABASE_ENABLED:
+        existing = await call_supabase_rest(
+            "GET",
+            supabase_counters_table,
+            params={"mode": f"eq.{payload.mode}", "select": "mode", "limit": "1"},
+            prefer=None
+        )
+        if existing is not None and existing.json():
+            await call_supabase_rest(
+                "PATCH",
+                supabase_counters_table,
+                params={"mode": f"eq.{payload.mode}"},
+                payload={"value": 0, "updated_at": now_iso()}
+            )
+        else:
+            await call_supabase_rest(
+                "POST",
+                supabase_counters_table,
+                payload={"mode": payload.mode, "value": 0, "updated_at": now_iso()}
+            )
+            
+    return {"message": f"{payload.mode.capitalize()} counter reset successfully"}
+
 @api_router.get("/bills/public/{document_number}")
 async def get_public_bill(document_number: str):
     bill = await bills_collection.find_one({"document_number": document_number}, {"_id": 0})
