@@ -66,16 +66,16 @@ class AuthTokenResponse(BaseModel):
     token_type: str = "bearer"
     expires_at: str
 
-# ✅ UPDATED: Includes new Theme Colors, Font Sizes, and Multiple Branch Addresses
 class SettingsPayload(BaseModel):
     shop_name: str = "Jalaram Jewellers"
     tagline: str = "The Silver Specialist"
-    address: str = "" # Kept for backward compatibility with older bills
+    address: str = "" 
     branch_1_address: str = "Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2"
     branch_1_url: str = "https://maps.app.goo.gl/phoory4FrNUpFU7a6"
     branch_2_address: str = "Branch - 2 : Shop No.14, BMC Market Complex, Market Building, Near Petrol Pump, Unit-2, BBSR-9"
     branch_2_url: str = "https://maps.app.goo.gl/Tjn7Rm744hvetoe57"
     address_color: str = "#475569"
+    address_size: int = 14
     phone_numbers: List[str] = Field(default_factory=lambda: ["+91 9583221115", "+91 9776177296", "+91 7538977527"])
     email: str = "jalaramjewellers26@gmail.com"
     gstin: str = "21AAUFJ1925F1ZH"
