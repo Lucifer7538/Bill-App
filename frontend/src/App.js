@@ -84,6 +84,7 @@ export default function App() {
   const [exchange, setExchange] = useState("0");
   const [manualRoundOff, setManualRoundOff] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("Cash");
+  const [isPaymentDone, setIsPaymentDone] = useState(false); // ✅ NEW STATE FOR PAYMENT TOGGLE
   const [notes, setNotes] = useState("");
 
   const [showSettings, setShowSettings] = useState(false);
@@ -351,6 +352,7 @@ export default function App() {
     setExchange("0");
     setManualRoundOff("");
     setPaymentMethod("Cash");
+    setIsPaymentDone(false); // ✅ Reset payment toggle
     setNotes("");
     setBillDate(today());
     await reserveNumber(nextMode);
@@ -370,6 +372,7 @@ export default function App() {
     });
 
     setPaymentMethod(bill.payment_method || "Cash");
+    setIsPaymentDone(bill.is_payment_done || false); // ✅ Load payment toggle state
     setNotes(bill.notes || "");
     
     setDiscount(bill.totals?.discount ? String(bill.totals.discount) : "0");
@@ -406,6 +409,32 @@ export default function App() {
     }
   };
 
+  // ✅ NEW: Instant Payment Toggle directly from the Recent Bills Drawer
+  const handleQuickPaymentToggle = async (bill) => {
+    const newStatus = !bill.is_payment_done;
+    try {
+      await axios.put(
+        `${API}/bills/${bill.document_number}/toggle-payment`, 
+        { is_payment_done: newStatus }, 
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      toast.success(`Payment marked as ${newStatus ? 'DONE ✅' : 'PENDING ⏳'}`);
+      
+      // Update local state if it's the currently editing bill
+      if (editingDocNumber === bill.document_number) {
+        setIsPaymentDone(newStatus);
+      }
+      // Update recent bills list locally
+      setRecentBillsList(prev => 
+        prev.map(b => b.document_number === bill.document_number ? { ...b, is_payment_done: newStatus } : b)
+      );
+    } catch (error) {
+      console.error("Toggle error:", error);
+      toast.error("Failed to update payment status.");
+    }
+  };
+
   const handleResetCounter = async (resetMode) => {
     if (!window.confirm(`Are you SURE you want to restart the ${resetMode.toUpperCase()} counter back to 0001? Old bills will remain, but new ones will start from 1.`)) return;
     
@@ -421,7 +450,7 @@ export default function App() {
     }
   };
 
-  // --- NEW: BACKUP & DELETE ALL DATA LOGIC ---
+  // --- BACKUP & DELETE ALL DATA LOGIC ---
   const handleBackupBills = async () => {
     try {
       toast.info("Preparing backup file...");
@@ -585,6 +614,7 @@ export default function App() {
         customer_address: customer.address,
         customer_email: customer.email,
         payment_method: paymentMethod,
+        is_payment_done: isPaymentDone, // ✅ Included payment status in Save Payload
         discount: num(discount),
         exchange: num(exchange),
         round_off: manualRoundOff === "" ? null : num(manualRoundOff),
@@ -682,7 +712,16 @@ export default function App() {
           </Button>
         </div>
 
-        <section id="public-bill-root" className="bill-sheet" style={{ "--print-scale-factor": 1 }}>
+        {/* ✅ ADDED position relative and zIndex for the Watermark */}
+        <section id="public-bill-root" className="bill-sheet" style={{ "--print-scale-factor": 1, position: 'relative', zIndex: 1 }}>
+          
+          {/* ✅ RENDER PUBLIC WATERMARK HERE */}
+          {publicBill.is_payment_done && (
+            <div className="watermark-done">
+              PAYMENT DONE
+            </div>
+          )}
+
           <div className="bill-header">
             <div className="logo-area">
               {publicSettings.logo_data_url ? (
@@ -880,7 +919,17 @@ export default function App() {
       </header>
 
       <main className="main-layout">
-        <section id="bill-print-root" className="bill-sheet" style={{ "--print-scale-factor": (printScale / 100).toFixed(3) }}>
+        
+        {/* ✅ ADDED position relative and zIndex for the Watermark preview */}
+        <section id="bill-print-root" className="bill-sheet" style={{ "--print-scale-factor": (printScale / 100).toFixed(3), position: 'relative', zIndex: 1 }}>
+          
+          {/* ✅ RENDER DASHBOARD WATERMARK HERE */}
+          {isPaymentDone && (
+            <div className="watermark-done">
+              PAYMENT DONE
+            </div>
+          )}
+
           <div className="bill-header">
             <div className="logo-area">
               {settings.logo_data_url ? (
@@ -1079,7 +1128,24 @@ export default function App() {
               <option value="Card">Card</option>
             </select>
 
-            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes" className="notes-box" />
+            {/* ✅ NEW: Main Form Payment Toggle */}
+            <div 
+              style={{ marginTop: "15px", padding: "12px", backgroundColor: isPaymentDone ? "#dcfce7" : "#fef3c7", border: `1.5px solid ${isPaymentDone ? "#22c55e" : "#f59e0b"}`, borderRadius: "8px", display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", transition: "all 0.2s" }} 
+              onClick={() => setIsPaymentDone(!isPaymentDone)}
+            >
+              <input 
+                type="checkbox" 
+                checked={isPaymentDone} 
+                onChange={(e) => setIsPaymentDone(e.target.checked)} 
+                onClick={(e) => e.stopPropagation()} 
+                style={{ width: "20px", height: "20px", cursor: "pointer" }} 
+              />
+              <strong style={{ color: isPaymentDone ? "#166534" : "#b45309", fontSize: "1.1rem" }}>
+                {isPaymentDone ? "✅ PAYMENT DONE" : "⏳ PAYMENT PENDING"}
+              </strong>
+            </div>
+
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes" className="notes-box" style={{ marginTop: "15px" }} />
           </div>
 
           <div className="control-card action-grid">
@@ -1088,7 +1154,7 @@ export default function App() {
             </Button>
             <Button onClick={() => { setShowRecentBills(true); setBillSearchQuery(""); }} variant="outline">Recent Bills</Button>
             <Button onClick={() => downloadPdf("bill-print-root", documentNumber || mode)}>Download PDF</Button>
-            <Button onClick={printBill}>Print</Button>
+            <Button onClick={() => window.print()}>Print</Button>
             <Button onClick={shareWhatsApp}>WhatsApp Link</Button>
             <Button onClick={shareEmail}>Email Link</Button>
             <Button onClick={() => clearBill()} variant="outline">New Bill</Button>
@@ -1137,7 +1203,20 @@ export default function App() {
                   <div style={{ marginBottom: "8px", fontWeight: "500" }}>{b.customer?.name || "Unknown Customer"}</div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <strong>₹{b.totals?.grand_total}</strong>
-                    <div style={{ display: "flex", gap: "8px" }}>
+                    
+                    {/* ✅ ADDED: Quick Payment Toggle inside Recent Bills */}
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                      
+                      <label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85rem", cursor: "pointer", marginRight: "5px", padding: "4px 8px", backgroundColor: b.is_payment_done ? "#dcfce7" : "#fef3c7", color: b.is_payment_done ? "#166534" : "#b45309", borderRadius: "5px", fontWeight: "bold" }}>
+                        <input 
+                          type="checkbox" 
+                          checked={b.is_payment_done || false} 
+                          onChange={() => handleQuickPaymentToggle(b)} 
+                          style={{ cursor: "pointer" }}
+                        />
+                        {b.is_payment_done ? "Paid" : "Pending"}
+                      </label>
+
                       <Button size="sm" variant="destructive" style={{ backgroundColor: "#ef4444", color: "white" }} onClick={() => handleDeleteBill(b)}>Delete</Button>
                       <Button size="sm" onClick={() => loadBillForEditing(b)}>Edit</Button>
                     </div>
