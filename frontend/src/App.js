@@ -134,13 +134,12 @@ export default function App() {
     verify();
   }, [token]);
 
-  // Fetch recent bills when the drawer opens (BUG FIXED HERE - removed API and authHeaders from dependency array)
+  // Fetch recent bills when the drawer opens
   useEffect(() => {
     if (showRecentBills && token) {
       const fetchRecent = async () => {
         setLoadingRecent(true);
         try {
-          // Using axios.get directly with the token to avoid dependency loop issues
           const response = await axios.get(`${API}/bills/recent?limit=15`, { 
             headers: { Authorization: `Bearer ${token}` } 
           });
@@ -348,6 +347,32 @@ export default function App() {
     setShowRecentBills(false); // Close drawer
     toast.success(`Loaded ${bill.document_number} for editing`);
     goToBillTop(); // Scroll up
+  };
+
+  // NEW DELETE FUNCTION
+  const handleDeleteBill = async (bill) => {
+    // 1. Ask for confirmation so you don't delete by accident!
+    if (!window.confirm(`Are you sure you want to permanently delete ${bill.document_number}?`)) {
+      return;
+    }
+
+    try {
+      // 2. Send the delete request to the backend
+      await axios.delete(`${API}/bills/${bill.document_number}`, { headers: { Authorization: `Bearer ${token}` } });
+      
+      // 3. Remove the bill from the drawer list instantly
+      setRecentBillsList((prev) => prev.filter((b) => b.document_number !== bill.document_number));
+      
+      // 4. If you happen to be editing the bill you just deleted, clear the form
+      if (editingDocNumber === bill.document_number) {
+        clearBill(mode);
+      }
+      
+      toast.success(`${bill.document_number} deleted successfully.`);
+    } catch (error) {
+      console.error("Delete error:", error);
+      toast.error("Failed to delete the bill.");
+    }
   };
 
   const handleModeChange = async (nextMode) => {
@@ -1039,7 +1064,17 @@ export default function App() {
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <strong>₹{b.totals?.grand_total}</strong>
-                    <Button size="sm" onClick={() => loadBillForEditing(b)}>Edit</Button>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <Button 
+                        size="sm" 
+                        variant="destructive" 
+                        style={{ backgroundColor: "#ef4444", color: "white" }} 
+                        onClick={() => handleDeleteBill(b)}
+                      >
+                        Delete
+                      </Button>
+                      <Button size="sm" onClick={() => loadBillForEditing(b)}>Edit</Button>
+                    </div>
                   </div>
                 </div>
               ))
