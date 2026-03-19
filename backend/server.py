@@ -477,6 +477,24 @@ async def delete_bill(document_number: str, _: str = Depends(require_auth)):
 async def recent_bills(limit: int = Query(default=8, ge=1, le=50), _: str = Depends(require_auth)):
     return await bills_collection.find({}, {"_id": 0}).sort("created_at", -1).to_list(limit)
 
+# --- PUBLIC ENDPOINT ---
+@api_router.get("/bills/public/{document_number}")
+async def get_public_bill(document_number: str):
+    bill = await bills_collection.find_one({"document_number": document_number}, {"_id": 0})
+    if not bill:
+        raise HTTPException(status_code=404, detail="Bill not found")
+        
+    settings_doc = await settings_collection.find_one({"key": "app_settings"}, {"_id": 0})
+    if settings_doc:
+        settings_data = {k: v for k, v in settings_doc.items() if k not in {"key", "updated_at"}}
+    else:
+        settings_data = SettingsPayload().model_dump()
+        
+    return {
+        "bill": bill,
+        "settings": settings_data
+    }
+
 app.include_router(api_router)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
