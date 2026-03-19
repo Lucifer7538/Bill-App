@@ -88,10 +88,12 @@ export default function App() {
 
   const [showSettings, setShowSettings] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
-  const [showRecentBills, setShowRecentBills] = useState(false);
   
+  // --- RECENT BILLS STATE ---
+  const [showRecentBills, setShowRecentBills] = useState(false);
   const [recentBillsList, setRecentBillsList] = useState([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
+  const [billSearchQuery, setBillSearchQuery] = useState("");
   
   const [savingBill, setSavingBill] = useState(false);
   const [printScale, setPrintScale] = useState(getInitialPrintScale);
@@ -147,7 +149,7 @@ export default function App() {
   }, [printScale]);
 
   useEffect(() => {
-    if (isPublicView) return; // Skip session verify if looking at a public bill
+    if (isPublicView) return; 
     const verify = async () => {
       if (!token) {
         setCheckingSession(false);
@@ -165,12 +167,13 @@ export default function App() {
     verify();
   }, [token, isPublicView]);
 
+  // LIVE SEARCH & FETCH RECENT BILLS
   useEffect(() => {
     if (showRecentBills && token && !isPublicView) {
       const fetchRecent = async () => {
         setLoadingRecent(true);
         try {
-          const response = await axios.get(`${API}/bills/recent?limit=15`, { 
+          const response = await axios.get(`${API}/bills/recent?limit=15&search=${encodeURIComponent(billSearchQuery)}`, { 
             headers: { Authorization: `Bearer ${token}` } 
           });
           setRecentBillsList(response.data);
@@ -180,9 +183,12 @@ export default function App() {
           setLoadingRecent(false);
         }
       };
-      fetchRecent();
+      
+      // Debounce the search so it doesn't spam the server while typing
+      const timer = setTimeout(fetchRecent, 300);
+      return () => clearTimeout(timer);
     }
-  }, [showRecentBills, token, isPublicView]); 
+  }, [showRecentBills, token, isPublicView, billSearchQuery]); 
 
   const loadSettings = async () => {
     const response = await axios.get(`${API}/settings`, { headers: authHeaders });
@@ -381,6 +387,24 @@ export default function App() {
     } catch (error) {
       console.error("Delete error:", error);
       toast.error("Failed to delete the bill.");
+    }
+  };
+
+  // --- NEW: RESET COUNTER LOGIC ---
+  const handleResetCounter = async (resetMode) => {
+    if (!window.confirm(`Are you SURE you want to restart the ${resetMode.toUpperCase()} counter back to 0001? Old bills will remain, but new ones will start from 1.`)) return;
+    
+    try {
+      await axios.post(`${API}/bills/reset-counter`, { mode: resetMode }, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success(`${resetMode.toUpperCase()} counter has been reset to 0001.`);
+      
+      // If we reset the mode we are currently working in, reserve a fresh number
+      if (mode === resetMode) {
+        await reserveNumber(mode);
+      }
+    } catch (error) {
+      console.error("Reset error:", error);
+      toast.error(`Failed to reset the ${resetMode} counter.`);
     }
   };
 
@@ -999,7 +1023,7 @@ export default function App() {
             <Button onClick={saveBill} disabled={savingBill}>
               {savingBill ? "Saving..." : editingDocNumber ? `Update (${editingDocNumber})` : "Save Bill"}
             </Button>
-            <Button onClick={() => setShowRecentBills(true)} variant="outline">Recent Bills</Button>
+            <Button onClick={() => { setShowRecentBills(true); setBillSearchQuery(""); }} variant="outline">Recent Bills</Button>
             <Button onClick={() => downloadPdf("bill-print-root", documentNumber || mode)}>Download PDF</Button>
             <Button onClick={printBill}>Print</Button>
             <Button onClick={shareWhatsApp}>WhatsApp Link</Button>
@@ -1011,7 +1035,7 @@ export default function App() {
         </aside>
       </main>
 
-      {/* RECENT BILLS DRAWER */}
+      {/* RECENT BILLS DRAWER WITH SEARCH & RESET */}
       {showRecentBills && (
         <section className="side-drawer no-print">
           <div className="drawer-header">
@@ -1020,8 +1044,22 @@ export default function App() {
               <ArrowLeft className="drawer-back-icon" /><span>Back</span>
             </Button>
           </div>
-          
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "15px" }}>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "15px" }}>
+            
+            {/* Search Bar */}
+            <Input 
+              placeholder="Search by Name, Phone, or Inv No..." 
+              value={billSearchQuery} 
+              onChange={(e) => setBillSearchQuery(e.target.value)} 
+            />
+
+            {/* Counter Reset Buttons */}
+            <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+              <Button size="sm" variant="outline" onClick={() => handleResetCounter("invoice")} style={{ flex: 1 }}>Reset Invoice No.</Button>
+              <Button size="sm" variant="outline" onClick={() => handleResetCounter("estimate")} style={{ flex: 1 }}>Reset Estimate No.</Button>
+            </div>
+
             {loadingRecent ? (
               <p>Loading recent bills...</p>
             ) : recentBillsList.length === 0 ? (
@@ -1048,7 +1086,7 @@ export default function App() {
         </section>
       )}
 
-      {/* SETTINGS DRAWER (Now includes About QR Upload) */}
+      {/* SETTINGS DRAWER */}
       {showSettings && (
         <section className="side-drawer no-print">
           <div className="drawer-header">
@@ -1073,7 +1111,6 @@ export default function App() {
           <Input type="number" min="98" max="102" step="0.1" value={printScale} onChange={(e) => setPrintScale(clampPrintScale(Number(e.target.value)))} />
           <Button type="button" variant="outline" onClick={() => setPrintScale(100)}>Reset Print Scale (100%)</Button>
 
-          {/* Logo Upload Section */}
           <div style={{ marginTop: "15px", padding: "10px", border: "1px dashed #ccc", borderRadius: "8px" }}>
             <label className="file-label" htmlFor="logo-upload-input">Upload Shop Logo</label>
             <input id="logo-upload-input" type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/*" onChange={handleLogoUpload} />
@@ -1081,7 +1118,6 @@ export default function App() {
             {settings.logo_data_url && <img src={settings.logo_data_url} alt="Logo preview" className="settings-logo-preview" style={{ maxWidth: "100px", marginTop: "10px" }} />}
           </div>
 
-          {/* About QR Upload Section (Moved from About Drawer) */}
           <div style={{ marginTop: "15px", padding: "10px", border: "1px dashed #ccc", borderRadius: "8px", marginBottom: "15px" }}>
             <label className="file-label" htmlFor="about-qr-upload-input">Upload About Us QR</label>
             <input id="about-qr-upload-input" type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/*" onChange={handleAboutQrUpload} />
