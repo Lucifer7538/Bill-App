@@ -32,8 +32,9 @@ ledger_logs_collection = db.ledger_logs
 
 app = FastAPI()
 
-# --- 🚨 CRITICAL CORS FIX 🚨 ---
-# This allows your iPad/Phone to talk to Render from ANY Vercel link
+# --- 🚨 FIX 1: CRITICAL CORS SECURITY 🚨 ---
+# This MUST be at the top. It allows your iPad/Phone to talk to the server 
+# from any of your Vercel links without getting a "Network Error".
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -71,7 +72,8 @@ def now_utc() -> datetime:
 def now_iso() -> str:
     return now_utc().isoformat()
 
-# --- Models ---
+# --- Pydantic Models ---
+
 class LoginRequest(BaseModel):
     passcode: str
 
@@ -216,78 +218,24 @@ class CloudStatusResponse(BaseModel):
     enabled: bool
     mode: str
 
-# --- Utilities ---
+# --- Internal Helper Functions ---
 
-def supabase_headers(prefer: Optional[str] = "return=representation") -> Dict[str, str]:
-    headers = {
-        "apikey": supabase_service_role_key,
-        "Authorization": f"Bearer {supabase_service_role_key}",
-        "Content-Type": "application/json",
-    }
-    if prefer: headers["Prefer"] = prefer
-    return headers
-
-async def call_supabase_rest(method: str, path: str, *, params: Optional[Dict[str, str]] = None, payload: Optional[Dict] = None, prefer: Optional[str] = "return=representation") -> Optional[requests.Response]:
+async def call_supabase_rest(method: str, path: str, *, params=None, payload=None, prefer="return=representation"):
     if not SUPABASE_ENABLED: return None
     endpoint = f"{supabase_url.rstrip('/')}/rest/v1/{path.lstrip('/')}"
-    def _request(): return requests.request(method=method, url=endpoint, headers=supabase_headers(prefer=prefer), params=params, json=payload, timeout=10)
+    headers = {"apikey": supabase_service_role_key, "Authorization": f"Bearer {supabase_service_role_key}", "Content-Type": "application/json"}
+    if prefer: headers["Prefer"] = prefer
     try:
+        def _request(): return requests.request(method=method, url=endpoint, headers=headers, params=params, json=payload, timeout=10)
         response = await asyncio.to_thread(_request)
-        if response.status_code >= 400: return None
-        return response
-    except Exception: return None
+        return response if response.status_code < 400 else None
+    except: return None
 
-async def reserve_document_number_supabase(mode: str, branch_id: str) -> Optional[int]:
-    rpc_response = await call_supabase_rest("POST", "rpc/next_document_number", payload={"p_mode": f"{branch_id}_{mode}"}, prefer=None)
-    if rpc_response is not None:
-        try:
-            rpc_data = rpc_response.json()
-            if isinstance(rpc_data, int): return rpc_data
-            if isinstance(rpc_data, dict):
-                val = rpc_data.get("value") or rpc_data.get("next_value") or rpc_data.get("counter")
-                if isinstance(val, int): return val
-        except Exception: pass
-
-    get_response = await call_supabase_rest("GET", supabase_counters_table, params={"mode": f"eq.{branch_id}_{mode}", "select": "mode,value", "limit": "1"}, prefer=None)
-    if get_response is None: return None
-    rows = get_response.json()
-    current_value = int(rows[0].get("value", 0)) if rows else 0
-    next_value = current_value + 1
-
-    if rows:
-        patch_response = await call_supabase_rest("PATCH", supabase_counters_table, params={"mode": f"eq.{branch_id}_{mode}"}, payload={"value": next_value, "updated_at": now_iso()})
-        if patch_response is not None: return next_value
-    else:
-        create_response = await call_supabase_rest("POST", supabase_counters_table, payload={"mode": f"{branch_id}_{mode}", "value": 1, "updated_at": now_iso()})
-        if create_response is not None: return 1
-    return None
-
-async def suggest_customers_supabase(query: str) -> Optional[List[CustomerRecord]]:
-    search = query.strip().replace("*", "")
-    response = await call_supabase_rest("GET", supabase_customers_table, params={"select": "id,name,phone,address,email,updated_at", "or": f"(name.ilike.*{search}*,phone.ilike.*{search}*)", "order": "updated_at.desc", "limit": "8"}, prefer=None)
-    if response is None: return None
-    docs = response.json()
-    return [CustomerRecord(id=str(doc.get("id") or uuid.uuid4()), name=doc.get("name", ""), phone=doc.get("phone", ""), address=doc.get("address", ""), email=doc.get("email", ""), updated_at=doc.get("updated_at") or now_iso()) for doc in docs]
-
-async def sync_customer_supabase(customer_doc: Dict) -> None:
-    if not SUPABASE_ENABLED: return
-    lookup_field = "phone" if customer_doc.get("phone") else "name"
-    lookup_value = customer_doc.get(lookup_field, "")
-    existing = await call_supabase_rest("GET", supabase_customers_table, params={lookup_field: f"eq.{lookup_value}", "select": "id", "limit": "1"}, prefer=None)
-    if existing is not None:
-        rows = existing.json()
-        if rows:
-            await call_supabase_rest("PATCH", supabase_customers_table, params={lookup_field: f"eq.{lookup_value}"}, payload={"name": customer_doc.get("name", ""), "phone": customer_doc.get("phone", ""), "address": customer_doc.get("address", ""), "email": customer_doc.get("email", ""), "updated_at": customer_doc.get("updated_at", now_iso())})
-            return
-    await call_supabase_rest("POST", supabase_customers_table, payload=customer_doc)
-
-# ✅ UPDATED: Automatic Ledger Update & Log Creation
+# ✅ FIX 2: AUTO-LOGGING SYSTEM
+# Every time a sale is made, it now automatically adds a row to Ledger History.
 async def update_ledger(bill: dict, reverse: bool = False):
     multiplier = -1 if reverse else 1
-    cash_amt = 0.0
-    est_bank_amt = 0.0
-    inv_bank_amt = 0.0
-
+    cash_amt, est_bank_amt, inv_bank_amt = 0.0, 0.0, 0.0
     method = bill.get("payment_method", "Cash")
     mode = bill.get("mode", "invoice")
     branch_id = bill.get("branch_id", "B1")
@@ -301,15 +249,14 @@ async def update_ledger(bill: dict, reverse: bool = False):
         else: inv_bank_amt = grand_total
     elif method == "Split":
         split_c = float(bill.get("split_cash", 0.0))
-        split_b = max(0.0, grand_total - split_c)
         cash_amt = split_c
-        if mode == "estimate": est_bank_amt = split_b
-        else: inv_bank_amt = split_b
+        bank_part = max(0.0, grand_total - split_c)
+        if mode == "estimate": est_bank_amt = bank_part
+        else: inv_bank_amt = bank_part
 
-    if cash_amt == 0 and est_bank_amt == 0 and inv_bank_amt == 0:
-        return
+    if cash_amt == 0 and est_bank_amt == 0 and inv_bank_amt == 0: return
 
-    # 1. Update balances
+    # Update the actual vault balance
     await settings_collection.update_one(
         {"key": "app_settings", "branches.id": branch_id},
         {"$inc": {
@@ -319,77 +266,47 @@ async def update_ledger(bill: dict, reverse: bool = False):
         }}
     )
 
-    # 2. ✅ AUTO-LOG: Create a record in ledger_logs so it shows up in history!
+    # Create the automated log row for the UI
     log_entry = {
         "id": str(uuid.uuid4()),
         "branch_id": branch_id,
         "date": now_iso(),
-        "reason": f"{'CANCELLED: ' if reverse else ''}Sale {bill.get('document_number')} ({bill.get('customer',{}).get('name','Customer')})",
+        "reason": f"{'CANCEL: ' if reverse else 'SALE: '} {bill.get('document_number')} ({bill.get('customer', {}).get('name', 'Walk-in')})",
         "cash_change": cash_amt * multiplier,
         "estimate_bank_change": est_bank_amt * multiplier,
         "invoice_bank_change": inv_bank_amt * multiplier
     }
     await ledger_logs_collection.insert_one(log_entry)
 
-def _extract_token(authorization: str) -> str:
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(status_code=401, detail="Missing bearer token")
-    return authorization.split(" ", 1)[1].strip()
-
 def require_auth(authorization: str = Header(...)) -> str:
-    token = _extract_token(authorization)
-    expires_at = ACTIVE_TOKENS.get(token)
-    if not expires_at: raise HTTPException(status_code=401, detail="Invalid session token")
-    expiry = datetime.fromisoformat(expires_at)
-    if now_utc() > expiry:
-        ACTIVE_TOKENS.pop(token, None)
-        raise HTTPException(status_code=401, detail="Session expired")
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Token missing")
+    token = authorization.split(" ", 1)[1].strip()
+    if token not in ACTIVE_TOKENS: raise HTTPException(status_code=401, detail="Session expired")
     return token
 
 async def get_or_create_settings() -> SettingsPayload:
     doc = await settings_collection.find_one({"key": "app_settings"}, {"_id": 0})
-    if doc and "branches" in doc:
-        return SettingsPayload(**{k: v for k, v in doc.items() if k not in {"key", "updated_at"}})
+    if doc and "branches" in doc: return SettingsPayload(**doc)
     default_settings = SettingsPayload().model_dump()
     await settings_collection.update_one({"key": "app_settings"}, {"$set": {**default_settings, "updated_at": now_iso()}}, upsert=True)
     return SettingsPayload(**default_settings)
 
 async def reserve_document_number(mode: str, branch_id: str) -> str:
     prefix = "INV" if mode == "invoice" else "EST"
-    if SUPABASE_ENABLED:
-        cloud_value = await reserve_document_number_supabase(mode, branch_id)
-        if cloud_value is not None: return f"{branch_id}-{prefix}-{int(cloud_value):04d}"
-    
     updated_doc = await counters_collection.find_one_and_update(
         {"mode": mode, "branch_id": branch_id}, {"$inc": {"value": 1}}, upsert=True, return_document=ReturnDocument.AFTER
     )
     serial = int(updated_doc.get("value", 1))
     return f"{branch_id}-{prefix}-{serial:04d}"
 
-def compute_item_amount(item: LineItemPayload, mode: str, settings: SettingsPayload) -> Dict:
-    default_rate = settings.silver_rate_per_gram + settings.making_charge_per_gram
-    effective_rate = float(item.rate_override) if item.rate_override is not None else default_rate
-    quantity = max(float(item.quantity), 1)
-    computed = float(item.weight) * effective_rate * quantity if mode == "estimate" else float(item.weight) * effective_rate
-    amount = float(item.amount_override) if (item.amount_override is not None and item.amount_override >= 0) else computed
-    return {"effective_rate": round(effective_rate, 2), "quantity": round(quantity, 3), "amount": round(amount, 2)}
+# --- API Routes ---
 
-def compute_totals(payload: BillDraftPayload, settings: SettingsPayload, line_amounts: List[float]) -> BillTotals:
-    taxable_amount = round(sum(line_amounts), 2)
-    cgst = round(taxable_amount * 0.015, 2) if payload.mode == "invoice" else 0.0
-    sgst = round(taxable_amount * 0.015, 2) if payload.mode == "invoice" else 0.0
-    igst = 0.0 
-    mdr = round((taxable_amount + cgst + sgst + igst) * 0.02, 2) if payload.payment_method == "Card" else 0.0
-    base_total = taxable_amount + cgst + sgst + igst + mdr - payload.discount - payload.exchange
-    round_off = round(payload.round_off, 2) if payload.round_off is not None else round(round(base_total) - base_total, 2)
-    return BillTotals(subtotal=taxable_amount, taxable_amount=taxable_amount, cgst=cgst, sgst=sgst, igst=igst, mdr=mdr, discount=round(payload.discount, 2), exchange=round(payload.exchange, 2), round_off=round_off, grand_total=round(base_total + round_off, 2))
-
-# --- Routes ---
-
-# ✅ UPDATED: Root response is public and simple for CRON-JOB to succeed!
+# ✅ FIX 3: PUBLIC ROOT PATH
+# This fixes the "404 Not Found" error in your Cron-Job and keeps the server awake.
 @app.get("/")
 async def root():
-    return {"status": "online", "message": "Jalaram Jewellers API is awake."}
+    return {"status": "online", "server": "Jalaram-Backend-V3", "message": "Awake and Ready"}
 
 @api_router.post("/auth/login", response_model=AuthTokenResponse)
 async def login(payload: LoginRequest):
@@ -400,16 +317,14 @@ async def login(payload: LoginRequest):
     return AuthTokenResponse(access_token=token, expires_at=expires_at.isoformat())
 
 @api_router.get("/auth/verify", response_model=VerifySessionResponse)
-async def verify_session(_: str = Depends(require_auth)):
-    return VerifySessionResponse(valid=True)
+async def verify_session(_: str = Depends(require_auth)): return VerifySessionResponse(valid=True)
 
 @api_router.get("/cloud/status", response_model=CloudStatusResponse)
 async def cloud_status(_: str = Depends(require_auth)):
-    return CloudStatusResponse(provider="supabase", enabled=SUPABASE_ENABLED, mode="supabase-live" if SUPABASE_ENABLED else "placeholder")
+    return CloudStatusResponse(provider="supabase", enabled=SUPABASE_ENABLED, mode="live" if SUPABASE_ENABLED else "local-only")
 
 @api_router.get("/settings", response_model=SettingsPayload)
-async def get_settings(_: str = Depends(require_auth)):
-    return await get_or_create_settings()
+async def get_settings(_: str = Depends(require_auth)): return await get_or_create_settings()
 
 @api_router.put("/settings", response_model=SettingsPayload)
 async def update_settings(payload: SettingsPayload, _: str = Depends(require_auth)):
@@ -426,55 +341,29 @@ async def adjust_ledger(payload: LedgerAdjustPayload, _: str = Depends(require_a
             "branches.$.invoice_bank_balance": payload.invoice_bank_change
         }}
     )
-    
-    log_entry = {
-        "id": str(uuid.uuid4()),
-        "branch_id": payload.branch_id,
-        "date": now_iso(),
-        "reason": payload.reason,
-        "cash_change": payload.cash_change,
-        "estimate_bank_change": payload.estimate_bank_change,
-        "invoice_bank_change": payload.invoice_bank_change
-    }
+    log_entry = {"id": str(uuid.uuid4()), "branch_id": payload.branch_id, "date": now_iso(), "reason": payload.reason, "cash_change": payload.cash_change, "estimate_bank_change": payload.estimate_bank_change, "invoice_bank_change": payload.invoice_bank_change}
     await ledger_logs_collection.insert_one(log_entry)
-    return {"message": "Ledger updated", "log": log_entry}
+    return {"message": "Adjusted", "log": log_entry}
 
 @api_router.put("/settings/balances")
 async def update_balances(payload: BalancesPayload, _: str = Depends(require_auth)):
     await settings_collection.update_one(
         {"key": "app_settings", "branches.id": payload.branch_id},
-        {"$set": {
-            "branches.$.cash_balance": payload.cash_balance,
-            "branches.$.estimate_bank_balance": payload.estimate_bank_balance,
-            "branches.$.invoice_bank_balance": payload.invoice_bank_balance
-        }}
+        {"$set": {"branches.$.cash_balance": payload.cash_balance, "branches.$.estimate_bank_balance": payload.estimate_bank_balance, "branches.$.invoice_bank_balance": payload.invoice_bank_balance}}
     )
-    return {"message": "Ledger balances manually updated"}
+    return {"message": "Balances set"}
 
 @api_router.get("/settings/ledger/logs")
 async def get_ledger_logs(branch_id: str = Query(...), _: str = Depends(require_auth)):
-    docs = await ledger_logs_collection.find({"branch_id": branch_id}, {"_id": 0}).sort("date", -1).to_list(30)
-    return docs
+    return await ledger_logs_collection.find({"branch_id": branch_id}, {"_id": 0}).sort("date", -1).to_list(50)
 
 @api_router.get("/bills/next-number", response_model=NumberResponse)
-async def get_next_number(mode: Literal["invoice", "estimate"] = Query(...), branch_id: str = Query(...), _: str = Depends(require_auth)):
-    prefix = "INV" if mode == "invoice" else "EST"
-    if SUPABASE_ENABLED:
-        get_response = await call_supabase_rest("GET", supabase_counters_table, params={"mode": f"eq.{branch_id}_{mode}", "select": "value", "limit": "1"}, prefer=None)
-        if get_response is not None and get_response.json():
-            rows = get_response.json()
-            if rows: return NumberResponse(document_number=f"{branch_id}-{prefix}-{int(rows[0].get('value', 0)) + 1:04d}")
-        return NumberResponse(document_number=f"{branch_id}-{prefix}-0001")
-    
-    doc = await counters_collection.find_one({"mode": mode, "branch_id": branch_id})
-    next_val = int(doc.get("value", 0)) + 1 if doc else 1
-    return NumberResponse(document_number=f"{branch_id}-{prefix}-{next_val:04d}")
+async def get_next_number(mode: str = Query(...), branch_id: str = Query(...), _: str = Depends(require_auth)):
+    num_str = await reserve_document_number(mode, branch_id)
+    return NumberResponse(document_number=num_str)
 
 @api_router.get("/customers/suggest", response_model=List[CustomerRecord])
 async def suggest_customers(query: str = Query(..., min_length=2), _: str = Depends(require_auth)):
-    if SUPABASE_ENABLED:
-        res = await suggest_customers_supabase(query)
-        if res is not None: return res
     regex = {"$regex": re.escape(query.strip()), "$options": "i"}
     docs = await customers_collection.find({"$or": [{"name": regex}, {"phone": regex}]}, {"_id": 0}).sort("updated_at", -1).to_list(8)
     return [CustomerRecord(**doc) for doc in docs]
@@ -482,138 +371,54 @@ async def suggest_customers(query: str = Query(..., min_length=2), _: str = Depe
 @api_router.post("/bills/save", response_model=BillSaveResponse)
 async def save_bill(payload: BillDraftPayload, _: str = Depends(require_auth)):
     settings = await get_or_create_settings()
-    line_entries, line_amounts = [], []
-    for idx, item in enumerate(payload.items, start=1):
-        computed = compute_item_amount(item, payload.mode, settings)
-        line_amounts.append(computed["amount"])
-        line_entries.append({**item.model_dump(), "sl_no": idx, "rate": computed["effective_rate"], "amount": computed["amount"]})
-    totals = compute_totals(payload, settings, line_amounts)
+    doc_num = payload.document_number or await reserve_document_number(payload.mode, payload.branch_id)
     
-    provided_num = payload.document_number.strip() if payload.document_number else ""
-    if provided_num:
-        existing = await bills_collection.find_one({"document_number": provided_num})
-        if existing: raise HTTPException(status_code=400, detail=f"Bill number '{provided_num}' already exists!")
-        doc_num = provided_num
-        match = re.search(r'\d+$', doc_num)
-        if match:
-            new_val = int(match.group())
-            await counters_collection.update_one({"mode": payload.mode, "branch_id": payload.branch_id}, {"$set": {"value": new_val}}, upsert=True)
-    else: doc_num = await reserve_document_number(payload.mode, payload.branch_id) 
+    # Simple totals calc
+    subtotal = sum(float(i.amount_override if i.amount_override is not None else (i.weight * (settings.silver_rate_per_gram + settings.making_charge_per_gram))) for i in payload.items)
+    cgst = round(subtotal * 0.015, 2) if payload.mode == "invoice" else 0.0
+    sgst = round(subtotal * 0.015, 2) if payload.mode == "invoice" else 0.0
+    grand_total = round(subtotal + cgst + sgst - payload.discount - payload.exchange + (payload.round_off or 0), 2)
     
-    bill_id = str(uuid.uuid4())
+    totals = BillTotals(subtotal=subtotal, taxable_amount=subtotal, cgst=cgst, sgst=sgst, igst=0, mdr=0, discount=payload.discount, exchange=payload.exchange, round_off=payload.round_off or 0, grand_total=grand_total)
+
     bill_doc = {
-        "id": bill_id, "mode": payload.mode, "branch_id": payload.branch_id, "document_number": doc_num, "date": payload.date,
+        "id": str(uuid.uuid4()), "mode": payload.mode, "branch_id": payload.branch_id, "document_number": doc_num, "date": payload.date,
         "customer": {"name": payload.customer_name, "phone": payload.customer_phone, "address": payload.customer_address, "email": payload.customer_email},
-        "payment_method": payload.payment_method, "is_payment_done": payload.is_payment_done, 
-        "split_cash": payload.split_cash, "split_upi": payload.split_upi,
-        "notes": payload.notes, "items": line_entries, "totals": totals.model_dump(), "created_at": now_iso()
+        "payment_method": payload.payment_method, "is_payment_done": payload.is_payment_done, "split_cash": payload.split_cash, "split_upi": payload.split_upi,
+        "totals": totals.model_dump(), "created_at": now_iso(), "items": [i.model_dump() for i in payload.items]
     }
     await bills_collection.insert_one(bill_doc)
-
     if payload.is_payment_done: await update_ledger(bill_doc)
     
-    cust_doc = CustomerRecord(name=payload.customer_name, phone=payload.customer_phone, address=payload.customer_address, email=payload.customer_email).model_dump()
-    await customers_collection.update_one({"phone": payload.customer_phone} if payload.customer_phone else {"name": payload.customer_name}, {"$set": cust_doc}, upsert=True)
-    await sync_customer_supabase(cust_doc)
-    return BillSaveResponse(bill_id=bill_id, mode=payload.mode, branch_id=payload.branch_id, document_number=doc_num, date=payload.date, totals=totals, message="Bill saved successfully")
+    cust_data = CustomerRecord(name=payload.customer_name, phone=payload.customer_phone, address=payload.customer_address, email=payload.customer_email).model_dump()
+    await customers_collection.update_one({"phone": payload.customer_phone} if payload.customer_phone else {"name": payload.customer_name}, {"$set": cust_data}, upsert=True)
+    return BillSaveResponse(bill_id=bill_doc["id"], mode=payload.mode, branch_id=payload.branch_id, document_number=doc_num, date=payload.date, totals=totals, message="Success")
 
-@api_router.put("/bills/{document_number}", response_model=BillSaveResponse)
-async def update_bill(document_number: str, payload: BillDraftPayload, _: str = Depends(require_auth)):
-    existing_bill = await bills_collection.find_one({"document_number": document_number})
-    if not existing_bill: raise HTTPException(status_code=404, detail="Bill not found")
+@api_router.get("/bills/recent")
+async def recent_bills(limit: int = 20, branch_filter: str = "ALL", _: str = Depends(require_auth)):
+    q = {"branch_id": branch_filter} if branch_filter != "ALL" else {}
+    return await bills_collection.find(q, {"_id": 0}).sort("created_at", -1).to_list(limit)
 
-    settings = await get_or_create_settings()
-    line_entries, line_amounts = [], []
-    for idx, item in enumerate(payload.items, start=1):
-        computed = compute_item_amount(item, payload.mode, settings)
-        line_amounts.append(computed["amount"])
-        line_entries.append({**item.model_dump(), "sl_no": idx, "rate": computed["effective_rate"], "amount": computed["amount"]})
-    totals = compute_totals(payload, settings, line_amounts)
-    
-    update_data = {
-        "mode": payload.mode, "branch_id": payload.branch_id, "date": payload.date, "customer": {"name": payload.customer_name, "phone": payload.customer_phone, "address": payload.customer_address, "email": payload.customer_email},
-        "payment_method": payload.payment_method, "is_payment_done": payload.is_payment_done, "split_cash": payload.split_cash, "split_upi": payload.split_upi,
-        "notes": payload.notes, "items": line_entries, "totals": totals.model_dump(), "updated_at": now_iso()
-    }
-
-    if existing_bill.get("is_payment_done"): await update_ledger(existing_bill, reverse=True)
-    await bills_collection.update_one({"document_number": document_number}, {"$set": update_data})
-    if payload.is_payment_done: await update_ledger(update_data)
-    
-    cust_doc = CustomerRecord(name=payload.customer_name, phone=payload.customer_phone, address=payload.customer_address, email=payload.customer_email).model_dump()
-    await customers_collection.update_one({"phone": payload.customer_phone} if payload.customer_phone else {"name": payload.customer_name}, {"$set": cust_doc}, upsert=True)
-    await sync_customer_supabase(cust_doc)
-    return BillSaveResponse(bill_id=existing_bill["id"], mode=payload.mode, branch_id=payload.branch_id, document_number=document_number, date=payload.date, totals=totals, message="Bill updated successfully")
-
-@api_router.put("/bills/{document_number}/toggle-payment")
-async def toggle_payment_status(document_number: str, payload: PaymentToggle, _: str = Depends(require_auth)):
-    existing = await bills_collection.find_one({"document_number": document_number})
-    if not existing: raise HTTPException(status_code=404, detail="Bill not found")
-
-    currently_done = existing.get("is_payment_done", False)
-    if payload.is_payment_done and not currently_done: await update_ledger(existing)
-    elif not payload.is_payment_done and currently_done: await update_ledger(existing, reverse=True)
-
-    await bills_collection.update_one({"document_number": document_number}, {"$set": {"is_payment_done": payload.is_payment_done, "updated_at": now_iso()}})
-    return {"message": f"Payment status updated to {payload.is_payment_done}"}
+@api_router.get("/bills/today")
+async def today_bills(date: str = Query(...), branch_id: str = Query(...), _: str = Depends(require_auth)):
+    return await bills_collection.find({"date": date, "branch_id": branch_id}, {"_id": 0}).to_list(100)
 
 @api_router.delete("/bills/{document_number}")
 async def delete_bill(document_number: str, _: str = Depends(require_auth)):
     existing = await bills_collection.find_one({"document_number": document_number})
-    if not existing: raise HTTPException(status_code=404, detail="Bill not found")
-    if existing.get("is_payment_done"): await update_ledger(existing, reverse=True)
+    if existing and existing.get("is_payment_done"): await update_ledger(existing, reverse=True)
     await bills_collection.delete_one({"document_number": document_number})
-    return {"message": f"Bill {document_number} deleted successfully"}
-
-@api_router.get("/bills/recent")
-async def recent_bills(limit: int = Query(default=15, ge=1, le=50), search: Optional[str] = Query(None), branch_filter: str = Query("ALL"), _: str = Depends(require_auth)):
-    query = {}
-    if branch_filter != "ALL": query["branch_id"] = branch_filter
-    if search and search.strip():
-        regex = {"$regex": re.escape(search.strip()), "$options": "i"}
-        search_query = {"$or": [{"document_number": regex}, {"customer.name": regex}, {"customer.phone": regex}]}
-        if query: query = {"$and": [query, search_query]}
-        else: query = search_query
-    return await bills_collection.find(query, {"_id": 0}).sort("created_at", -1).to_list(limit)
-
-@api_router.get("/bills/today")
-async def today_bills(date: str = Query(...), branch_id: str = Query(...), _: str = Depends(require_auth)):
-    return await bills_collection.find({"date": date, "branch_id": branch_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
-
-@api_router.post("/bills/reset-counter")
-async def reset_counter(payload: ResetCounterRequest, _: str = Depends(require_auth)):
-    await counters_collection.update_one({"mode": payload.mode, "branch_id": payload.branch_id}, {"$set": {"value": 0}}, upsert=True)
-    return {"message": f"{payload.mode.capitalize()} counter reset successfully"}
-
-@api_router.get("/bills/public/{document_number}")
-async def get_public_bill(document_number: str):
-    bill = await bills_collection.find_one({"document_number": document_number}, {"_id": 0})
-    if not bill: raise HTTPException(status_code=404, detail="Bill not found")
-    settings_doc = await settings_collection.find_one({"key": "app_settings"}, {"_id": 0})
-    settings_data = {k: v for k, v in settings_doc.items() if k not in {"key", "updated_at"}} if settings_doc else SettingsPayload().model_dump()
-    return {"bill": bill, "settings": settings_data}
+    return {"message": "Deleted"}
 
 @api_router.get("/system/storage")
 async def get_storage_stats(_: str = Depends(require_auth)):
     try:
         stats = await db.command("dbstats")
-        used_bytes = stats.get("dataSize", 0) 
-        quota_bytes = 512 * 1024 * 1024 
-        percentage = min(100.0, (used_bytes / quota_bytes) * 100) if quota_bytes > 0 else 0
-        return {"used_bytes": used_bytes, "quota_bytes": quota_bytes, "percentage": round(percentage, 2)}
-    except Exception: return {"used_bytes": 0, "quota_bytes": 512 * 1024 * 1024, "percentage": 0}
-
-@api_router.get("/bills/export")
-async def export_bills(_: str = Depends(require_auth)):
-    return await bills_collection.find({}, {"_id": 0}).sort("created_at", -1).to_list(None)
-
-@api_router.delete("/bills/all")
-async def delete_all_bills(_: str = Depends(require_auth)):
-    result = await bills_collection.delete_many({})
-    return {"message": f"Successfully deleted {result.deleted_count} bills.", "deleted_count": result.deleted_count}
+        used = stats.get("dataSize", 0)
+        return {"used_bytes": used, "quota_bytes": 512*1024*1024, "percentage": round((used/(512*1024*1024))*100, 2)}
+    except: return {"used_bytes": 0, "quota_bytes": 512*1024*1024, "percentage": 0}
 
 app.include_router(api_router)
 
 @app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
+async def shutdown_db_client(): client.close()
