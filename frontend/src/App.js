@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Wifi, Store } from "lucide-react";
+import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Wifi, Store, Upload, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Toaster, toast } from "sonner";
@@ -61,6 +61,7 @@ const defaultSettings = {
   
   logo_data_url: "",
   about_qr_data_url: STATIC_ABOUT_QR_URL,
+  custom_fonts: [],
   
   branches: [
     {
@@ -100,6 +101,23 @@ const getInitialPrintScale = () => {
   const saved = Number(localStorage.getItem("jj_print_scale") || "100");
   if (!Number.isFinite(saved)) return 100;
   return clampPrintScale(saved);
+};
+
+// Helper for Rupees/Paise splitting
+const splitAmount = (amt) => {
+  const rupees = Math.floor(amt);
+  const paise = Math.round((amt - rupees) * 100).toString().padStart(2, "0");
+  return { rupees, paise };
+};
+
+// Custom Font Registration Helper
+const registerFont = (name, dataUrl) => {
+  const styleId = `custom-font-${name.replace(/\s+/g, '-').toLowerCase()}`;
+  if (document.getElementById(styleId)) return;
+  const style = document.createElement('style');
+  style.id = styleId;
+  style.innerHTML = `@font-face { font-family: '${name}'; src: url('${dataUrl}'); }`;
+  document.head.appendChild(style);
 };
 
 export default function App() {
@@ -148,11 +166,17 @@ export default function App() {
   const [settingsTab, setSettingsTab] = useState("design"); 
   const [showAbout, setShowAbout] = useState(false);
   
+  // RECENT BILLS & FILTERS
   const [showRecentBills, setShowRecentBills] = useState(false);
   const [recentBillsList, setRecentBillsList] = useState([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
   const [billSearchQuery, setBillSearchQuery] = useState("");
   const [recentBranchFilter, setRecentBranchFilter] = useState("ALL");
+  const [recentModeFilter, setRecentModeFilter] = useState("ALL");
+  const [recentDateFilter, setRecentDateFilter] = useState("ALL"); // 'ALL', 'THIS_MONTH', 'LAST_MONTH', 'CUSTOM'
+  const [customStartDate, setCustomStartDate] = useState("");
+  const [customEndDate, setCustomEndDate] = useState("");
+  const [isBulkDownloading, setIsBulkDownloading] = useState(false);
 
   const [showLedger, setShowLedger] = useState(false);
   const [todayBills, setTodayBills] = useState([]);
@@ -184,6 +208,49 @@ export default function App() {
   const activeGlobalBranch = settings.branches.find(b => b.id === globalBranchId) || settings.branches[0];
   const activeBillBranch = settings.branches.find(b => b.id === billBranchId) || settings.branches[0];
 
+  // Custom Font Loading & Component
+  useEffect(() => {
+    if (settings.custom_fonts && settings.custom_fonts.length > 0) {
+      settings.custom_fonts.forEach(f => registerFont(f.name, f.dataUrl));
+    }
+  }, [settings.custom_fonts]);
+
+  const FontSelectOptions = () => (
+    <>
+      <option value="sans-serif">Sans-serif</option>
+      <option value="Arial, Helvetica, sans-serif">Arial</option>
+      <option value="'Times New Roman', Times, serif">Times New Roman</option>
+      <option value="'Courier New', Courier, monospace">Courier New</option>
+      <option value="Georgia, serif">Georgia</option>
+      <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+      <option value="'Brush Script MT', cursive">Brush Script MT (Cursive)</option>
+      {settings.custom_fonts?.map(f => (
+        <option key={f.name} value={`'${f.name}'`}>{f.name} (Custom)</option>
+      ))}
+    </>
+  );
+
+  const handleFontUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const fontName = file.name.split('.')[0];
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const dataUrl = e.target.result;
+        const newFont = { name: fontName, dataUrl };
+        const updatedFonts = [...(settings.custom_fonts || []), newFont];
+        setSettings(prev => ({ ...prev, custom_fonts: updatedFonts }));
+        localStorage.setItem("jj_custom_fonts", JSON.stringify(updatedFonts));
+        registerFont(fontName, dataUrl);
+        toast.success(`Font "${fontName}" uploaded! Check Design tab to use it.`);
+      };
+      reader.readAsDataURL(file);
+    } catch {
+      toast.error("Font upload failed.");
+    }
+  };
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const viewDoc = params.get("view");
@@ -198,6 +265,9 @@ export default function App() {
           const sData = { ...defaultSettings, ...res.data.settings };
           if (!sData.branches) {
              sData.branches = defaultSettings.branches;
+          }
+          if (sData.custom_fonts) {
+            sData.custom_fonts.forEach(f => registerFont(f.name, f.dataUrl));
           }
           setPublicSettings(sData);
         } catch (err) {
@@ -238,9 +308,7 @@ export default function App() {
     if (isPublicView) return; 
     const verify = async () => {
       if (!token) { setCheckingSession(false); return; }
-      
       const slowServerTimeout = setTimeout(() => setIsWakingUp(true), 3000);
-
       try { await axios.get(`${API}/auth/verify`, { headers: authHeaders }); } 
       catch { localStorage.removeItem("jj_auth_token"); setToken(""); } 
       finally { 
@@ -250,15 +318,17 @@ export default function App() {
       }
     };
     verify();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, isPublicView]);
 
+  // FETCH RECENT BILLS WITH DYNAMIC LIMIT
   useEffect(() => {
     if (showRecentBills && token && !isPublicView) {
       const fetchRecent = async () => {
         setLoadingRecent(true);
         try {
-          const response = await axios.get(`${API}/bills/recent?limit=15&branch_filter=${recentBranchFilter}&search=${encodeURIComponent(billSearchQuery)}`, { headers: authHeaders });
+          // If filtering by date, we pull more bills from backend to ensure we catch the whole month
+          const limit = recentDateFilter === "ALL" ? 50 : 500;
+          const response = await axios.get(`${API}/bills/recent?limit=${limit}&branch_filter=${recentBranchFilter}&search=${encodeURIComponent(billSearchQuery)}`, { headers: authHeaders });
           setRecentBillsList(response.data);
         } catch { toast.error("Failed to load recent bills."); } 
         finally { setLoadingRecent(false); }
@@ -266,8 +336,80 @@ export default function App() {
       const timer = setTimeout(fetchRecent, 300);
       return () => clearTimeout(timer);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showRecentBills, token, isPublicView, billSearchQuery, recentBranchFilter]); 
+  }, [showRecentBills, token, isPublicView, billSearchQuery, recentBranchFilter, recentDateFilter]); 
+
+  // FRONTEND FILTERING SYSTEM FOR EXPORT
+  const filteredRecentBills = useMemo(() => {
+    return recentBillsList.filter(bill => {
+      // 1. Mode Filter
+      if (recentModeFilter !== "ALL" && bill.mode !== recentModeFilter) return false;
+
+      // 2. Date Filter
+      if (recentDateFilter === "THIS_MONTH") {
+        const billMonth = new Date(bill.date).getMonth();
+        const billYear = new Date(bill.date).getFullYear();
+        const now = new Date();
+        if (billMonth !== now.getMonth() || billYear !== now.getFullYear()) return false;
+      } 
+      else if (recentDateFilter === "LAST_MONTH") {
+        const billDateObj = new Date(bill.date);
+        const now = new Date();
+        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        if (billDateObj.getMonth() !== lastMonth.getMonth() || billDateObj.getFullYear() !== lastMonth.getFullYear()) return false;
+      } 
+      else if (recentDateFilter === "CUSTOM") {
+        if (customStartDate && bill.date < customStartDate) return false;
+        if (customEndDate && bill.date > customEndDate) return false;
+      }
+
+      return true;
+    });
+  }, [recentBillsList, recentModeFilter, recentDateFilter, customStartDate, customEndDate]);
+
+
+  // BULK PDF GENERATOR
+  const handleBulkDownload = async () => {
+    if (filteredRecentBills.length === 0) {
+      toast.error("No bills to download!"); return;
+    }
+    if (filteredRecentBills.length > 20) {
+      if (!window.confirm(`You are about to generate a PDF with ${filteredRecentBills.length} pages. This might take a minute or two. Continue?`)) return;
+    }
+
+    setIsBulkDownloading(true);
+    toast.info(`Generating PDF for ${filteredRecentBills.length} bills... Please wait and do not close the window.`);
+
+    try {
+      // Allow React to render the hidden bills in the DOM first
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+
+      for (let i = 0; i < filteredRecentBills.length; i++) {
+        const bill = filteredRecentBills[i];
+        const node = document.getElementById(`bulk-bill-${bill.document_number}`);
+        
+        if (!node) continue;
+
+        const canvas = await html2canvas(node, { scale: 2, useCORS: true, backgroundColor: "#ffffff", windowWidth: 800 });
+        const imgData = canvas.toDataURL("image/png", 1.0);
+        const pageHeight = (canvas.height * pageWidth) / canvas.width;
+
+        if (i > 0) pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, 0, pageWidth, pageHeight);
+      }
+
+      pdf.save(`Jalaram_Bills_Export_${today()}.pdf`);
+      toast.success("Bulk PDF Downloaded Successfully!");
+    } catch (error) {
+      console.error(error);
+      toast.error("Error generating bulk PDF.");
+    } finally {
+      setIsBulkDownloading(false);
+    }
+  };
+
 
   const fetchLedgerHistory = async () => {
     try {
@@ -292,7 +434,6 @@ export default function App() {
       };
       fetchLedger();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showLedger, token, isPublicView, globalBranchId]);
 
   useEffect(() => {
@@ -305,7 +446,6 @@ export default function App() {
       };
       fetchStorageStats();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showSettings, token, isPublicView]);
 
   const loadSettings = async () => {
@@ -318,11 +458,18 @@ export default function App() {
       dbData.branches = defaultSettings.branches;
     }
 
+    let localFonts = [];
+    const localFontsRaw = localStorage.getItem("jj_custom_fonts");
+    if (localFontsRaw) {
+      try { localFonts = JSON.parse(localFontsRaw); } catch (e) {}
+    }
+
     const newSettings = {
       ...defaultSettings,
       ...dbData,
       logo_data_url: savedLogo || dbData.logo_data_url || "",
       about_qr_data_url: savedAboutQr || dbData.about_qr_data_url || STATIC_ABOUT_QR_URL,
+      custom_fonts: dbData.custom_fonts || localFonts,
     };
     setSettings(newSettings);
 
@@ -366,14 +513,12 @@ export default function App() {
       catch { toast.error("Could not load billing settings."); }
     };
     bootstrap();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, isPublicView]);
 
   useEffect(() => {
     if (!token || isPublicView) return;
     const interval = setInterval(() => { fetchCloudStatus(); }, 30000);
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, isPublicView]);
 
   useEffect(() => {
@@ -387,7 +532,6 @@ export default function App() {
       } catch { setSuggestions([]); }
     }, 250);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customer.phone, customer.name, token, isPublicView]);
 
   const computed = useMemo(() => {
@@ -776,12 +920,6 @@ export default function App() {
     const publicUpiId = publicBill.mode === "invoice" ? pbBranch.invoice_upi_id : pbBranch.estimate_upi_id;
     const publicUpiUri = `upi://pay?pa=${publicUpiId}&pn=${encodeURIComponent(publicSettings.shop_name)}&am=${money(publicUpiAmountToPay)}&cu=INR&tn=Bill_${publicBill.document_number}`;
 
-    const splitAmount = (amt) => {
-      const rupees = Math.floor(amt);
-      const paise = Math.round((amt - rupees) * 100).toString().padStart(2, "0");
-      return { rupees, paise };
-    };
-
     return (
       <div className="billing-app" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px' }}>
         <Toaster position="bottom-right" />
@@ -1062,7 +1200,6 @@ export default function App() {
     );
   }
 
-  // ✅ UX improvement to show users that the server is waking up
   if (checkingSession) {
     return (
       <div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
@@ -1105,6 +1242,114 @@ export default function App() {
     <div className="billing-app">
 
       <Toaster position="bottom-right" />
+
+      {/* INVISIBLE BULK PDF RENDERER - USED ONLY FOR GENERATING MULTI-PAGE PDFS */}
+      <div style={{ position: "absolute", top: "-9999px", left: "-9999px", opacity: 0, pointerEvents: "none" }}>
+        {filteredRecentBills.map(b => {
+           const billBranch = settings.branches.find(br => br.id === b.branch_id) || settings.branches[0];
+           const bulkUpiAmountToPay = b.payment_method === "Split" ? num(b.split_upi) : (b.totals?.grand_total || 0);
+           return (
+             <section key={b.id} id={`bulk-bill-${b.document_number}`} className="bill-sheet" style={{ width: "800px", maxWidth: "800px", margin: 0, "--print-scale-factor": 1 }}>
+                {b.is_payment_done && <div className="watermark-done">PAYMENT DONE</div>}
+                
+                <div className="bill-header">
+                  <div className="logo-area">
+                    {settings.logo_data_url ? <img src={settings.logo_data_url} alt="Shop Logo" className="shop-logo" /> : <div className="shop-logo-fallback">JJ</div>}
+                    <div style={{ width: "100%", textAlign: settings.shop_name_align || "center" }}>
+                      <h2 className="sheet-shop-title" style={{ fontFamily: settings.shop_name_font || "sans-serif", color: settings.shop_name_color || "#000", fontSize: `${settings.shop_name_size}px`, margin: 0 }}>{settings.shop_name}</h2>
+                    </div>
+                    <div style={{ width: "100%", textAlign: settings.tagline_align || "center" }}>
+                      <p className="sheet-tagline" style={{ fontFamily: settings.tagline_font || "sans-serif", color: settings.tagline_color || "#475569", fontSize: `${settings.tagline_size}px`, margin: "5px 0" }}>{settings.tagline}</p>
+                    </div>
+                  </div>
+                  <div className="contact-area">
+                    <div className="contact-address" style={{ fontFamily: settings.address_font || "sans-serif", textAlign: settings.address_align || "center" }}>
+                        <span style={{ color: settings.address_color || "#475569", fontSize: `${settings.address_size || 14}px` }}>{billBranch.address}</span>
+                    </div>
+                    <div style={{ width: "100%", textAlign: settings.phone_align || "center", fontFamily: settings.phone_font || "sans-serif", fontSize: `${settings.phone_size || 13}px`, marginBottom: "4px" }}>
+                      {settings.phone_numbers.join(" | ")}
+                    </div>
+                    {b.mode === "invoice" && <p style={{ margin: "4px 0", textAlign: "center" }}>GSTIN: {settings.gstin}</p>}
+                  </div>
+                </div>
+
+                <div className="sheet-banner">{b.mode === "invoice" ? "TAX INVOICE" : "ESTIMATE"}</div>
+
+                <div className="meta-grid">
+                  <p><strong>{b.mode === "invoice" ? "Invoice No" : "Estimate No"}:</strong> {b.document_number}</p>
+                  <p><strong>Date:</strong> {b.date}</p>
+                </div>
+
+                <div className="customer-box">
+                  <p><strong>Name:</strong> {b.customer?.name || "-"}</p>
+                  <p><strong>Address:</strong> {b.customer?.address || "-"}</p>
+                  <p><strong>Phone:</strong> {b.customer?.phone || "-"}</p>
+                </div>
+
+                <table className="bill-table">
+                  <thead>
+                    {b.mode === "invoice" ? (
+                      <tr><th>Sl. No.</th><th>DESCRIPTION</th><th>HSN</th><th>WEIGHT IN GRAMS</th><th>RATE PER GRAM Rs.</th><th>AMOUNT Ps.</th></tr>
+                    ) : (
+                      <tr><th>SI. No.</th><th>Particulars</th><th>Weight</th><th>Quantity / Rate</th><th>Amount Rupees.</th><th>PS.</th></tr>
+                    )}
+                  </thead>
+                  <tbody>
+                    {(b.items || []).map((item, idx) => {
+                      const { rupees, paise } = splitAmount(item.amount || 0);
+                      return (
+                        <tr key={idx}>
+                          <td>{item.sl_no || (idx + 1)}</td>
+                          <td>{item.description || "-"}</td>
+                          <td>{b.mode === "invoice" ? item.hsn || "-" : money(item.weight)}</td>
+                          <td>{b.mode === "invoice" ? money(item.weight) : `${money(item.quantity)} × ${money(item.rate)}`}</td>
+                          <td>{money(item.rate)}</td>
+                          <td>{rupees}.{paise}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+
+                <div className="sheet-bottom-stack">
+                  <div className="totals">
+                    <div className="totals-row">
+                      <span>{b.mode === "invoice" ? "Taxable Amt." : "TOTAL"}</span>
+                      <strong>₹{money(b.totals?.taxable_amount || b.totals?.subtotal)}</strong>
+                    </div>
+                    {b.mode === "invoice" ? (
+                      <>
+                        <div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(b.totals?.cgst)}</strong></div>
+                        <div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(b.totals?.sgst)}</strong></div>
+                        <div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(b.totals?.igst)}</strong></div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="totals-row"><span>DISCOUNT</span><strong>₹{money(b.totals?.discount)}</strong></div>
+                        <div className="totals-row"><span>EXCHANGE</span><strong>₹{money(b.totals?.exchange)}</strong></div>
+                      </>
+                    )}
+                    <div className="totals-row total-highlight">
+                      <span>GRAND TOTAL</span>
+                      <strong>₹{money(b.totals?.grand_total)}</strong>
+                    </div>
+                    <div className="payment-method-view">
+                      <span>Payment Method:</span>
+                      <strong>
+                        {b.payment_method === "Split" ? `Split (Cash: ₹${money(b.split_cash)}, UPI: ₹${money(bulkUpiAmountToPay)})` : b.payment_method}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+                <footer className="sheet-footer">
+                  <p>Authorised Signature</p><p>Thanking you.</p>
+                </footer>
+             </section>
+           );
+        })}
+      </div>
+      {/* END OF BULK PDF RENDERER */}
+
 
       <header className="top-bar no-print">
         <div className="brand-block" style={{ display: "flex", alignItems: "center", gap: "15px" }}>
@@ -1476,7 +1721,7 @@ export default function App() {
             
             <Button onClick={() => setShowLedger(true)} style={{ backgroundColor: "#16a34a", color: "white" }}>Daily Sales & Ledger</Button>
             
-            <Button onClick={() => { setShowRecentBills(true); setBillSearchQuery(""); setRecentBranchFilter("ALL"); }} variant="outline">Recent Bills</Button>
+            <Button onClick={() => { setShowRecentBills(true); setBillSearchQuery(""); setRecentBranchFilter("ALL"); setRecentModeFilter("ALL"); setRecentDateFilter("ALL"); }} variant="outline">Recent Bills</Button>
             <Button onClick={() => downloadPdf("bill-print-root", documentNumber || mode)}>Download PDF</Button>
             <Button onClick={() => window.print()}>Print</Button>
             <Button onClick={shareWhatsApp}>WhatsApp Link</Button>
@@ -1706,74 +1951,125 @@ export default function App() {
         </section>
       )}
 
-      {/* RECENT BILLS DRAWER WITH FILTER */}
+      {/* RECENT BILLS DRAWER WITH NEW BULK PDF FILTERS */}
       {showRecentBills && (
-        <section className="side-drawer no-print">
-          <div className="drawer-header">
-            <h3>Recent Bills</h3>
+        <section className="side-drawer no-print" style={{ width: "550px", overflowY: "auto" }}>
+          <div className="drawer-header" style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10, paddingBottom: "15px", borderBottom: "1px solid #e2e8f0" }}>
+            <h3>Recent Bills & Exports</h3>
             <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowRecentBills(false)}>
               <ArrowLeft className="drawer-back-icon" /><span>Back</span>
             </Button>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "15px", padding: "0 15px 15px 15px" }}>
+          <div style={{ padding: "15px" }}>
             
-            <select 
-                value={recentBranchFilter} 
-                onChange={(e) => setRecentBranchFilter(e.target.value)} 
-                className="native-select"
-            >
-                <option value="ALL">All Branches</option>
-                {settings.branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </select>
+            {/* BULK PDF EXPORT BUTTON */}
+            <div style={{ marginBottom: "20px" }}>
+              <Button
+                onClick={handleBulkDownload}
+                disabled={isBulkDownloading || filteredRecentBills.length === 0}
+                style={{ width: "100%", backgroundColor: "#0f172a", height: "45px", display: "flex", gap: "8px", alignItems: "center", justifyContent: "center", fontSize: "1rem" }}
+              >
+                {isBulkDownloading ? "Generating PDF... Please Wait" : <><Download size={18} /> Download {filteredRecentBills.length} Bills as Single PDF</>}
+              </Button>
+              <p style={{ fontSize: "0.75rem", color: "#64748b", textAlign: "center", marginTop: "5px" }}>
+                This button will generate a single PDF document containing all the bills currently matching the filters below.
+              </p>
+            </div>
 
-            <Input 
-              placeholder="Search by Name, Phone, or Inv No..." 
-              value={billSearchQuery} 
-              onChange={(e) => setBillSearchQuery(e.target.value)} 
-            />
+            <div style={{ backgroundColor: "#f8fafc", padding: "15px", borderRadius: "8px", border: "1px solid #cbd5e1", marginBottom: "20px" }}>
+               <h4 style={{ margin: "0 0 10px 0", color: "#334155", fontSize: "0.9rem" }}>Filter Bills</h4>
+               
+               <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+                 <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: "0.75rem", color: "#64748b" }}>Branch</label>
+                    <select value={recentBranchFilter} onChange={(e) => setRecentBranchFilter(e.target.value)} className="native-select">
+                        <option value="ALL">All Branches</option>
+                        {settings.branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                 </div>
+                 <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: "0.75rem", color: "#64748b" }}>Bill Type</label>
+                    <select value={recentModeFilter} onChange={(e) => setRecentModeFilter(e.target.value)} className="native-select">
+                        <option value="ALL">All Types</option>
+                        <option value="invoice">Invoices Only</option>
+                        <option value="estimate">Estimates Only</option>
+                    </select>
+                 </div>
+               </div>
 
-            <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
-              <Button size="sm" variant="outline" onClick={() => handleResetCounter("invoice")} style={{ flex: 1 }}>Reset Invoice No.</Button>
-              <Button size="sm" variant="outline" onClick={() => handleResetCounter("estimate")} style={{ flex: 1 }}>Reset Estimate No.</Button>
+               <div style={{ marginBottom: "10px" }}>
+                  <label style={{ fontSize: "0.75rem", color: "#64748b" }}>Date Range</label>
+                  <select value={recentDateFilter} onChange={(e) => setRecentDateFilter(e.target.value)} className="native-select">
+                      <option value="ALL">All Time</option>
+                      <option value="THIS_MONTH">This Month</option>
+                      <option value="LAST_MONTH">Last Month</option>
+                      <option value="CUSTOM">Custom Date Range</option>
+                  </select>
+               </div>
+
+               {recentDateFilter === "CUSTOM" && (
+                 <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: "0.75rem", color: "#64748b" }}>Start Date</label>
+                      <Input type="date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: "0.75rem", color: "#64748b" }}>End Date</label>
+                      <Input type="date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} />
+                    </div>
+                 </div>
+               )}
+
+               <div>
+                 <label style={{ fontSize: "0.75rem", color: "#64748b" }}>Search Name/Phone/Inv Number</label>
+                 <Input placeholder="Type to search..." value={billSearchQuery} onChange={(e) => setBillSearchQuery(e.target.value)} />
+               </div>
+            </div>
+
+            <div style={{ display: "flex", gap: "10px", marginBottom: "15px", paddingBottom: "15px", borderBottom: "1px dashed #cbd5e1" }}>
+              <Button size="sm" variant="outline" onClick={() => handleResetCounter("invoice")} style={{ flex: 1, borderColor: "#dc2626", color: "#dc2626" }}>Reset Invoice No.</Button>
+              <Button size="sm" variant="outline" onClick={() => handleResetCounter("estimate")} style={{ flex: 1, borderColor: "#2563eb", color: "#2563eb" }}>Reset Estimate No.</Button>
             </div>
 
             {loadingRecent ? (
-              <p>Loading recent bills...</p>
-            ) : recentBillsList.length === 0 ? (
-              <p>No recent bills found.</p>
+              <p style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>Loading bills from database...</p>
+            ) : filteredRecentBills.length === 0 ? (
+              <p style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>No bills found matching these filters.</p>
             ) : (
-              recentBillsList.map((b) => (
-                <div key={b.id} style={{ border: "1px solid var(--border)", padding: "12px", borderRadius: "8px", backgroundColor: "white" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-                    <strong style={{ color: "var(--brand)" }}>{b.document_number}</strong>
-                    <span style={{ fontSize: "0.85rem", color: "#666" }}>{b.date}</span>
-                  </div>
-                  <div style={{ marginBottom: "8px", fontWeight: "500" }}>{b.customer?.name || "Unknown Customer"}</div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <strong>₹{b.totals?.grand_total}</strong>
-                    
-                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {filteredRecentBills.map((b) => (
+                  <div key={b.id} style={{ border: "1px solid var(--border)", padding: "12px", borderRadius: "8px", backgroundColor: "white" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                      <strong style={{ color: b.mode === "invoice" ? "#dc2626" : "#2563eb" }}>{b.document_number}</strong>
+                      <span style={{ fontSize: "0.85rem", color: "#666" }}>{b.date}</span>
+                    </div>
+                    <div style={{ marginBottom: "8px", fontWeight: "500" }}>{b.customer?.name || "Unknown Customer"}</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <strong>₹{b.totals?.grand_total}</strong>
                       
-                      <label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85rem", cursor: "pointer", marginRight: "5px", padding: "4px 8px", backgroundColor: b.is_payment_done ? "#dcfce7" : "#fef3c7", color: b.is_payment_done ? "#166534" : "#b45309", borderRadius: "5px", fontWeight: "bold" }}>
-                        <input 
-                          type="checkbox" 
-                          checked={b.is_payment_done || false} 
-                          onChange={() => handleQuickPaymentToggle(b)} 
-                          style={{ cursor: "pointer" }}
-                        />
-                        {b.is_payment_done ? "Paid" : "Pending"}
-                      </label>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                        
+                        <label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85rem", cursor: "pointer", marginRight: "5px", padding: "4px 8px", backgroundColor: b.is_payment_done ? "#dcfce7" : "#fef3c7", color: b.is_payment_done ? "#166534" : "#b45309", borderRadius: "5px", fontWeight: "bold" }}>
+                          <input 
+                            type="checkbox" 
+                            checked={b.is_payment_done || false} 
+                            onChange={() => handleQuickPaymentToggle(b)} 
+                            style={{ cursor: "pointer" }}
+                          />
+                          {b.is_payment_done ? "Paid" : "Pending"}
+                        </label>
 
-                      <Button size="sm" variant="destructive" style={{ backgroundColor: "#ef4444", color: "white" }} onClick={() => handleDeleteBill(b)}>Delete</Button>
-                      <Button size="sm" onClick={() => {
-                        if (isDirty && !window.confirm("⚠️ You have unsaved changes. Discard them and load this old bill?")) return;
-                        loadBillForEditing(b);
-                      }}>Edit</Button>
+                        <Button size="sm" variant="destructive" style={{ backgroundColor: "#ef4444", color: "white" }} onClick={() => handleDeleteBill(b)}>Delete</Button>
+                        <Button size="sm" onClick={() => {
+                          if (isDirty && !window.confirm("⚠️ You have unsaved changes. Discard them and load this old bill?")) return;
+                          loadBillForEditing(b);
+                        }}>Edit</Button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
+                ))}
+              </div>
             )}
           </div>
         </section>
@@ -1806,13 +2102,7 @@ export default function App() {
                     <input type="color" value={settings.shop_name_color || "#000000"} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px" }} title="Color" />
                     <Input type="number" min="16" max="60" value={settings.shop_name_size || 26} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_size: Number(e.target.value) }))} style={{ width: "60px", padding: "0 5px", textAlign: "center" }} title="Font Size (px)" />
                     <select value={settings.shop_name_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_font: e.target.value }))} style={{ flex: 1, height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Font Style">
-                      <option value="sans-serif">Sans-serif</option>
-                      <option value="Arial, Helvetica, sans-serif">Arial</option>
-                      <option value="'Times New Roman', Times, serif">Times New Roman</option>
-                      <option value="'Courier New', Courier, monospace">Courier New</option>
-                      <option value="Georgia, serif">Georgia</option>
-                      <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
-                      <option value="'Brush Script MT', cursive">Brush Script MT (Cursive)</option>
+                      <FontSelectOptions />
                     </select>
                     <select value={settings.shop_name_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_align: e.target.value }))} style={{ width: "80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Alignment">
                       <option value="left">Left</option>
@@ -1830,13 +2120,7 @@ export default function App() {
                     <input type="color" value={settings.tagline_color || "#475569"} onChange={(e) => setSettings((prev) => ({ ...prev, tagline_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px" }} title="Color" />
                     <Input type="number" min="8" max="40" value={settings.tagline_size || 12} onChange={(e) => setSettings((prev) => ({ ...prev, tagline_size: Number(e.target.value) }))} style={{ width: "60px", padding: "0 5px", textAlign: "center" }} title="Font Size (px)" />
                     <select value={settings.tagline_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, tagline_font: e.target.value }))} style={{ flex: 1, height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Font Style">
-                      <option value="sans-serif">Sans-serif</option>
-                      <option value="Arial, Helvetica, sans-serif">Arial</option>
-                      <option value="'Times New Roman', Times, serif">Times New Roman</option>
-                      <option value="'Courier New', Courier, monospace">Courier New</option>
-                      <option value="Georgia, serif">Georgia</option>
-                      <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
-                      <option value="'Brush Script MT', cursive">Brush Script MT (Cursive)</option>
+                      <FontSelectOptions />
                     </select>
                     <select value={settings.tagline_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, tagline_align: e.target.value }))} style={{ width: "80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Alignment">
                       <option value="left">Left</option>
@@ -1853,12 +2137,7 @@ export default function App() {
                     <input type="color" value={settings.address_color || "#475569"} onChange={(e) => setSettings((prev) => ({ ...prev, address_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px" }} title="Color" />
                     <Input type="number" min="8" max="30" value={settings.address_size || 14} onChange={(e) => setSettings((prev) => ({ ...prev, address_size: Number(e.target.value) }))} style={{ width: "60px", padding: "0 5px", textAlign: "center" }} title="Font Size (px)" />
                     <select value={settings.address_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, address_font: e.target.value }))} style={{ flex: 1, height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Font Style">
-                      <option value="sans-serif">Sans-serif</option>
-                      <option value="Arial, Helvetica, sans-serif">Arial</option>
-                      <option value="'Times New Roman', Times, serif">Times New Roman</option>
-                      <option value="'Courier New', Courier, monospace">Courier New</option>
-                      <option value="Georgia, serif">Georgia</option>
-                      <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+                      <FontSelectOptions />
                     </select>
                     <select value={settings.address_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, address_align: e.target.value }))} style={{ width: "80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Alignment">
                       <option value="left">Left</option>
@@ -1876,12 +2155,7 @@ export default function App() {
                     <input type="color" value={settings.phone_color || "#475569"} onChange={(e) => setSettings((prev) => ({ ...prev, phone_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px" }} title="Color" />
                     <Input type="number" min="8" max="30" value={settings.phone_size || 13} onChange={(e) => setSettings((prev) => ({ ...prev, phone_size: Number(e.target.value) }))} style={{ width: "60px", padding: "0 5px", textAlign: "center" }} title="Font Size (px)" />
                     <select value={settings.phone_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, phone_font: e.target.value }))} style={{ flex: 1, height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Font Style">
-                      <option value="sans-serif">Sans-serif</option>
-                      <option value="Arial, Helvetica, sans-serif">Arial</option>
-                      <option value="'Times New Roman', Times, serif">Times New Roman</option>
-                      <option value="'Courier New', Courier, monospace">Courier New</option>
-                      <option value="Georgia, serif">Georgia</option>
-                      <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+                      <FontSelectOptions />
                     </select>
                     <select value={settings.phone_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, phone_align: e.target.value }))} style={{ width: "80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Alignment">
                       <option value="left">Left</option>
@@ -1899,12 +2173,7 @@ export default function App() {
                     <input type="color" value={settings.email_color || "#475569"} onChange={(e) => setSettings((prev) => ({ ...prev, email_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px" }} title="Color" />
                     <Input type="number" min="8" max="30" value={settings.email_size || 13} onChange={(e) => setSettings((prev) => ({ ...prev, email_size: Number(e.target.value) }))} style={{ width: "60px", padding: "0 5px", textAlign: "center" }} title="Font Size (px)" />
                     <select value={settings.email_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, email_font: e.target.value }))} style={{ flex: 1, height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Font Style">
-                      <option value="sans-serif">Sans-serif</option>
-                      <option value="Arial, Helvetica, sans-serif">Arial</option>
-                      <option value="'Times New Roman', Times, serif">Times New Roman</option>
-                      <option value="'Courier New', Courier, monospace">Courier New</option>
-                      <option value="Georgia, serif">Georgia</option>
-                      <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+                      <FontSelectOptions />
                     </select>
                     <select value={settings.email_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, email_align: e.target.value }))} style={{ width: "80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Alignment">
                       <option value="left">Left</option>
@@ -1921,6 +2190,23 @@ export default function App() {
             {settingsTab === "technical" && (
               <div className="settings-technical-tab">
                 
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f0fdf4" }}>
+                  <h4 style={{ margin: "0 0 10px 0", color: "#166534", display: "flex", alignItems: "center", gap: "8px" }}><Upload size={18} /> Upload Custom Font</h4>
+                  <p style={{ fontSize: "0.75rem", color: "#666", marginBottom: "10px" }}>Upload a .ttf or .otf file to use it in your bill design.</p>
+                  <label style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px", border: "2px dashed #16a34a", borderRadius: "8px", cursor: "pointer", backgroundColor: "white" }}>
+                    <span style={{ fontSize: "0.85rem", fontWeight: "bold" }}>📁 Choose Font File</span>
+                    <input type="file" accept=".ttf,.otf,.woff,.woff2" onChange={handleFontUpload} style={{ display: "none" }} />
+                  </label>
+                  {settings.custom_fonts?.length > 0 && (
+                    <div style={{ marginTop: "10px" }}>
+                      <p style={{ fontSize: "0.75rem", fontWeight: "bold", margin: "0 0 5px 0" }}>Uploaded Fonts:</p>
+                      <ul style={{ fontSize: "0.75rem", margin: 0, paddingLeft: "15px" }}>
+                        {settings.custom_fonts.map(f => <li key={f.name}>{f.name}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+
                 <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc" }}>
                   <h4 style={{ margin: "0 0 10px 0" }}>Math & Formulas</h4>
                   
@@ -1993,7 +2279,6 @@ export default function App() {
               </div>
             )}
 
-            {/* ✅ NEW: BRANCHES TAB */}
             {settingsTab === "branches" && (
                <div className="settings-branches-tab">
                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
