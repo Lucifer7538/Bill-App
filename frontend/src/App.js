@@ -62,7 +62,6 @@ const defaultSettings = {
   logo_data_url: "",
   about_qr_data_url: STATIC_ABOUT_QR_URL,
   
-  // ✅ NEW: Full Branch Definitions
   branches: [
     {
       id: "B1",
@@ -121,9 +120,8 @@ export default function App() {
 
   const [settings, setSettings] = useState(defaultSettings);
   
-  // ✅ GLOBAL BRANCH SELECTION
   const [globalBranchId, setGlobalBranchId] = useState("B1");
-  const [billBranchId, setBillBranchId] = useState("B1"); // Branch assigned to the specific bill being drafted
+  const [billBranchId, setBillBranchId] = useState("B1");
 
   const [mode, setMode] = useState("invoice");
   const [documentNumber, setDocumentNumber] = useState("");
@@ -134,9 +132,8 @@ export default function App() {
   const [customer, setCustomer] = useState({ name: "", phone: "", address: "", email: "" });
   const [suggestions, setSuggestions] = useState([]);
 
-  const [items, useStateItems] = useState([createItem()]);
-  const items = useStateItems;
-  const setItems = useStateItems;
+  // ✅ VERCEL ERROR FIXED HERE (Removed duplicate variables)
+  const [items, setItems] = useState([createItem()]);
 
   const [discount, setDiscount] = useState("0");
   const [exchange, setExchange] = useState("0");
@@ -148,7 +145,7 @@ export default function App() {
   const [notes, setNotes] = useState("");
 
   const [showSettings, setShowSettings] = useState(false);
-  const [settingsTab, setSettingsTab] = useState("design"); // design, technical, branches
+  const [settingsTab, setSettingsTab] = useState("design"); 
   const [showAbout, setShowAbout] = useState(false);
   
   const [showRecentBills, setShowRecentBills] = useState(false);
@@ -184,7 +181,6 @@ export default function App() {
   
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
-  // Active branch definitions
   const activeGlobalBranch = settings.branches.find(b => b.id === globalBranchId) || settings.branches[0];
   const activeBillBranch = settings.branches.find(b => b.id === billBranchId) || settings.branches[0];
 
@@ -200,7 +196,6 @@ export default function App() {
           setPublicBill(res.data.bill);
           
           const sData = { ...defaultSettings, ...res.data.settings };
-          // If old payload structure, migrate shape for public view
           if (!sData.branches) {
              sData.branches = defaultSettings.branches;
           }
@@ -308,7 +303,6 @@ export default function App() {
     const savedAboutQr = localStorage.getItem("jj_about_qr_data_url");
     
     let dbData = response.data;
-    // Auto-migrate if branches array is missing
     if (!dbData.branches) {
       dbData.branches = defaultSettings.branches;
     }
@@ -321,7 +315,6 @@ export default function App() {
     };
     setSettings(newSettings);
 
-    // Sync global branch id if not set
     if (!newSettings.branches.find(b => b.id === globalBranchId)) {
         setGlobalBranchId(newSettings.branches[0].id);
         setBillBranchId(newSettings.branches[0].id);
@@ -415,7 +408,6 @@ export default function App() {
   const upiAmountToPay = paymentMethod === "Split" ? Math.max(0, computed.grandTotal - num(splitCash)) : computed.grandTotal;
   const showDashboardUpi = !isPaymentDone && (paymentMethod === "UPI" || (paymentMethod === "Split" && upiAmountToPay > 0));
   
-  // Use the specific UPI ID assigned to the currently drafted bill's branch!
   const upiId = mode === "invoice" ? activeBillBranch.invoice_upi_id : activeBillBranch.estimate_upi_id;
   const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
   const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
@@ -625,7 +617,6 @@ export default function App() {
       };
       await axios.put(`${API}/settings/balances`, payload, { headers: authHeaders });
       
-      // Update local state instantly to reflect the current vault
       setSettings(prev => {
         const updatedBranches = prev.branches.map(b => b.id === globalBranchId ? { ...b, ...payload } : b);
         return { ...prev, branches: updatedBranches };
@@ -726,9 +717,8 @@ export default function App() {
 
   const goToBillTop = () => { document.getElementById("bill-print-root")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
 
-  // ✅ SMART GEOLOCATION OR MODAL REVIEW
   const handleSmartFeedback = () => {
-    setShowFeedbackModal(true); // Always show modal for simplicity and choice
+    setShowFeedbackModal(true); 
   };
 
   const handleWifiClick = () => {
@@ -750,7 +740,6 @@ export default function App() {
     const publicUpiAmountToPay = publicBill.payment_method === "Split" ? num(publicBill.split_upi) : publicBill.totals.grand_total;
     const showPublicUpi = !publicBill.is_payment_done && (publicBill.payment_method === "UPI" || (publicBill.payment_method === "Split" && publicUpiAmountToPay > 0));
     
-    // Identify public bill's branch data
     const pbBranch = publicSettings.branches.find(b => b.id === publicBill.branch_id) || publicSettings.branches[0];
     const publicUpiId = publicBill.mode === "invoice" ? pbBranch.invoice_upi_id : pbBranch.estimate_upi_id;
     const publicUpiUri = `upi://pay?pa=${publicUpiId}&pn=${encodeURIComponent(publicSettings.shop_name)}&am=${money(publicUpiAmountToPay)}&cu=INR&tn=Bill_${publicBill.document_number}`;
@@ -832,7 +821,7 @@ export default function App() {
             <div className="contact-area">
               <div className="contact-address" style={{ fontFamily: publicSettings.address_font || "sans-serif", display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '8px', alignItems: publicSettings.address_align === 'left' ? 'flex-start' : publicSettings.address_align === 'right' ? 'flex-end' : 'center', textAlign: publicSettings.address_align || "center" }}>
                 {publicSettings.branches.map(b => (
-                    <a key={b.id} href={b.map_url} target="_blank" rel="noopener noreferrer" style={{ color: publicSettings.address_color || "#475569", fontSize: `${publicSettings.address_size || 14}px`, textDecoration: 'none' }}>
+                    <a key={b.id} href={b.map_url !== "#" ? b.map_url : "#"} target="_blank" rel="noopener noreferrer" style={{ color: publicSettings.address_color || "#475569", fontSize: `${publicSettings.address_size || 14}px`, textDecoration: 'none' }}>
                       {b.address}
                     </a>
                 ))}
@@ -1073,7 +1062,6 @@ export default function App() {
 
       <Toaster position="bottom-right" />
 
-      {/* ✅ NEW: Global Branch Switcher in Top Bar */}
       <header className="top-bar no-print">
         <div className="brand-block" style={{ display: "flex", alignItems: "center", gap: "15px" }}>
           <div>
@@ -1307,7 +1295,6 @@ export default function App() {
         <aside className="controls no-print">
           <div className="control-card">
             
-            {/* ✅ NEW: Edit Bill Branch Assignment */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
                 <h3 style={{ margin: 0 }}>Bill Details</h3>
                 <select 
@@ -1670,7 +1657,6 @@ export default function App() {
 
           <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "15px" }}>
             
-            {/* ✅ NEW: Filter by Branch */}
             <select 
                 value={recentBranchFilter} 
                 onChange={(e) => setRecentBranchFilter(e.target.value)} 
