@@ -173,7 +173,7 @@ export default function App() {
   const [billSearchQuery, setBillSearchQuery] = useState("");
   const [recentBranchFilter, setRecentBranchFilter] = useState("ALL");
   const [recentModeFilter, setRecentModeFilter] = useState("ALL");
-  const [recentDateFilter, setRecentDateFilter] = useState("ALL");
+  const [recentDateFilter, setRecentDateFilter] = useState("ALL"); // 'ALL', 'THIS_MONTH', 'LAST_MONTH', 'CUSTOM'
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
@@ -322,7 +322,6 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, isPublicView]);
 
-  // FETCH RECENT BILLS WITH DYNAMIC LIMIT
   useEffect(() => {
     if (showRecentBills && token && !isPublicView) {
       const fetchRecent = async () => {
@@ -731,7 +730,6 @@ export default function App() {
     catch { toast.error("Could not save settings."); }
   };
 
-  // --- UPGRADED LEDGER LOGGING WITH SMART ERROR CATCHER ---
   const submitLedgerLog = async () => {
     if (!logAmount || isNaN(logAmount) || num(logAmount) <= 0) {
       toast.error("Please enter a valid amount."); return;
@@ -771,11 +769,10 @@ export default function App() {
     } catch (error) { 
       console.error("Ledger Error:", error);
       if (error.response) {
-          // Backend responded with an error (e.g. 500 server error, missing column, etc)
           toast.error(`Backend Error: ${error.response.data?.detail || error.response.statusText || "Check backend logs."}`);
       } else if (error.request) {
-          // No response from server (Timeout / Sleeping)
-          toast.error("Network Error: Server is sleeping or unreachable. Try again in 10s ⏳");
+          // It explicitly prints error.message so we can see if it's CORS or Timeout
+          toast.error(`Network Error: ${error.message} (Is backend running?)`);
       } else {
           toast.error(`Error: ${error.message}`);
       }
@@ -833,10 +830,17 @@ export default function App() {
       }
       
       await loadSettings(); 
-      // Force Ledger Log Refresh automatically after saving a bill
       await fetchLedgerHistory();
 
-    } catch (error) { toast.error(error.response?.data?.detail || "Could not save bill."); } 
+    } catch (error) { 
+      if (error.response) {
+          toast.error(`Backend Error: ${error.response.data?.detail || "Could not save bill."}`);
+      } else if (error.request) {
+          toast.error(`Network Error: ${error.message}`);
+      } else {
+          toast.error(`Error: ${error.message}`);
+      }
+    } 
     finally { setSavingBill(false); }
   };
 
@@ -1752,9 +1756,9 @@ export default function App() {
 
       {/* DAILY SALES, LEDGER & EXPENSE DRAWER */}
       {showLedger && (
-        <section className="side-drawer no-print" style={{ width: "100%", maxWidth: "650px", overflowY: "auto" }}>
+        <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "650px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
           <div className="drawer-header" style={{ backgroundColor: "#f0fdf4", borderBottom: "2px solid #bbf7d0", padding: "20px", position: "sticky", top: 0, zIndex: 10 }}>
-            <h3 style={{ display: "flex", alignItems: "center", gap: "10px" }}><Banknote /> Vaults & Ledger: {activeGlobalBranch.name}</h3>
+            <h3 style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}><Banknote /> Vaults & Ledger: {activeGlobalBranch.name}</h3>
             <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowLedger(false)}>
               <ArrowLeft className="drawer-back-icon" /><span>Back</span>
             </Button>
@@ -1765,7 +1769,7 @@ export default function App() {
             <div style={{ marginBottom: "25px" }}>
               <h4 style={{ margin: "0 0 15px 0", fontSize: "1.1rem", color: "#1e293b" }}>Live Vault Balances</h4>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
-                <div style={{ flex: 1, backgroundColor: "#fffbeb", border: "1px solid #fde68a", padding: "15px", borderRadius: "10px", textAlign: "center", minWidth: "140px" }}>
+                <div style={{ flex: "1 1 140px", backgroundColor: "#fffbeb", border: "1px solid #fde68a", padding: "15px", borderRadius: "10px", textAlign: "center" }}>
                   <Banknote size={24} color="#d97706" style={{ margin: "0 auto 8px auto" }} />
                   <p style={{ margin: "0 0 5px 0", fontSize: "0.85rem", color: "#92400e", fontWeight: "bold" }}>Cash Drawer</p>
                   {editingBalances ? (
@@ -1775,7 +1779,7 @@ export default function App() {
                   )}
                 </div>
 
-                <div style={{ flex: 1, backgroundColor: "#eff6ff", border: "1px solid #bfdbfe", padding: "15px", borderRadius: "10px", textAlign: "center", minWidth: "140px" }}>
+                <div style={{ flex: "1 1 140px", backgroundColor: "#eff6ff", border: "1px solid #bfdbfe", padding: "15px", borderRadius: "10px", textAlign: "center" }}>
                   <Wallet size={24} color="#2563eb" style={{ margin: "0 auto 8px auto" }} />
                   <p style={{ margin: "0 0 5px 0", fontSize: "0.85rem", color: "#1e40af", fontWeight: "bold" }}>Estimate Bank</p>
                   {editingBalances ? (
@@ -1785,7 +1789,7 @@ export default function App() {
                   )}
                 </div>
 
-                <div style={{ flex: 1, backgroundColor: "#fef2f2", border: "1px solid #fecaca", padding: "15px", borderRadius: "10px", textAlign: "center", minWidth: "140px" }}>
+                <div style={{ flex: "1 1 140px", backgroundColor: "#fef2f2", border: "1px solid #fecaca", padding: "15px", borderRadius: "10px", textAlign: "center" }}>
                   <Building2 size={24} color="#dc2626" style={{ margin: "0 auto 8px auto" }} />
                   <p style={{ margin: "0 0 5px 0", fontSize: "0.85rem", color: "#991b1b", fontWeight: "bold" }}>GST Bank</p>
                   {editingBalances ? (
@@ -1813,7 +1817,7 @@ export default function App() {
             </div>
 
             <div style={{ marginBottom: "30px", padding: "15px", backgroundColor: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "10px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", justifyContent: "space-between", alignItems: "center" }}>
                 <h4 style={{ margin: "0" }}>Log Expenses & Vault Exchanges</h4>
                 <Button size="sm" onClick={() => setShowLogForm(!showLogForm)} style={{ backgroundColor: "#0f172a" }}>
                   <Plus size={16} style={{ marginRight: "5px" }} /> New Entry
@@ -1823,7 +1827,7 @@ export default function App() {
               {showLogForm && (
                 <div style={{ marginTop: "15px", paddingTop: "15px", borderTop: "1px dashed #cbd5e1" }}>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "10px" }}>
-                    <div style={{ flex: 1, minWidth: "150px" }}>
+                    <div style={{ flex: "1 1 150px" }}>
                       <label className="select-label">Transaction Type</label>
                       <select value={logType} onChange={(e) => setLogType(e.target.value)} className="native-select">
                         <option value="expense">Expense (Deduct Money)</option>
@@ -1831,14 +1835,14 @@ export default function App() {
                         <option value="exchange">Exchange (Move Vault to Vault)</option>
                       </select>
                     </div>
-                    <div style={{ flex: 1, minWidth: "150px" }}>
+                    <div style={{ flex: "1 1 150px" }}>
                       <label className="select-label">Amount (₹)</label>
                       <Input type="number" placeholder="e.g. 500" value={logAmount} onChange={(e) => setLogAmount(e.target.value)} />
                     </div>
                   </div>
 
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "10px" }}>
-                    <div style={{ flex: 1, minWidth: "150px" }}>
+                    <div style={{ flex: "1 1 150px" }}>
                       <label className="select-label">{logType === "add" ? "To Vault" : "From Vault"}</label>
                       <select value={logSourceVault} onChange={(e) => setLogSourceVault(e.target.value)} className="native-select">
                         <option value="cash">Cash Drawer</option>
@@ -1847,7 +1851,7 @@ export default function App() {
                       </select>
                     </div>
                     {logType === "exchange" && (
-                      <div style={{ flex: 1, minWidth: "150px" }}>
+                      <div style={{ flex: "1 1 150px" }}>
                         <label className="select-label">To Vault</label>
                         <select value={logTargetVault} onChange={(e) => setLogTargetVault(e.target.value)} className="native-select">
                           <option value="cash">Cash Drawer</option>
@@ -1877,19 +1881,19 @@ export default function App() {
                 <p>Calculating today's sales...</p>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px", backgroundColor: "#f8fafc", padding: "15px", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #e2e8f0", paddingBottom: "8px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", borderBottom: "1px solid #e2e8f0", paddingBottom: "8px" }}>
                     <span style={{ color: "#475569" }}>Physical Cash Collected:</span>
                     <strong style={{ color: "#d97706" }}>+ ₹{money(todaysTotalCash)}</strong>
                   </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #e2e8f0", paddingBottom: "8px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", borderBottom: "1px solid #e2e8f0", paddingBottom: "8px" }}>
                     <span style={{ color: "#475569" }}>Estimate Bank Collected:</span>
                     <strong style={{ color: "#2563eb" }}>+ ₹{money(todaysTotalEstBank)}</strong>
                   </div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap" }}>
                     <span style={{ color: "#475569" }}>GST Bank Collected:</span>
                     <strong style={{ color: "#dc2626" }}>+ ₹{money(todaysTotalInvBank)}</strong>
                   </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: "10px", paddingTop: "10px", borderTop: "2px solid #cbd5e1" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", marginTop: "10px", paddingTop: "10px", borderTop: "2px solid #cbd5e1" }}>
                     <span style={{ fontWeight: "bold", fontSize: "1.1rem" }}>Total Day Sales:</span>
                     <strong style={{ fontSize: "1.1rem" }}>₹{money(todaysTotalCash + todaysTotalEstBank + todaysTotalInvBank)}</strong>
                   </div>
@@ -1966,9 +1970,9 @@ export default function App() {
         </section>
       )}
 
-      {/* RECENT BILLS DRAWER WITH NEW BULK PDF FILTERS */}
+      {/* RECENT BILLS DRAWER */}
       {showRecentBills && (
-        <section className="side-drawer no-print" style={{ width: "100%", maxWidth: "550px", overflowY: "auto" }}>
+        <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "550px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
           <div className="drawer-header" style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10, paddingBottom: "15px", borderBottom: "1px solid #e2e8f0" }}>
             <h3>Recent Bills & Exports</h3>
             <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowRecentBills(false)}>
@@ -1983,7 +1987,7 @@ export default function App() {
               <Button
                 onClick={handleBulkDownload}
                 disabled={isBulkDownloading || filteredRecentBills.length === 0}
-                style={{ width: "100%", backgroundColor: "#0f172a", height: "45px", display: "flex", gap: "8px", alignItems: "center", justifyContent: "center", fontSize: "1rem" }}
+                style={{ width: "100%", backgroundColor: "#0f172a", height: "auto", padding: "10px", display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", justifyContent: "center", fontSize: "1rem", boxSizing: "border-box" }}
               >
                 {isBulkDownloading ? "Generating PDF... Please Wait" : <><Download size={18} /> Download {filteredRecentBills.length} Bills as Single PDF</>}
               </Button>
@@ -1996,14 +2000,14 @@ export default function App() {
                <h4 style={{ margin: "0 0 10px 0", color: "#334155", fontSize: "0.9rem" }}>Filter Bills</h4>
                
                <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "10px" }}>
-                 <div style={{ flex: 1, minWidth: "120px" }}>
+                 <div style={{ flex: "1 1 120px" }}>
                     <label style={{ fontSize: "0.75rem", color: "#64748b" }}>Branch</label>
                     <select value={recentBranchFilter} onChange={(e) => setRecentBranchFilter(e.target.value)} className="native-select">
                         <option value="ALL">All Branches</option>
                         {settings.branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                     </select>
                  </div>
-                 <div style={{ flex: 1, minWidth: "120px" }}>
+                 <div style={{ flex: "1 1 120px" }}>
                     <label style={{ fontSize: "0.75rem", color: "#64748b" }}>Bill Type</label>
                     <select value={recentModeFilter} onChange={(e) => setRecentModeFilter(e.target.value)} className="native-select">
                         <option value="ALL">All Types</option>
@@ -2025,11 +2029,11 @@ export default function App() {
 
                {recentDateFilter === "CUSTOM" && (
                  <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "10px" }}>
-                    <div style={{ flex: 1, minWidth: "120px" }}>
+                    <div style={{ flex: "1 1 120px" }}>
                       <label style={{ fontSize: "0.75rem", color: "#64748b" }}>Start Date</label>
                       <Input type="date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} />
                     </div>
-                    <div style={{ flex: 1, minWidth: "120px" }}>
+                    <div style={{ flex: "1 1 120px" }}>
                       <label style={{ fontSize: "0.75rem", color: "#64748b" }}>End Date</label>
                       <Input type="date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} />
                     </div>
@@ -2042,9 +2046,9 @@ export default function App() {
                </div>
             </div>
 
-            <div style={{ display: "flex", gap: "10px", marginBottom: "15px", paddingBottom: "15px", borderBottom: "1px dashed #cbd5e1" }}>
-              <Button size="sm" variant="outline" onClick={() => handleResetCounter("invoice")} style={{ flex: 1, borderColor: "#dc2626", color: "#dc2626" }}>Reset Invoice No.</Button>
-              <Button size="sm" variant="outline" onClick={() => handleResetCounter("estimate")} style={{ flex: 1, borderColor: "#2563eb", color: "#2563eb" }}>Reset Estimate No.</Button>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "15px", paddingBottom: "15px", borderBottom: "1px dashed #cbd5e1" }}>
+              <Button size="sm" variant="outline" onClick={() => handleResetCounter("invoice")} style={{ flex: "1 1 100%", borderColor: "#dc2626", color: "#dc2626" }}>Reset Invoice No.</Button>
+              <Button size="sm" variant="outline" onClick={() => handleResetCounter("estimate")} style={{ flex: "1 1 100%", borderColor: "#2563eb", color: "#2563eb" }}>Reset Estimate No.</Button>
             </div>
 
             {loadingRecent ? (
@@ -2055,7 +2059,7 @@ export default function App() {
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 {filteredRecentBills.map((b) => (
                   <div key={b.id} style={{ border: "1px solid var(--border)", padding: "12px", borderRadius: "8px", backgroundColor: "white" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", marginBottom: "8px" }}>
                       <strong style={{ color: b.mode === "invoice" ? "#dc2626" : "#2563eb" }}>{b.document_number}</strong>
                       <span style={{ fontSize: "0.85rem", color: "#666" }}>{b.date}</span>
                     </div>
@@ -2092,7 +2096,7 @@ export default function App() {
 
       {/* SETTINGS DRAWER WITH BRANCHES */}
       {showSettings && (
-        <section className="side-drawer no-print" style={{ width: "100%", maxWidth: "500px", overflowY: "auto" }}>
+        <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "500px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
           <div className="drawer-header">
             <h3>Settings</h3>
             <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowSettings(false)}>
@@ -2100,26 +2104,26 @@ export default function App() {
             </Button>
           </div>
 
-          <div style={{ padding: "0 15px 15px 15px" }}>
+          <div style={{ padding: "0 15px 15px 15px", boxSizing: "border-box", width: "100%" }}>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "20px" }}>
-              <Button variant={settingsTab === "design" ? "default" : "outline"} onClick={() => setSettingsTab("design")} style={{ flex: 1, minWidth: "100px" }}>🎨 Design</Button>
-              <Button variant={settingsTab === "technical" ? "default" : "outline"} onClick={() => setSettingsTab("technical")} style={{ flex: 1, minWidth: "100px" }}>⚙️ Tech</Button>
-              <Button variant={settingsTab === "branches" ? "default" : "outline"} onClick={() => setSettingsTab("branches")} style={{ flex: 1, minWidth: "100px" }}><Store size={16} style={{marginRight:"4px"}}/> Branches</Button>
+              <Button variant={settingsTab === "design" ? "default" : "outline"} onClick={() => setSettingsTab("design")} style={{ flex: "1 1 100px" }}>🎨 Design</Button>
+              <Button variant={settingsTab === "technical" ? "default" : "outline"} onClick={() => setSettingsTab("technical")} style={{ flex: "1 1 100px" }}>⚙️ Tech</Button>
+              <Button variant={settingsTab === "branches" ? "default" : "outline"} onClick={() => setSettingsTab("branches")} style={{ flex: "1 1 100px" }}><Store size={16} style={{marginRight:"4px"}}/> Branches</Button>
             </div>
 
             {settingsTab === "design" && (
-              <div className="settings-design-tab">
+              <div className="settings-design-tab" style={{ width: "100%" }}>
                 {/* SHOP NAME SETTINGS */}
-                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc" }}>
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
                   <h4 style={{ margin: "0 0 10px 0" }}>Shop Name</h4>
-                  <Input value={settings.shop_name} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name: e.target.value }))} placeholder="Shop name" style={{ marginBottom: "10px" }} />
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
-                    <input type="color" value={settings.shop_name_color || "#000000"} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px" }} title="Color" />
-                    <Input type="number" min="16" max="60" value={settings.shop_name_size || 26} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_size: Number(e.target.value) }))} style={{ width: "60px", padding: "0 5px", textAlign: "center" }} title="Font Size (px)" />
-                    <select value={settings.shop_name_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_font: e.target.value }))} style={{ flex: 1, minWidth: "120px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Font Style">
+                  <Input value={settings.shop_name} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name: e.target.value }))} placeholder="Shop name" style={{ marginBottom: "10px", width: "100%", boxSizing: "border-box" }} />
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", width: "100%" }}>
+                    <input type="color" value={settings.shop_name_color || "#000000"} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px", flexShrink: 0 }} title="Color" />
+                    <Input type="number" min="16" max="60" value={settings.shop_name_size || 26} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_size: Number(e.target.value) }))} style={{ width: "70px", padding: "0 5px", textAlign: "center", flexShrink: 0 }} title="Font Size (px)" />
+                    <select value={settings.shop_name_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_font: e.target.value }))} style={{ flex: "1 1 120px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "120px" }} title="Font Style">
                       <FontSelectOptions />
                     </select>
-                    <select value={settings.shop_name_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_align: e.target.value }))} style={{ width: "80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Alignment">
+                    <select value={settings.shop_name_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_align: e.target.value }))} style={{ flex: "1 1 80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "80px" }} title="Alignment">
                       <option value="left">Left</option>
                       <option value="center">Center</option>
                       <option value="right">Right</option>
@@ -2128,16 +2132,16 @@ export default function App() {
                 </div>
 
                 {/* TAGLINE SETTINGS */}
-                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc" }}>
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
                   <h4 style={{ margin: "0 0 10px 0" }}>Tagline</h4>
-                  <Input value={settings.tagline} onChange={(e) => setSettings((prev) => ({ ...prev, tagline: e.target.value }))} placeholder="Tagline" style={{ marginBottom: "10px" }} />
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
-                    <input type="color" value={settings.tagline_color || "#475569"} onChange={(e) => setSettings((prev) => ({ ...prev, tagline_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px" }} title="Color" />
-                    <Input type="number" min="8" max="40" value={settings.tagline_size || 12} onChange={(e) => setSettings((prev) => ({ ...prev, tagline_size: Number(e.target.value) }))} style={{ width: "60px", padding: "0 5px", textAlign: "center" }} title="Font Size (px)" />
-                    <select value={settings.tagline_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, tagline_font: e.target.value }))} style={{ flex: 1, minWidth: "120px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Font Style">
+                  <Input value={settings.tagline} onChange={(e) => setSettings((prev) => ({ ...prev, tagline: e.target.value }))} placeholder="Tagline" style={{ marginBottom: "10px", width: "100%", boxSizing: "border-box" }} />
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", width: "100%" }}>
+                    <input type="color" value={settings.tagline_color || "#475569"} onChange={(e) => setSettings((prev) => ({ ...prev, tagline_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px", flexShrink: 0 }} title="Color" />
+                    <Input type="number" min="8" max="40" value={settings.tagline_size || 12} onChange={(e) => setSettings((prev) => ({ ...prev, tagline_size: Number(e.target.value) }))} style={{ width: "70px", padding: "0 5px", textAlign: "center", flexShrink: 0 }} title="Font Size (px)" />
+                    <select value={settings.tagline_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, tagline_font: e.target.value }))} style={{ flex: "1 1 120px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "120px" }} title="Font Style">
                       <FontSelectOptions />
                     </select>
-                    <select value={settings.tagline_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, tagline_align: e.target.value }))} style={{ width: "80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Alignment">
+                    <select value={settings.tagline_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, tagline_align: e.target.value }))} style={{ flex: "1 1 80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "80px" }} title="Alignment">
                       <option value="left">Left</option>
                       <option value="center">Center</option>
                       <option value="right">Right</option>
@@ -2146,15 +2150,15 @@ export default function App() {
                 </div>
 
                 {/* ADDRESS DESIGN (Global) */}
-                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc" }}>
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
                   <h4 style={{ margin: "0 0 10px 0" }}>Address Style (Content managed in Branches Tab)</h4>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
-                    <input type="color" value={settings.address_color || "#475569"} onChange={(e) => setSettings((prev) => ({ ...prev, address_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px" }} title="Color" />
-                    <Input type="number" min="8" max="30" value={settings.address_size || 14} onChange={(e) => setSettings((prev) => ({ ...prev, address_size: Number(e.target.value) }))} style={{ width: "60px", padding: "0 5px", textAlign: "center" }} title="Font Size (px)" />
-                    <select value={settings.address_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, address_font: e.target.value }))} style={{ flex: 1, minWidth: "120px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Font Style">
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", width: "100%" }}>
+                    <input type="color" value={settings.address_color || "#475569"} onChange={(e) => setSettings((prev) => ({ ...prev, address_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px", flexShrink: 0 }} title="Color" />
+                    <Input type="number" min="8" max="30" value={settings.address_size || 14} onChange={(e) => setSettings((prev) => ({ ...prev, address_size: Number(e.target.value) }))} style={{ width: "70px", padding: "0 5px", textAlign: "center", flexShrink: 0 }} title="Font Size (px)" />
+                    <select value={settings.address_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, address_font: e.target.value }))} style={{ flex: "1 1 120px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "120px" }} title="Font Style">
                       <FontSelectOptions />
                     </select>
-                    <select value={settings.address_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, address_align: e.target.value }))} style={{ width: "80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Alignment">
+                    <select value={settings.address_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, address_align: e.target.value }))} style={{ flex: "1 1 80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "80px" }} title="Alignment">
                       <option value="left">Left</option>
                       <option value="center">Center</option>
                       <option value="right">Right</option>
@@ -2163,16 +2167,16 @@ export default function App() {
                 </div>
 
                 {/* PHONE NUMBERS SETTINGS */}
-                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc" }}>
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
                   <h4 style={{ margin: "0 0 10px 0" }}>Phone Numbers</h4>
-                  <Input value={settings.phone_numbers.join(", ")} onChange={(e) => setSettings((prev) => ({ ...prev, phone_numbers: e.target.value.split(",").map((item) => item.trim()).filter(Boolean) }))} placeholder="Phone numbers (comma separated)" style={{ marginBottom: "10px" }} />
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
-                    <input type="color" value={settings.phone_color || "#475569"} onChange={(e) => setSettings((prev) => ({ ...prev, phone_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px" }} title="Color" />
-                    <Input type="number" min="8" max="30" value={settings.phone_size || 13} onChange={(e) => setSettings((prev) => ({ ...prev, phone_size: Number(e.target.value) }))} style={{ width: "60px", padding: "0 5px", textAlign: "center" }} title="Font Size (px)" />
-                    <select value={settings.phone_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, phone_font: e.target.value }))} style={{ flex: 1, minWidth: "120px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Font Style">
+                  <Input value={settings.phone_numbers.join(", ")} onChange={(e) => setSettings((prev) => ({ ...prev, phone_numbers: e.target.value.split(",").map((item) => item.trim()).filter(Boolean) }))} placeholder="Phone numbers (comma separated)" style={{ marginBottom: "10px", width: "100%", boxSizing: "border-box" }} />
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", width: "100%" }}>
+                    <input type="color" value={settings.phone_color || "#475569"} onChange={(e) => setSettings((prev) => ({ ...prev, phone_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px", flexShrink: 0 }} title="Color" />
+                    <Input type="number" min="8" max="30" value={settings.phone_size || 13} onChange={(e) => setSettings((prev) => ({ ...prev, phone_size: Number(e.target.value) }))} style={{ width: "70px", padding: "0 5px", textAlign: "center", flexShrink: 0 }} title="Font Size (px)" />
+                    <select value={settings.phone_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, phone_font: e.target.value }))} style={{ flex: "1 1 120px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "120px" }} title="Font Style">
                       <FontSelectOptions />
                     </select>
-                    <select value={settings.phone_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, phone_align: e.target.value }))} style={{ width: "80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Alignment">
+                    <select value={settings.phone_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, phone_align: e.target.value }))} style={{ flex: "1 1 80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "80px" }} title="Alignment">
                       <option value="left">Left</option>
                       <option value="center">Center</option>
                       <option value="right">Right</option>
@@ -2181,16 +2185,16 @@ export default function App() {
                 </div>
 
                 {/* EMAIL SETTINGS */}
-                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc" }}>
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
                   <h4 style={{ margin: "0 0 10px 0" }}>Email</h4>
-                  <Input value={settings.email} onChange={(e) => setSettings((prev) => ({ ...prev, email: e.target.value }))} placeholder="Email" style={{ marginBottom: "10px" }} />
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
-                    <input type="color" value={settings.email_color || "#475569"} onChange={(e) => setSettings((prev) => ({ ...prev, email_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px" }} title="Color" />
-                    <Input type="number" min="8" max="30" value={settings.email_size || 13} onChange={(e) => setSettings((prev) => ({ ...prev, email_size: Number(e.target.value) }))} style={{ width: "60px", padding: "0 5px", textAlign: "center" }} title="Font Size (px)" />
-                    <select value={settings.email_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, email_font: e.target.value }))} style={{ flex: 1, minWidth: "120px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Font Style">
+                  <Input value={settings.email} onChange={(e) => setSettings((prev) => ({ ...prev, email: e.target.value }))} placeholder="Email" style={{ marginBottom: "10px", width: "100%", boxSizing: "border-box" }} />
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", width: "100%" }}>
+                    <input type="color" value={settings.email_color || "#475569"} onChange={(e) => setSettings((prev) => ({ ...prev, email_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px", flexShrink: 0 }} title="Color" />
+                    <Input type="number" min="8" max="30" value={settings.email_size || 13} onChange={(e) => setSettings((prev) => ({ ...prev, email_size: Number(e.target.value) }))} style={{ width: "70px", padding: "0 5px", textAlign: "center", flexShrink: 0 }} title="Font Size (px)" />
+                    <select value={settings.email_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, email_font: e.target.value }))} style={{ flex: "1 1 120px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "120px" }} title="Font Style">
                       <FontSelectOptions />
                     </select>
-                    <select value={settings.email_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, email_align: e.target.value }))} style={{ width: "80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Alignment">
+                    <select value={settings.email_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, email_align: e.target.value }))} style={{ flex: "1 1 80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "80px" }} title="Alignment">
                       <option value="left">Left</option>
                       <option value="center">Center</option>
                       <option value="right">Right</option>
@@ -2198,18 +2202,18 @@ export default function App() {
                   </div>
                 </div>
 
-                <Button onClick={saveSettings} style={{ width: "100%", marginBottom: "15px" }}>Save Design Settings</Button>
+                <Button onClick={saveSettings} style={{ width: "100%", marginBottom: "15px", boxSizing: "border-box" }}>Save Design Settings</Button>
               </div>
             )}
 
             {settingsTab === "technical" && (
-              <div className="settings-technical-tab">
+              <div className="settings-technical-tab" style={{ width: "100%" }}>
                 
                 {/* NEW CUSTOM FONT UPLOAD */}
-                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f0fdf4" }}>
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f0fdf4", width: "100%", boxSizing: "border-box" }}>
                   <h4 style={{ margin: "0 0 10px 0", color: "#166534", display: "flex", alignItems: "center", gap: "8px" }}><Upload size={18} /> Upload Custom Font</h4>
                   <p style={{ fontSize: "0.75rem", color: "#666", marginBottom: "10px" }}>Upload a .ttf or .otf file to use it in your bill design.</p>
-                  <label style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px", border: "2px dashed #16a34a", borderRadius: "8px", cursor: "pointer", backgroundColor: "white" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px", border: "2px dashed #16a34a", borderRadius: "8px", cursor: "pointer", backgroundColor: "white", flexWrap: "wrap" }}>
                     <span style={{ fontSize: "0.85rem", fontWeight: "bold" }}>📁 Choose Font File</span>
                     <input type="file" accept=".ttf,.otf,.woff,.woff2" onChange={handleFontUpload} style={{ display: "none" }} />
                   </label>
@@ -2223,7 +2227,7 @@ export default function App() {
                   )}
                 </div>
 
-                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc" }}>
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
                   <h4 style={{ margin: "0 0 10px 0" }}>Math & Formulas</h4>
                   
                   <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Silver Rate (per gram)</label>
@@ -2242,38 +2246,38 @@ export default function App() {
                   <Input value={settings.formula_note} onChange={(e) => setSettings((prev) => ({ ...prev, formula_note: e.target.value }))} />
                 </div>
 
-                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc" }}>
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
                   <h4 style={{ margin: "0 0 10px 0" }}>Global Business IDs</h4>
                   <label className="select-label" style={{ fontSize: "0.8rem" }}>GSTIN</label>
-                  <Input value={settings.gstin} onChange={(e) => setSettings((prev) => ({ ...prev, gstin: e.target.value }))} style={{ marginBottom: "8px" }} />
+                  <Input value={settings.gstin} onChange={(e) => setSettings((prev) => ({ ...prev, gstin: e.target.value }))} style={{ marginBottom: "8px", width: "100%" }} />
                 </div>
 
-                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc" }}>
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
                   <h4 style={{ margin: "0 0 10px 0" }}>Printing & Uploads</h4>
                   <label className="select-label" htmlFor="print-scale-range" style={{ fontSize: "0.8rem" }}>Auto Print Scale: {printScale.toFixed(1)}%</label>
-                  <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "15px" }}>
-                    <input id="print-scale-range" type="range" min="98" max="102" step="0.1" value={printScale} onChange={(e) => setPrintScale(clampPrintScale(Number(e.target.value)))} style={{ flex: 1 }} />
+                  <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "15px", flexWrap: "wrap" }}>
+                    <input id="print-scale-range" type="range" min="98" max="102" step="0.1" value={printScale} onChange={(e) => setPrintScale(clampPrintScale(Number(e.target.value)))} style={{ flex: "1 1 150px" }} />
                     <Button type="button" variant="outline" size="sm" onClick={() => setPrintScale(100)}>Reset</Button>
                   </div>
 
-                  <div style={{ marginBottom: "15px" }}>
+                  <div style={{ marginBottom: "15px", width: "100%" }}>
                     <label className="file-label" htmlFor="logo-upload-input" style={{ fontSize: "0.8rem" }}>Upload Shop Logo</label>
-                    <input id="logo-upload-input" type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/*" onChange={handleLogoUpload} style={{ display: "block", marginBottom: "5px" }} />
-                    <span style={{ fontSize: "0.75rem", color: "#666" }}>{logoUploadName ? `Selected: ${logoUploadName}` : "No logo selected"}</span>
+                    <input id="logo-upload-input" type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/*" onChange={handleLogoUpload} style={{ display: "block", marginBottom: "5px", maxWidth: "100%" }} />
+                    <span style={{ fontSize: "0.75rem", color: "#666", wordBreak: "break-all" }}>{logoUploadName ? `Selected: ${logoUploadName}` : "No logo selected"}</span>
                     {settings.logo_data_url && <img src={settings.logo_data_url} alt="Logo preview" style={{ maxWidth: "80px", marginTop: "5px", display: "block" }} />}
                   </div>
 
-                  <div>
+                  <div style={{ width: "100%" }}>
                     <label className="file-label" htmlFor="about-qr-upload-input" style={{ fontSize: "0.8rem" }}>Upload About Us QR</label>
-                    <input id="about-qr-upload-input" type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/*" onChange={handleAboutQrUpload} style={{ display: "block", marginBottom: "5px" }} />
-                    <span style={{ fontSize: "0.75rem", color: "#666" }}>{aboutUploadName ? `Selected: ${aboutUploadName}` : "No QR selected"}</span>
+                    <input id="about-qr-upload-input" type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/*" onChange={handleAboutQrUpload} style={{ display: "block", marginBottom: "5px", maxWidth: "100%" }} />
+                    <span style={{ fontSize: "0.75rem", color: "#666", wordBreak: "break-all" }}>{aboutUploadName ? `Selected: ${aboutUploadName}` : "No QR selected"}</span>
                     {(settings.about_qr_data_url || STATIC_ABOUT_QR_URL) && <img src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="QR preview" style={{ maxWidth: "80px", marginTop: "5px", display: "block" }} />}
                   </div>
                 </div>
 
                 <Button onClick={saveSettings} style={{ width: "100%", marginBottom: "15px" }}>Save Technical Settings</Button>
 
-                <div style={{ marginTop: "20px", padding: "15px", border: "1px solid #ef4444", borderRadius: "8px", backgroundColor: "#fef2f2" }}>
+                <div style={{ marginTop: "20px", padding: "15px", border: "1px solid #ef4444", borderRadius: "8px", backgroundColor: "#fef2f2", width: "100%", boxSizing: "border-box" }}>
                   <h4 style={{ margin: "0 0 10px 0", color: "#b91c1c" }}>Database & Backup</h4>
                   
                   <div style={{ marginBottom: "15px" }}>
@@ -2296,7 +2300,7 @@ export default function App() {
             )}
 
             {settingsTab === "branches" && (
-               <div className="settings-branches-tab">
+               <div className="settings-branches-tab" style={{ width: "100%" }}>
                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px", flexWrap: "wrap", gap: "10px" }}>
                        <p style={{ margin: 0, fontSize: "0.9rem", color: "#475569" }}>Manage isolated branch ledgers and addresses here.</p>
                        <Button size="sm" onClick={() => {
@@ -2316,7 +2320,7 @@ export default function App() {
                    </div>
 
                    {settings.branches.map((b, index) => (
-                       <div key={b.id} style={{ padding: "15px", border: "1px solid #cbd5e1", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc" }}>
+                       <div key={b.id} style={{ padding: "15px", border: "1px solid #cbd5e1", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "10px" }}>
                               <h4 style={{ margin: 0, color: "var(--brand)" }}>Branch: {b.name}</h4>
                               {settings.branches.length > 1 && (
@@ -2333,35 +2337,35 @@ export default function App() {
                                const newBranches = [...settings.branches];
                                newBranches[index].name = e.target.value;
                                setSettings(prev => ({ ...prev, branches: newBranches }));
-                           }} style={{ marginBottom: "8px" }} />
+                           }} style={{ marginBottom: "8px", width: "100%" }} />
 
                            <label className="select-label" style={{ fontSize: "0.8rem" }}>Printed Bill Address</label>
                            <Input value={b.address} onChange={(e) => {
                                const newBranches = [...settings.branches];
                                newBranches[index].address = e.target.value;
                                setSettings(prev => ({ ...prev, branches: newBranches }));
-                           }} style={{ marginBottom: "8px" }} />
+                           }} style={{ marginBottom: "8px", width: "100%" }} />
 
                            <label className="select-label" style={{ fontSize: "0.8rem" }}>Google Maps Review Link</label>
                            <Input value={b.map_url} onChange={(e) => {
                                const newBranches = [...settings.branches];
                                newBranches[index].map_url = e.target.value;
                                setSettings(prev => ({ ...prev, branches: newBranches }));
-                           }} style={{ marginBottom: "8px" }} />
+                           }} style={{ marginBottom: "8px", width: "100%" }} />
 
                            <label className="select-label" style={{ fontSize: "0.8rem" }}>Invoice UPI ID</label>
                            <Input value={b.invoice_upi_id} onChange={(e) => {
                                const newBranches = [...settings.branches];
                                newBranches[index].invoice_upi_id = e.target.value;
                                setSettings(prev => ({ ...prev, branches: newBranches }));
-                           }} style={{ marginBottom: "8px" }} />
+                           }} style={{ marginBottom: "8px", width: "100%" }} />
 
                            <label className="select-label" style={{ fontSize: "0.8rem" }}>Estimate UPI ID</label>
                            <Input value={b.estimate_upi_id} onChange={(e) => {
                                const newBranches = [...settings.branches];
                                newBranches[index].estimate_upi_id = e.target.value;
                                setSettings(prev => ({ ...prev, branches: newBranches }));
-                           }} style={{ marginBottom: "8px" }} />
+                           }} style={{ marginBottom: "8px", width: "100%" }} />
                        </div>
                    ))}
 
@@ -2373,7 +2377,7 @@ export default function App() {
       )}
 
       {showAbout && (
-        <section className="side-drawer no-print" style={{ width: "100%", maxWidth: "500px", overflowY: "auto" }}>
+        <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "500px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
           <div className="drawer-header">
             <h3>About This App</h3>
             <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowAbout(false)}>
@@ -2381,7 +2385,7 @@ export default function App() {
             </Button>
           </div>
           
-          <div className="cloud-note" style={{ marginTop: "15px", padding: "0 15px" }}>
+          <div className="cloud-note" style={{ marginTop: "15px", padding: "0 15px", boxSizing: "border-box" }}>
             <h4>Cloud Database Setup</h4>
             <ol>
               <li>Create Supabase project and get project URL + service role key.</li>
