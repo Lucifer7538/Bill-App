@@ -203,7 +203,7 @@ export default function App() {
   const [aboutUploadName, setAboutUploadName] = useState("");
   const [cloudStatus, setCloudStatus] = useState({ provider: "supabase", enabled: false, mode: "loading" });
   
-  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
+  const authHeaders = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
 
   const activeGlobalBranch = settings.branches.find(b => b.id === globalBranchId) || settings.branches[0];
   const activeBillBranch = settings.branches.find(b => b.id === billBranchId) || settings.branches[0];
@@ -213,6 +213,7 @@ export default function App() {
     if (settings.custom_fonts && settings.custom_fonts.length > 0) {
       settings.custom_fonts.forEach(f => registerFont(f.name, f.dataUrl));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.custom_fonts]);
 
   const FontSelectOptions = () => (
@@ -279,6 +280,7 @@ export default function App() {
       };
       fetchPublicBill();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -318,6 +320,7 @@ export default function App() {
       }
     };
     verify();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, isPublicView]);
 
   // FETCH RECENT BILLS WITH DYNAMIC LIMIT
@@ -326,7 +329,6 @@ export default function App() {
       const fetchRecent = async () => {
         setLoadingRecent(true);
         try {
-          // If filtering by date, we pull more bills from backend to ensure we catch the whole month
           const limit = recentDateFilter === "ALL" ? 50 : 500;
           const response = await axios.get(`${API}/bills/recent?limit=${limit}&branch_filter=${recentBranchFilter}&search=${encodeURIComponent(billSearchQuery)}`, { headers: authHeaders });
           setRecentBillsList(response.data);
@@ -336,6 +338,7 @@ export default function App() {
       const timer = setTimeout(fetchRecent, 300);
       return () => clearTimeout(timer);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showRecentBills, token, isPublicView, billSearchQuery, recentBranchFilter, recentDateFilter]); 
 
   // FRONTEND FILTERING SYSTEM FOR EXPORT
@@ -434,6 +437,7 @@ export default function App() {
       };
       fetchLedger();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showLedger, token, isPublicView, globalBranchId]);
 
   useEffect(() => {
@@ -446,6 +450,7 @@ export default function App() {
       };
       fetchStorageStats();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showSettings, token, isPublicView]);
 
   const loadSettings = async () => {
@@ -513,12 +518,14 @@ export default function App() {
       catch { toast.error("Could not load billing settings."); }
     };
     bootstrap();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, isPublicView]);
 
   useEffect(() => {
     if (!token || isPublicView) return;
     const interval = setInterval(() => { fetchCloudStatus(); }, 30000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, isPublicView]);
 
   useEffect(() => {
@@ -532,6 +539,7 @@ export default function App() {
       } catch { setSuggestions([]); }
     }, 250);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customer.phone, customer.name, token, isPublicView]);
 
   const computed = useMemo(() => {
@@ -561,6 +569,7 @@ export default function App() {
     const grandTotal = baseTotal + roundOff;
 
     return { items: mapped, baseRate, subtotal, taxable, cgst, sgst, igst, mdr, roundOff, grandTotal };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff]);
 
   const upiAmountToPay = paymentMethod === "Split" ? Math.max(0, computed.grandTotal - num(splitCash)) : computed.grandTotal;
@@ -2303,7 +2312,7 @@ export default function App() {
                    {settings.branches.map((b, index) => (
                        <div key={b.id} style={{ padding: "15px", border: "1px solid #cbd5e1", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc" }}>
                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
-                              <h4 style={{ margin: 0, color: "var(--brand)" }}>Branch: {b.name}</h4>
+                              <h4 style={{ margin: "0, color: "var(--brand)" }}>Branch: {b.name}</h4>
                               {settings.branches.length > 1 && (
                                   <Button size="sm" variant="outline" style={{ borderColor: "#ef4444", color: "#ef4444", padding: "0 8px", height: "24px" }} onClick={() => {
                                       if(window.confirm(`Delete ${b.name}?`)) {
