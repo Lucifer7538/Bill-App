@@ -1746,7 +1746,7 @@ export default function App() {
 
       {/* DAILY SALES, LEDGER & EXPENSE DRAWER */}
       {showLedger && (
-        <section className="side-drawer no-print" style={{ width: "650px", overflowY: "auto" }}>
+        <section className="side-drawer no-print" style={{ width: isCompactView ? "100%" : "650px", overflowY: "auto" }}>
           <div className="drawer-header" style={{ backgroundColor: "#f0fdf4", borderBottom: "2px solid #bbf7d0", padding: "20px", position: "sticky", top: 0, zIndex: 10 }}>
             <h3 style={{ display: "flex", alignItems: "center", gap: "10px" }}><Banknote /> Vaults & Ledger: {activeGlobalBranch.name}</h3>
             <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowLedger(false)}>
@@ -1758,7 +1758,7 @@ export default function App() {
             
             <div style={{ marginBottom: "25px" }}>
               <h4 style={{ margin: "0 0 15px 0", fontSize: "1.1rem", color: "#1e293b" }}>Live Vault Balances</h4>
-              <div style={{ display: "flex", gap: "10px" }}>
+              <div style={{ display: "flex", flexDirection: isCompactView ? "column" : "row", gap: "10px" }}>
                 <div style={{ flex: 1, backgroundColor: "#fffbeb", border: "1px solid #fde68a", padding: "15px", borderRadius: "10px", textAlign: "center" }}>
                   <Banknote size={24} color="#d97706" style={{ margin: "0 auto 8px auto" }} />
                   <p style={{ margin: "0 0 5px 0", fontSize: "0.85rem", color: "#92400e", fontWeight: "bold" }}>Cash Drawer</p>
@@ -1816,7 +1816,7 @@ export default function App() {
               
               {showLogForm && (
                 <div style={{ marginTop: "15px", paddingTop: "15px", borderTop: "1px dashed #cbd5e1" }}>
-                  <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+                  <div style={{ display: "flex", flexDirection: isCompactView ? "column" : "row", gap: "10px", marginBottom: "10px" }}>
                     <div style={{ flex: 1 }}>
                       <label className="select-label">Transaction Type</label>
                       <select value={logType} onChange={(e) => setLogType(e.target.value)} className="native-select">
@@ -1831,7 +1831,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+                  <div style={{ display: "flex", flexDirection: isCompactView ? "column" : "row", gap: "10px", marginBottom: "10px" }}>
                     <div style={{ flex: 1 }}>
                       <label className="select-label">{logType === "add" ? "To Vault" : "From Vault"}</label>
                       <select value={logSourceVault} onChange={(e) => setLogSourceVault(e.target.value)} className="native-select">
@@ -1962,7 +1962,7 @@ export default function App() {
 
       {/* RECENT BILLS DRAWER WITH NEW BULK PDF FILTERS */}
       {showRecentBills && (
-        <section className="side-drawer no-print" style={{ width: "550px", overflowY: "auto" }}>
+        <section className="side-drawer no-print" style={{ width: isCompactView ? "100%" : "550px", overflowY: "auto" }}>
           <div className="drawer-header" style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10, paddingBottom: "15px", borderBottom: "1px solid #e2e8f0" }}>
             <h3>Recent Bills & Exports</h3>
             <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowRecentBills(false)}>
@@ -1977,9 +1977,9 @@ export default function App() {
               <Button
                 onClick={handleBulkDownload}
                 disabled={isBulkDownloading || filteredRecentBills.length === 0}
-                style={{ width: "100%", backgroundColor: "#0f172a", height: "45px", display: "flex", gap: "8px", alignItems: "center", justifyContent: "center", fontSize: "1rem" }}
+                style={{ width: "100%", backgroundColor: "#0f172a", height: "auto", minHeight: "45px", padding: "10px", display: "flex", gap: "8px", alignItems: "center", justifyContent: "center", fontSize: "1rem", whiteSpace: "normal" }}
               >
-                {isBulkDownloading ? "Generating PDF... Please Wait" : <><Download size={18} /> Download {filteredRecentBills.length} Bills as Single PDF</>}
+                {isBulkDownloading ? "Generating PDF... Please Wait" : <><Download size={18} style={{ flexShrink: 0 }} /> <span>Download {filteredRecentBills.length} Bills as Single PDF</span></>}
               </Button>
               <p style={{ fontSize: "0.75rem", color: "#64748b", textAlign: "center", marginTop: "5px" }}>
                 This button will generate a single PDF document containing all the bills currently matching the filters below.
@@ -1989,7 +1989,7 @@ export default function App() {
             <div style={{ backgroundColor: "#f8fafc", padding: "15px", borderRadius: "8px", border: "1px solid #cbd5e1", marginBottom: "20px" }}>
                <h4 style={{ margin: "0 0 10px 0", color: "#334155", fontSize: "0.9rem" }}>Filter Bills</h4>
                
-               <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+               <div style={{ display: "flex", flexDirection: isCompactView ? "column" : "row", gap: "10px", marginBottom: "10px" }}>
                  <div style={{ flex: 1 }}>
                     <label style={{ fontSize: "0.75rem", color: "#64748b" }}>Branch</label>
                     <select value={recentBranchFilter} onChange={(e) => setRecentBranchFilter(e.target.value)} className="native-select">
@@ -2018,7 +2018,7 @@ export default function App() {
                </div>
 
                {recentDateFilter === "CUSTOM" && (
-                 <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+                 <div style={{ display: "flex", flexDirection: isCompactView ? "column" : "row", gap: "10px", marginBottom: "10px" }}>
                     <div style={{ flex: 1 }}>
                       <label style={{ fontSize: "0.75rem", color: "#64748b" }}>Start Date</label>
                       <Input type="date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} />
@@ -2036,7 +2036,7 @@ export default function App() {
                </div>
             </div>
 
-            <div style={{ display: "flex", gap: "10px", marginBottom: "15px", paddingBottom: "15px", borderBottom: "1px dashed #cbd5e1" }}>
+            <div style={{ display: "flex", flexDirection: isCompactView ? "column" : "row", gap: "10px", marginBottom: "15px", paddingBottom: "15px", borderBottom: "1px dashed #cbd5e1" }}>
               <Button size="sm" variant="outline" onClick={() => handleResetCounter("invoice")} style={{ flex: 1, borderColor: "#dc2626", color: "#dc2626" }}>Reset Invoice No.</Button>
               <Button size="sm" variant="outline" onClick={() => handleResetCounter("estimate")} style={{ flex: 1, borderColor: "#2563eb", color: "#2563eb" }}>Reset Estimate No.</Button>
             </div>
@@ -2054,10 +2054,10 @@ export default function App() {
                       <span style={{ fontSize: "0.85rem", color: "#666" }}>{b.date}</span>
                     </div>
                     <div style={{ marginBottom: "8px", fontWeight: "500" }}>{b.customer?.name || "Unknown Customer"}</div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
                       <strong>₹{b.totals?.grand_total}</strong>
                       
-                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
                         
                         <label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85rem", cursor: "pointer", marginRight: "5px", padding: "4px 8px", backgroundColor: b.is_payment_done ? "#dcfce7" : "#fef3c7", color: b.is_payment_done ? "#166534" : "#b45309", borderRadius: "5px", fontWeight: "bold" }}>
                           <input 
@@ -2070,322 +2070,3 @@ export default function App() {
                         </label>
 
                         <Button size="sm" variant="destructive" style={{ backgroundColor: "#ef4444", color: "white" }} onClick={() => handleDeleteBill(b)}>Delete</Button>
-                        <Button size="sm" onClick={() => {
-                          if (isDirty && !window.confirm("⚠️ You have unsaved changes. Discard them and load this old bill?")) return;
-                          loadBillForEditing(b);
-                        }}>Edit</Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-      )}
-
-      {/* SETTINGS DRAWER WITH BRANCHES */}
-      {showSettings && (
-        <section className="side-drawer no-print" style={{ width: "500px", overflowY: "auto" }}>
-          <div className="drawer-header">
-            <h3>Settings</h3>
-            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowSettings(false)}>
-              <ArrowLeft className="drawer-back-icon" /><span>Back</span>
-            </Button>
-          </div>
-
-          <div style={{ padding: "0 15px 15px 15px" }}>
-            <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
-              <Button variant={settingsTab === "design" ? "default" : "outline"} onClick={() => setSettingsTab("design")} style={{ flex: 1 }}>🎨 Design</Button>
-              <Button variant={settingsTab === "technical" ? "default" : "outline"} onClick={() => setSettingsTab("technical")} style={{ flex: 1 }}>⚙️ Tech</Button>
-              <Button variant={settingsTab === "branches" ? "default" : "outline"} onClick={() => setSettingsTab("branches")} style={{ flex: 1 }}><Store size={16} style={{marginRight:"4px"}}/> Branches</Button>
-            </div>
-
-            {settingsTab === "design" && (
-              <div className="settings-design-tab">
-                {/* SHOP NAME SETTINGS */}
-                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc" }}>
-                  <h4 style={{ margin: "0 0 10px 0" }}>Shop Name</h4>
-                  <Input value={settings.shop_name} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name: e.target.value }))} placeholder="Shop name" style={{ marginBottom: "10px" }} />
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <input type="color" value={settings.shop_name_color || "#000000"} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px" }} title="Color" />
-                    <Input type="number" min="16" max="60" value={settings.shop_name_size || 26} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_size: Number(e.target.value) }))} style={{ width: "60px", padding: "0 5px", textAlign: "center" }} title="Font Size (px)" />
-                    <select value={settings.shop_name_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_font: e.target.value }))} style={{ flex: 1, height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Font Style">
-                      <FontSelectOptions />
-                    </select>
-                    <select value={settings.shop_name_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_align: e.target.value }))} style={{ width: "80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Alignment">
-                      <option value="left">Left</option>
-                      <option value="center">Center</option>
-                      <option value="right">Right</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* TAGLINE SETTINGS */}
-                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc" }}>
-                  <h4 style={{ margin: "0 0 10px 0" }}>Tagline</h4>
-                  <Input value={settings.tagline} onChange={(e) => setSettings((prev) => ({ ...prev, tagline: e.target.value }))} placeholder="Tagline" style={{ marginBottom: "10px" }} />
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <input type="color" value={settings.tagline_color || "#475569"} onChange={(e) => setSettings((prev) => ({ ...prev, tagline_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px" }} title="Color" />
-                    <Input type="number" min="8" max="40" value={settings.tagline_size || 12} onChange={(e) => setSettings((prev) => ({ ...prev, tagline_size: Number(e.target.value) }))} style={{ width: "60px", padding: "0 5px", textAlign: "center" }} title="Font Size (px)" />
-                    <select value={settings.tagline_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, tagline_font: e.target.value }))} style={{ flex: 1, height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Font Style">
-                      <FontSelectOptions />
-                    </select>
-                    <select value={settings.tagline_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, tagline_align: e.target.value }))} style={{ width: "80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Alignment">
-                      <option value="left">Left</option>
-                      <option value="center">Center</option>
-                      <option value="right">Right</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* ADDRESS DESIGN (Global) */}
-                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc" }}>
-                  <h4 style={{ margin: "0 0 10px 0" }}>Address Style (Content managed in Branches Tab)</h4>
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <input type="color" value={settings.address_color || "#475569"} onChange={(e) => setSettings((prev) => ({ ...prev, address_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px" }} title="Color" />
-                    <Input type="number" min="8" max="30" value={settings.address_size || 14} onChange={(e) => setSettings((prev) => ({ ...prev, address_size: Number(e.target.value) }))} style={{ width: "60px", padding: "0 5px", textAlign: "center" }} title="Font Size (px)" />
-                    <select value={settings.address_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, address_font: e.target.value }))} style={{ flex: 1, height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Font Style">
-                      <FontSelectOptions />
-                    </select>
-                    <select value={settings.address_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, address_align: e.target.value }))} style={{ width: "80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Alignment">
-                      <option value="left">Left</option>
-                      <option value="center">Center</option>
-                      <option value="right">Right</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* PHONE NUMBERS SETTINGS */}
-                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc" }}>
-                  <h4 style={{ margin: "0 0 10px 0" }}>Phone Numbers</h4>
-                  <Input value={settings.phone_numbers.join(", ")} onChange={(e) => setSettings((prev) => ({ ...prev, phone_numbers: e.target.value.split(",").map((item) => item.trim()).filter(Boolean) }))} placeholder="Phone numbers (comma separated)" style={{ marginBottom: "10px" }} />
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <input type="color" value={settings.phone_color || "#475569"} onChange={(e) => setSettings((prev) => ({ ...prev, phone_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px" }} title="Color" />
-                    <Input type="number" min="8" max="30" value={settings.phone_size || 13} onChange={(e) => setSettings((prev) => ({ ...prev, phone_size: Number(e.target.value) }))} style={{ width: "60px", padding: "0 5px", textAlign: "center" }} title="Font Size (px)" />
-                    <select value={settings.phone_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, phone_font: e.target.value }))} style={{ flex: 1, height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Font Style">
-                      <FontSelectOptions />
-                    </select>
-                    <select value={settings.phone_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, phone_align: e.target.value }))} style={{ width: "80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Alignment">
-                      <option value="left">Left</option>
-                      <option value="center">Center</option>
-                      <option value="right">Right</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* EMAIL SETTINGS */}
-                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc" }}>
-                  <h4 style={{ margin: "0 0 10px 0" }}>Email</h4>
-                  <Input value={settings.email} onChange={(e) => setSettings((prev) => ({ ...prev, email: e.target.value }))} placeholder="Email" style={{ marginBottom: "10px" }} />
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                    <input type="color" value={settings.email_color || "#475569"} onChange={(e) => setSettings((prev) => ({ ...prev, email_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px" }} title="Color" />
-                    <Input type="number" min="8" max="30" value={settings.email_size || 13} onChange={(e) => setSettings((prev) => ({ ...prev, email_size: Number(e.target.value) }))} style={{ width: "60px", padding: "0 5px", textAlign: "center" }} title="Font Size (px)" />
-                    <select value={settings.email_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, email_font: e.target.value }))} style={{ flex: 1, height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Font Style">
-                      <FontSelectOptions />
-                    </select>
-                    <select value={settings.email_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, email_align: e.target.value }))} style={{ width: "80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px" }} title="Alignment">
-                      <option value="left">Left</option>
-                      <option value="center">Center</option>
-                      <option value="right">Right</option>
-                    </select>
-                  </div>
-                </div>
-
-                <Button onClick={saveSettings} style={{ width: "100%", marginBottom: "15px" }}>Save Design Settings</Button>
-              </div>
-            )}
-
-            {settingsTab === "technical" && (
-              <div className="settings-technical-tab">
-                
-                {/* NEW CUSTOM FONT UPLOAD */}
-                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f0fdf4" }}>
-                  <h4 style={{ margin: "0 0 10px 0", color: "#166534", display: "flex", alignItems: "center", gap: "8px" }}><Upload size={18} /> Upload Custom Font</h4>
-                  <p style={{ fontSize: "0.75rem", color: "#666", marginBottom: "10px" }}>Upload a .ttf or .otf file to use it in your bill design.</p>
-                  <label style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px", border: "2px dashed #16a34a", borderRadius: "8px", cursor: "pointer", backgroundColor: "white" }}>
-                    <span style={{ fontSize: "0.85rem", fontWeight: "bold" }}>📁 Choose Font File</span>
-                    <input type="file" accept=".ttf,.otf,.woff,.woff2" onChange={handleFontUpload} style={{ display: "none" }} />
-                  </label>
-                  {settings.custom_fonts?.length > 0 && (
-                    <div style={{ marginTop: "10px" }}>
-                      <p style={{ fontSize: "0.75rem", fontWeight: "bold", margin: "0 0 5px 0" }}>Uploaded Fonts:</p>
-                      <ul style={{ fontSize: "0.75rem", margin: 0, paddingLeft: "15px" }}>
-                        {settings.custom_fonts.map(f => <li key={f.name}>{f.name}</li>)}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-
-                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc" }}>
-                  <h4 style={{ margin: "0 0 10px 0" }}>Math & Formulas</h4>
-                  
-                  <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Silver Rate (per gram)</label>
-                  <Input value={settings.silver_rate_per_gram} onChange={(e) => setSettings((prev) => ({ ...prev, silver_rate_per_gram: num(e.target.value) }))} style={{ marginBottom: "2px" }} />
-                  <p style={{ fontSize: "0.75rem", color: "#666", marginBottom: "10px", marginTop: "0" }}>Example: 240 (The live market price for 1 gram of silver).</p>
-
-                  <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Making Charge (per gram)</label>
-                  <Input value={settings.making_charge_per_gram} onChange={(e) => setSettings((prev) => ({ ...prev, making_charge_per_gram: num(e.target.value) }))} style={{ marginBottom: "2px" }} />
-                  <p style={{ fontSize: "0.75rem", color: "#666", marginBottom: "10px", marginTop: "0" }}>Example: 15 (The labor/making cost charged per 1 gram).</p>
-
-                  <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Default HSN Code</label>
-                  <Input value={settings.default_hsn} onChange={(e) => setSettings((prev) => ({ ...prev, default_hsn: e.target.value }))} style={{ marginBottom: "2px" }} />
-                  <p style={{ fontSize: "0.75rem", color: "#666", marginBottom: "10px", marginTop: "0" }}>Example: 7113 (Automatically fills in when you add a new item).</p>
-
-                  <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Formula Note (Prints on bill)</label>
-                  <Input value={settings.formula_note} onChange={(e) => setSettings((prev) => ({ ...prev, formula_note: e.target.value }))} />
-                </div>
-
-                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc" }}>
-                  <h4 style={{ margin: "0 0 10px 0" }}>Global Business IDs</h4>
-                  <label className="select-label" style={{ fontSize: "0.8rem" }}>GSTIN</label>
-                  <Input value={settings.gstin} onChange={(e) => setSettings((prev) => ({ ...prev, gstin: e.target.value }))} style={{ marginBottom: "8px" }} />
-                </div>
-
-                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc" }}>
-                  <h4 style={{ margin: "0 0 10px 0" }}>Printing & Uploads</h4>
-                  <label className="select-label" htmlFor="print-scale-range" style={{ fontSize: "0.8rem" }}>Auto Print Scale: {printScale.toFixed(1)}%</label>
-                  <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "15px" }}>
-                    <input id="print-scale-range" type="range" min="98" max="102" step="0.1" value={printScale} onChange={(e) => setPrintScale(clampPrintScale(Number(e.target.value)))} style={{ flex: 1 }} />
-                    <Button type="button" variant="outline" size="sm" onClick={() => setPrintScale(100)}>Reset</Button>
-                  </div>
-
-                  <div style={{ marginBottom: "15px" }}>
-                    <label className="file-label" htmlFor="logo-upload-input" style={{ fontSize: "0.8rem" }}>Upload Shop Logo</label>
-                    <input id="logo-upload-input" type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/*" onChange={handleLogoUpload} style={{ display: "block", marginBottom: "5px" }} />
-                    <span style={{ fontSize: "0.75rem", color: "#666" }}>{logoUploadName ? `Selected: ${logoUploadName}` : "No logo selected"}</span>
-                    {settings.logo_data_url && <img src={settings.logo_data_url} alt="Logo preview" style={{ maxWidth: "80px", marginTop: "5px", display: "block" }} />}
-                  </div>
-
-                  <div>
-                    <label className="file-label" htmlFor="about-qr-upload-input" style={{ fontSize: "0.8rem" }}>Upload About Us QR</label>
-                    <input id="about-qr-upload-input" type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/*" onChange={handleAboutQrUpload} style={{ display: "block", marginBottom: "5px" }} />
-                    <span style={{ fontSize: "0.75rem", color: "#666" }}>{aboutUploadName ? `Selected: ${aboutUploadName}` : "No QR selected"}</span>
-                    {(settings.about_qr_data_url || STATIC_ABOUT_QR_URL) && <img src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="QR preview" style={{ maxWidth: "80px", marginTop: "5px", display: "block" }} />}
-                  </div>
-                </div>
-
-                <Button onClick={saveSettings} style={{ width: "100%", marginBottom: "15px" }}>Save Technical Settings</Button>
-
-                <div style={{ marginTop: "20px", padding: "15px", border: "1px solid #ef4444", borderRadius: "8px", backgroundColor: "#fef2f2" }}>
-                  <h4 style={{ margin: "0 0 10px 0", color: "#b91c1c" }}>Database & Backup</h4>
-                  
-                  <div style={{ marginBottom: "15px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginBottom: "5px", color: "#7f1d1d" }}>
-                      <span>Storage Used: {(storageStats.used_bytes / 1024).toFixed(2)} KB</span>
-                      <span>{storageStats.percentage}%</span>
-                    </div>
-                    <div style={{ width: "100%", backgroundColor: "#fca5a5", borderRadius: "4px", height: "10px", overflow: "hidden" }}>
-                      <div style={{ width: `${storageStats.percentage}%`, backgroundColor: "#dc2626", height: "100%", transition: "width 0.5s ease" }}></div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                    <Button type="button" variant="outline" onClick={handleBackupBills}>⬇️ Download Backup (JSON)</Button>
-                    <Button type="button" variant="destructive" style={{ backgroundColor: "#ef4444", color: "white" }} onClick={handleDeleteAllBills}>⚠️ Wipe All Bills (Clear Storage)</Button>
-                  </div>
-                </div>
-
-              </div>
-            )}
-
-            {settingsTab === "branches" && (
-               <div className="settings-branches-tab">
-                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
-                       <p style={{ margin: 0, fontSize: "0.9rem", color: "#475569" }}>Manage isolated branch ledgers and addresses here.</p>
-                       <Button size="sm" onClick={() => {
-                           const newBranch = {
-                               id: `B${Date.now()}`,
-                               name: "New Branch",
-                               address: "",
-                               map_url: "#",
-                               invoice_upi_id: "",
-                               estimate_upi_id: "",
-                               cash_balance: 0,
-                               estimate_bank_balance: 0,
-                               invoice_bank_balance: 0
-                           };
-                           setSettings(prev => ({ ...prev, branches: [...prev.branches, newBranch] }));
-                       }}>+ Add Branch</Button>
-                   </div>
-
-                   {settings.branches.map((b, index) => (
-                       <div key={b.id} style={{ padding: "15px", border: "1px solid #cbd5e1", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc" }}>
-                           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
-                              <h4 style={{ margin: 0, color: "var(--brand)" }}>Branch: {b.name}</h4>
-                              {settings.branches.length > 1 && (
-                                  <Button size="sm" variant="outline" style={{ borderColor: "#ef4444", color: "#ef4444", padding: "0 8px", height: "24px" }} onClick={() => {
-                                      if(window.confirm(`Delete ${b.name}?`)) {
-                                          setSettings(prev => ({ ...prev, branches: prev.branches.filter(x => x.id !== b.id) }));
-                                      }
-                                  }}>Delete</Button>
-                              )}
-                           </div>
-
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Branch Name (Internal Use)</label>
-                           <Input value={b.name} onChange={(e) => {
-                               const newBranches = [...settings.branches];
-                               newBranches[index].name = e.target.value;
-                               setSettings(prev => ({ ...prev, branches: newBranches }));
-                           }} style={{ marginBottom: "8px" }} />
-
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Printed Bill Address</label>
-                           <Input value={b.address} onChange={(e) => {
-                               const newBranches = [...settings.branches];
-                               newBranches[index].address = e.target.value;
-                               setSettings(prev => ({ ...prev, branches: newBranches }));
-                           }} style={{ marginBottom: "8px" }} />
-
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Google Maps Review Link</label>
-                           <Input value={b.map_url} onChange={(e) => {
-                               const newBranches = [...settings.branches];
-                               newBranches[index].map_url = e.target.value;
-                               setSettings(prev => ({ ...prev, branches: newBranches }));
-                           }} style={{ marginBottom: "8px" }} />
-
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Invoice UPI ID</label>
-                           <Input value={b.invoice_upi_id} onChange={(e) => {
-                               const newBranches = [...settings.branches];
-                               newBranches[index].invoice_upi_id = e.target.value;
-                               setSettings(prev => ({ ...prev, branches: newBranches }));
-                           }} style={{ marginBottom: "8px" }} />
-
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Estimate UPI ID</label>
-                           <Input value={b.estimate_upi_id} onChange={(e) => {
-                               const newBranches = [...settings.branches];
-                               newBranches[index].estimate_upi_id = e.target.value;
-                               setSettings(prev => ({ ...prev, branches: newBranches }));
-                           }} style={{ marginBottom: "8px" }} />
-                       </div>
-                   ))}
-
-                   <Button onClick={saveSettings} style={{ width: "100%", marginBottom: "15px" }}>Save Branch Settings</Button>
-               </div>
-            )}
-          </div>
-        </section>
-      )}
-
-      {showAbout && (
-        <section className="side-drawer no-print">
-          <div className="drawer-header">
-            <h3>About This App</h3>
-            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowAbout(false)}>
-              <ArrowLeft className="drawer-back-icon" /><span>Back</span>
-            </Button>
-          </div>
-          
-          <div className="cloud-note" style={{ marginTop: "15px", padding: "0 15px" }}>
-            <h4>Cloud Database Setup</h4>
-            <ol>
-              <li>Create Supabase project and get project URL + service role key.</li>
-              <li>Add them in backend <code>SUPABASE_URL</code> and <code>SUPABASE_SERVICE_ROLE_KEY</code>.</li>
-              <li>Create <code>customers</code> and <code>number_counters</code> tables as in README.</li>
-            </ol>
-            <p className="cloud-status-text">Cloud status: {cloudStatus.enabled ? "Connected" : "Placeholder mode"} ({cloudStatus.mode})</p>
-          </div>
-        </section>
-      )}
-    </div>
-  );
-}
