@@ -1,5 +1,4 @@
-/* eslint-disable react-hooks/exhaustive-deps */
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
@@ -174,7 +173,7 @@ export default function App() {
   const [billSearchQuery, setBillSearchQuery] = useState("");
   const [recentBranchFilter, setRecentBranchFilter] = useState("ALL");
   const [recentModeFilter, setRecentModeFilter] = useState("ALL");
-  const [recentDateFilter, setRecentDateFilter] = useState("ALL"); 
+  const [recentDateFilter, setRecentDateFilter] = useState("ALL"); // 'ALL', 'THIS_MONTH', 'LAST_MONTH', 'CUSTOM'
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
@@ -204,10 +203,7 @@ export default function App() {
   const [aboutUploadName, setAboutUploadName] = useState("");
   const [cloudStatus, setCloudStatus] = useState({ provider: "supabase", enabled: false, mode: "loading" });
   
-  // Memoize auth headers to satisfy React Hooks dependencies
-  const authHeaders = useMemo(() => {
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  }, [token]);
+  const authHeaders = token ? { Authorization: `Bearer ${token}` } : {};
 
   const activeGlobalBranch = settings.branches.find(b => b.id === globalBranchId) || settings.branches[0];
   const activeBillBranch = settings.branches.find(b => b.id === billBranchId) || settings.branches[0];
@@ -322,7 +318,7 @@ export default function App() {
       }
     };
     verify();
-  }, [token, isPublicView, authHeaders]);
+  }, [token, isPublicView]);
 
   // FETCH RECENT BILLS WITH DYNAMIC LIMIT
   useEffect(() => {
@@ -340,7 +336,7 @@ export default function App() {
       const timer = setTimeout(fetchRecent, 300);
       return () => clearTimeout(timer);
     }
-  }, [showRecentBills, token, isPublicView, billSearchQuery, recentBranchFilter, recentDateFilter, authHeaders]); 
+  }, [showRecentBills, token, isPublicView, billSearchQuery, recentBranchFilter, recentDateFilter]); 
 
   // FRONTEND FILTERING SYSTEM FOR EXPORT
   const filteredRecentBills = useMemo(() => {
@@ -414,16 +410,45 @@ export default function App() {
     }
   };
 
-  const fetchLedgerHistory = useCallback(async () => {
+
+  const fetchLedgerHistory = async () => {
     try {
       const res = await axios.get(`${API}/settings/ledger/logs?branch_id=${globalBranchId}`, { headers: authHeaders });
       setLedgerLogs(res.data);
     } catch {
       toast.error("Failed to load ledger history.");
     }
-  }, [globalBranchId, authHeaders]);
+  };
 
-  const loadSettings = useCallback(async () => {
+  useEffect(() => {
+    if (showLedger && token && !isPublicView) {
+      const fetchLedger = async () => {
+        setLedgerLoading(true);
+        try {
+          await loadSettings(); 
+          const res = await axios.get(`${API}/bills/today?date=${today()}&branch_id=${globalBranchId}`, { headers: authHeaders });
+          setTodayBills(res.data);
+          await fetchLedgerHistory(); 
+        } catch { toast.error("Failed to load today's ledger."); }
+        finally { setLedgerLoading(false); }
+      };
+      fetchLedger();
+    }
+  }, [showLedger, token, isPublicView, globalBranchId]);
+
+  useEffect(() => {
+    if (showSettings && token && !isPublicView) {
+      const fetchStorageStats = async () => {
+        try {
+          const res = await axios.get(`${API}/system/storage`, { headers: authHeaders });
+          setStorageStats(res.data);
+        } catch { console.error("Failed to load storage stats"); }
+      };
+      fetchStorageStats();
+    }
+  }, [showSettings, token, isPublicView]);
+
+  const loadSettings = async () => {
     const response = await axios.get(`${API}/settings`, { headers: authHeaders });
     const savedLogo = localStorage.getItem("jj_logo_data_url");
     const savedAboutQr = localStorage.getItem("jj_about_qr_data_url");
@@ -459,50 +484,22 @@ export default function App() {
       }
       return prev;
     });
-  }, [authHeaders, globalBranchId]);
+  };
 
-  useEffect(() => {
-    if (showLedger && token && !isPublicView) {
-      const fetchLedger = async () => {
-        setLedgerLoading(true);
-        try {
-          await loadSettings(); 
-          const res = await axios.get(`${API}/bills/today?date=${today()}&branch_id=${globalBranchId}`, { headers: authHeaders });
-          setTodayBills(res.data);
-          await fetchLedgerHistory(); 
-        } catch { toast.error("Failed to load today's ledger."); }
-        finally { setLedgerLoading(false); }
-      };
-      fetchLedger();
-    }
-  }, [showLedger, token, isPublicView, globalBranchId, loadSettings, fetchLedgerHistory, authHeaders]);
-
-  useEffect(() => {
-    if (showSettings && token && !isPublicView) {
-      const fetchStorageStats = async () => {
-        try {
-          const res = await axios.get(`${API}/system/storage`, { headers: authHeaders });
-          setStorageStats(res.data);
-        } catch { console.error("Failed to load storage stats"); }
-      };
-      fetchStorageStats();
-    }
-  }, [showSettings, token, isPublicView, authHeaders]);
-
-  const reserveNumber = useCallback(async (activeMode, activeBranch) => {
+  const reserveNumber = async (activeMode, activeBranch) => {
     setIsNumberLoading(true);
     try {
       const response = await axios.get(`${API}/bills/next-number`, { headers: authHeaders, params: { mode: activeMode, branch_id: activeBranch } });
       setDocumentNumber(response.data.document_number || "");
     } finally { setIsNumberLoading(false); }
-  }, [authHeaders]);
+  };
 
-  const fetchCloudStatus = useCallback(async () => {
+  const fetchCloudStatus = async () => {
     try {
       const response = await axios.get(`${API}/cloud/status`, { headers: authHeaders });
       setCloudStatus(response.data);
     } catch { setCloudStatus({ provider: "supabase", enabled: false, mode: "status-unavailable" }); }
-  }, [authHeaders]);
+  };
 
   useEffect(() => {
     if (isPublicView) return;
@@ -516,13 +513,13 @@ export default function App() {
       catch { toast.error("Could not load billing settings."); }
     };
     bootstrap();
-  }, [token, isPublicView, loadSettings, fetchCloudStatus, reserveNumber, mode, billBranchId]);
+  }, [token, isPublicView]);
 
   useEffect(() => {
     if (!token || isPublicView) return;
     const interval = setInterval(() => { fetchCloudStatus(); }, 30000);
     return () => clearInterval(interval);
-  }, [token, isPublicView, fetchCloudStatus]);
+  }, [token, isPublicView]);
 
   useEffect(() => {
     if (!token || isPublicView) return;
@@ -535,7 +532,7 @@ export default function App() {
       } catch { setSuggestions([]); }
     }, 250);
     return () => clearTimeout(timer);
-  }, [customer.phone, customer.name, token, isPublicView, authHeaders]);
+  }, [customer.phone, customer.name, token, isPublicView]);
 
   const computed = useMemo(() => {
     const baseRate = num(settings.silver_rate_per_gram) + num(settings.making_charge_per_gram);
@@ -2103,5 +2100,4 @@ export default function App() {
                   <Input value={settings.shop_name} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name: e.target.value }))} placeholder="Shop name" style={{ marginBottom: "10px" }} />
                   <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                     <input type="color" value={settings.shop_name_color || "#000000"} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px" }} title="Color" />
-                    <Input type="number" min="16" max="60" value={settings.shop_name_size || 26} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_size: Number(e.target.value) }))} style={{ width: "60px", padding: "0 5px", textAlign: "center" }} title="Font Size (px)" />
-                    <select value={settings.shop_name_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_font: e.target.value }))} style={{ flex: 1, height: "35px
+                    <Input type="number" min="16" max="60" value={settings.shop_name_size || 26} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_size: Number(e.target.value) }))
