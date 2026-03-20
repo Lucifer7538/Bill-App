@@ -111,7 +111,6 @@ export default function App() {
   const [publicBill, setPublicBill] = useState(null);
   const [publicSettings, setPublicSettings] = useState(null);
   const [publicLoading, setPublicLoading] = useState(false);
-  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
   const [passcode, setPasscode] = useState("");
   const [token, setToken] = useState(localStorage.getItem("jj_auth_token") || "");
@@ -223,11 +222,10 @@ export default function App() {
       if (showAbout) setShowAbout(false);
       if (showRecentBills) setShowRecentBills(false);
       if (showLedger) setShowLedger(false);
-      if (showFeedbackModal) setShowFeedbackModal(false);
     };
     window.addEventListener("keydown", handleEsc);
     return () => window.removeEventListener("keydown", handleEsc);
-  }, [showSettings, showAbout, showRecentBills, showLedger, showFeedbackModal]);
+  }, [showSettings, showAbout, showRecentBills, showLedger]);
 
   useEffect(() => {
     localStorage.setItem("jj_print_scale", String(clampPrintScale(printScale)));
@@ -723,10 +721,6 @@ export default function App() {
 
   const goToBillTop = () => { document.getElementById("bill-print-root")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
 
-  const handleSmartFeedback = () => {
-    setShowFeedbackModal(true); 
-  };
-
   const handleWifiClick = () => {
     navigator.clipboard.writeText("12345678").then(() => {
       toast.success("✅ Password '12345678' Copied! Go to settings and connect to 'JalaramJewellers Unlimited'.", { duration: 6000 });
@@ -746,7 +740,9 @@ export default function App() {
     const publicUpiAmountToPay = publicBill.payment_method === "Split" ? num(publicBill.split_upi) : publicBill.totals.grand_total;
     const showPublicUpi = !publicBill.is_payment_done && (publicBill.payment_method === "UPI" || (publicBill.payment_method === "Split" && publicUpiAmountToPay > 0));
     
+    // ✅ Identify the SPECIFIC branch for this public bill
     const pbBranch = publicSettings.branches.find(b => b.id === publicBill.branch_id) || publicSettings.branches[0];
+    
     const publicUpiId = publicBill.mode === "invoice" ? pbBranch.invoice_upi_id : pbBranch.estimate_upi_id;
     const publicUpiUri = `upi://pay?pa=${publicUpiId}&pn=${encodeURIComponent(publicSettings.shop_name)}&am=${money(publicUpiAmountToPay)}&cu=INR&tn=Bill_${publicBill.document_number}`;
 
@@ -767,23 +763,6 @@ export default function App() {
             style={{ width: "100%", maxWidth: "800px", backgroundColor: "#eff6ff", border: "2px solid #3b82f6", borderRadius: "8px", padding: "12px", marginBottom: "20px", display: "flex", justifyContent: "center", alignItems: "center", gap: "10px", color: "#1d4ed8", fontWeight: "bold", cursor: "pointer", boxShadow: "0 4px 6px rgba(0,0,0,0.1)" }}
           >
             <Wifi size={20} /> Slow Internet? Tap here for Free Shop Wi-Fi
-          </div>
-        )}
-
-        {showFeedbackModal && (
-          <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
-            <div style={{ backgroundColor: "white", padding: "30px", borderRadius: "16px", width: "100%", maxWidth: "380px", textAlign: "center", boxShadow: "0 10px 25px rgba(0,0,0,0.2)" }}>
-              <h3 style={{ marginTop: 0, marginBottom: "8px", color: "#0f172a" }}>Leave a Review!</h3>
-              <p style={{ fontSize: "0.9rem", color: "#64748b", marginBottom: "20px" }}>Which branch did you visit today?</p>
-              
-              {publicSettings.branches.map(b => (
-                <a key={b.id} href={b.map_url !== "#" ? b.map_url : "#"} target="_blank" rel="noopener noreferrer" style={{ display: "block", padding: "14px", backgroundColor: b.map_url !== "#" ? "#facc15" : "#e2e8f0", color: b.map_url !== "#" ? "#854d0e" : "#475569", textDecoration: "none", borderRadius: "10px", marginBottom: "12px", fontWeight: "bold", fontSize: "1.1rem" }}>
-                  ⭐ {b.name}
-                </a>
-              ))}
-              
-              <Button variant="ghost" onClick={() => setShowFeedbackModal(false)} style={{ width: "100%", color: "#64748b", marginTop: "10px" }}>Cancel</Button>
-            </div>
           </div>
         )}
         
@@ -825,12 +804,11 @@ export default function App() {
             </div>
 
             <div className="contact-area">
+              {/* ✅ FIXED: ONLY shows the address of the branch the bill was made in! */}
               <div className="contact-address" style={{ fontFamily: publicSettings.address_font || "sans-serif", display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '8px', alignItems: publicSettings.address_align === 'left' ? 'flex-start' : publicSettings.address_align === 'right' ? 'flex-end' : 'center', textAlign: publicSettings.address_align || "center" }}>
-                {publicSettings.branches.map(b => (
-                    <a key={b.id} href={b.map_url !== "#" ? b.map_url : "#"} target="_blank" rel="noopener noreferrer" style={{ color: publicSettings.address_color || "#475569", fontSize: `${publicSettings.address_size || 14}px`, textDecoration: 'none' }}>
-                      {b.address}
-                    </a>
-                ))}
+                  <a href={pbBranch.map_url !== "#" ? pbBranch.map_url : "#"} target="_blank" rel="noopener noreferrer" style={{ color: publicSettings.address_color || "#475569", fontSize: `${publicSettings.address_size || 14}px`, textDecoration: 'none' }}>
+                    {pbBranch.address}
+                  </a>
               </div>
               
               <div style={{ width: "100%", textAlign: publicSettings.phone_align || "center", fontFamily: publicSettings.phone_font || "sans-serif", fontSize: `${publicSettings.phone_size || 13}px`, marginBottom: "4px" }}>
@@ -998,7 +976,14 @@ export default function App() {
                 <p className="section-title">DECLARATION</p>
                 <p>We declare that this bill shows the actual price of items and all details are correct.</p>
                 <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                  <div onClick={handleSmartFeedback} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
+                  {/* ✅ FIXED: Button instantly redirects to the specific branch's link! */}
+                  <div onClick={() => {
+                      if(pbBranch.map_url && pbBranch.map_url !== "#") {
+                          window.open(pbBranch.map_url, "_blank");
+                      } else {
+                          toast.info("Feedback link not set for this branch yet!");
+                      }
+                  }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
                   <a href="https://linktr.ee/JalaramJewellers" target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "12px", backgroundColor: "#1e293b", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>ℹ️ About Us</a>
                 </div>
               </div>
@@ -1010,7 +995,14 @@ export default function App() {
                   <li>You can replace purchased items within 7 days for manufacturing defects.</li>
                 </ul>
                 <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                  <div onClick={handleSmartFeedback} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
+                  {/* ✅ FIXED: Button instantly redirects to the specific branch's link! */}
+                  <div onClick={() => {
+                      if(pbBranch.map_url && pbBranch.map_url !== "#") {
+                          window.open(pbBranch.map_url, "_blank");
+                      } else {
+                          toast.info("Feedback link not set for this branch yet!");
+                      }
+                  }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
                   <a href="https://linktr.ee/JalaramJewellers" target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "12px", backgroundColor: "#1e293b", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>ℹ️ About Us</a>
                 </div>
               </div>
@@ -1048,23 +1040,6 @@ export default function App() {
 
   return (
     <div className="billing-app">
-      
-      {showFeedbackModal && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
-          <div style={{ backgroundColor: "white", padding: "30px", borderRadius: "16px", width: "100%", maxWidth: "380px", textAlign: "center", boxShadow: "0 10px 25px rgba(0,0,0,0.2)" }}>
-            <h3 style={{ marginTop: 0, marginBottom: "8px", color: "#0f172a" }}>Leave a Review!</h3>
-            <p style={{ fontSize: "0.9rem", color: "#64748b", marginBottom: "20px" }}>Which branch did you visit today?</p>
-            
-            {settings.branches.map(b => (
-                <a key={b.id} href={b.map_url !== "#" ? b.map_url : "#"} target="_blank" rel="noopener noreferrer" style={{ display: "block", padding: "14px", backgroundColor: b.map_url !== "#" ? "#facc15" : "#e2e8f0", color: b.map_url !== "#" ? "#854d0e" : "#475569", textDecoration: "none", borderRadius: "10px", marginBottom: "12px", fontWeight: "bold", fontSize: "1.1rem" }}>
-                  ⭐ {b.name}
-                </a>
-            ))}
-            
-            <Button variant="ghost" onClick={() => setShowFeedbackModal(false)} style={{ width: "100%", color: "#64748b", marginTop: "10px" }}>Cancel</Button>
-          </div>
-        </div>
-      )}
 
       <Toaster position="bottom-right" />
 
@@ -1134,12 +1109,11 @@ export default function App() {
             </div>
 
             <div className="contact-area">
+              {/* ✅ FIXED: ONLY shows the address of the branch the bill is currently assigned to! */}
               <div className="contact-address" style={{ fontFamily: settings.address_font || "sans-serif", display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '8px', alignItems: settings.address_align === 'left' ? 'flex-start' : settings.address_align === 'right' ? 'flex-end' : 'center', textAlign: settings.address_align || "center" }}>
-                {settings.branches.map(b => (
-                    <a key={b.id} href={b.map_url !== "#" ? b.map_url : "#"} target="_blank" rel="noopener noreferrer" style={{ color: settings.address_color || "#475569", fontSize: `${settings.address_size || 14}px`, textDecoration: 'none' }}>
-                      {b.address}
-                    </a>
-                ))}
+                  <a href={activeBillBranch.map_url !== "#" ? activeBillBranch.map_url : "#"} target="_blank" rel="noopener noreferrer" style={{ color: settings.address_color || "#475569", fontSize: `${settings.address_size || 14}px`, textDecoration: 'none' }}>
+                    {activeBillBranch.address}
+                  </a>
               </div>
               
               <div style={{ width: "100%", textAlign: settings.phone_align || "center", fontFamily: settings.phone_font || "sans-serif", fontSize: `${settings.phone_size || 13}px`, marginBottom: "4px" }}>
@@ -1249,7 +1223,6 @@ export default function App() {
                 </strong>
               </div>
 
-              {/* ✅ Conditional Dashboard QR */}
               {showDashboardUpi && (
                 <div className="payment-qr-box">
                   <p className="scan-title">Scan Here For Payment</p>
@@ -1270,7 +1243,14 @@ export default function App() {
                   )}
                 </div>
                 <div className="no-print" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                  <div onClick={handleSmartFeedback} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
+                  {/* ✅ FIXED: Button instantly redirects to the specific branch's link! */}
+                  <div onClick={() => {
+                      if(activeBillBranch.map_url && activeBillBranch.map_url !== "#") {
+                          window.open(activeBillBranch.map_url, "_blank");
+                      } else {
+                          toast.info("Feedback link not set for this branch yet!");
+                      }
+                  }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
                 </div>
               </div>
             ) : (
@@ -1287,7 +1267,14 @@ export default function App() {
                   )}
                 </div>
                 <div className="no-print" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                  <div onClick={handleSmartFeedback} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
+                  {/* ✅ FIXED: Button instantly redirects to the specific branch's link! */}
+                  <div onClick={() => {
+                      if(activeBillBranch.map_url && activeBillBranch.map_url !== "#") {
+                          window.open(activeBillBranch.map_url, "_blank");
+                      } else {
+                          toast.info("Feedback link not set for this branch yet!");
+                      }
+                  }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
                 </div>
               </div>
             )}
