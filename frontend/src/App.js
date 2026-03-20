@@ -2312,7 +2312,7 @@ export default function App() {
                    {settings.branches.map((b, index) => (
                        <div key={b.id} style={{ padding: "15px", border: "1px solid #cbd5e1", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc" }}>
                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
-                              <h4 style={{ margin: "0, color: "var(--brand)" }}>Branch: {b.name}</h4>
+                              <h4 style={{ margin: 0, color: "var(--brand)" }}>Branch: {b.name}</h4>
                               {settings.branches.length > 1 && (
                                   <Button size="sm" variant="outline" style={{ borderColor: "#ef4444", color: "#ef4444", padding: "0 8px", height: "24px" }} onClick={() => {
                                       if(window.confirm(`Delete ${b.name}?`)) {
