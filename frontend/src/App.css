@@ -1,3 +1,15 @@
+/* --- ✅ NEW: IMPORT GOOGLE FONTS --- */
+@import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400..700&family=Oswald:wght@200..700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Manrope:wght@200..800&display=swap');
+
+/* --- ✅ NEW: UPLOADED CUSTOM FONT TEMPLATE --- */
+/* To use this, create a "fonts" folder inside "src" and drop your font file inside it */
+@font-face {
+  font-family: 'My Custom Font';
+  src: url('./fonts/MyCustomFont.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
 :root {
   --j-green: #166534;
   --j-green-dark: #0f3f21;
