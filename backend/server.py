@@ -13,8 +13,9 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field
 from pymongo import ReturnDocument
 import requests
-from starlette.middleware.cors import CORSMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 
+# Setup directories and environment
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
@@ -30,6 +31,17 @@ counters_collection = db.number_counters
 ledger_logs_collection = db.ledger_logs 
 
 app = FastAPI()
+
+# --- 🚨 CRITICAL CORS FIX 🚨 ---
+# This allows your iPad/Phone to talk to Render from ANY Vercel link
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 api_router = APIRouter(prefix="/api")
 
 AUTH_TOKEN_EXPIRY_HOURS = 12
@@ -59,6 +71,7 @@ def now_utc() -> datetime:
 def now_iso() -> str:
     return now_utc().isoformat()
 
+# --- Models ---
 class LoginRequest(BaseModel):
     passcode: str
 
@@ -67,7 +80,6 @@ class AuthTokenResponse(BaseModel):
     token_type: str = "bearer"
     expires_at: str
 
-# ✅ NEW: Isolated Branch Structure
 class BranchDef(BaseModel):
     id: str
     name: str
@@ -84,50 +96,41 @@ class SettingsPayload(BaseModel):
     tagline: str = "The Silver Specialist"
     phone_numbers: List[str] = Field(default_factory=lambda: ["+91 9583221115", "+91 9776177296", "+91 7538977527"])
     email: str = "jalaramjewellers26@gmail.com"
-
     shop_name_color: str = "#000000"
     shop_name_size: int = 26
     shop_name_font: str = "sans-serif"
     shop_name_align: str = "center"
-
     tagline_color: str = "#475569"
     tagline_size: int = 12
     tagline_font: str = "sans-serif"
     tagline_align: str = "center"
-
     address_color: str = "#475569"
     address_size: int = 14
     address_font: str = "sans-serif"
     address_align: str = "center"
-
     phone_color: str = "#475569"
     phone_size: int = 13
     phone_font: str = "sans-serif"
     phone_align: str = "center"
-
     email_color: str = "#475569"
     email_size: int = 13
     email_font: str = "sans-serif"
     email_align: str = "center"
-
     gstin: str = "21AAUFJ1925F1ZH"
     silver_rate_per_gram: float = 240.0
     making_charge_per_gram: float = 15.0
     default_hsn: str = "7113"
     formula_note: str = "Line total = Weight × (Silver rate per gram + Making charge per gram)"
-    
     logo_data_url: Optional[str] = None
     about_qr_data_url: Optional[str] = None
     theme_color: str = "#000000"
-
-    # ✅ NEW: Multi-Branch List
     branches: List[BranchDef] = Field(default_factory=lambda: [
         BranchDef(id="B1", name="Branch 1 (Old Town)", address="Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2", map_url="https://g.page/r/CVvnomQZn7zxEBE/review", invoice_upi_id="eazypay.0000048595@icici", estimate_upi_id="7538977527@ybl"),
         BranchDef(id="B2", name="Branch 2 (Unit-2)", address="Branch - 2 : Shop No.14, BMC Market Complex, Market Building, Near Petrol Pump, Unit-2, BBSR-9", map_url="#", invoice_upi_id="eazypay.0000048595@icici", estimate_upi_id="7538977527@ybl")
     ])
 
 class LedgerAdjustPayload(BaseModel):
-    branch_id: str # Needs to know which branch to adjust!
+    branch_id: str
     reason: str
     cash_change: float = 0.0
     estimate_bank_change: float = 0.0
@@ -157,7 +160,7 @@ class LineItemPayload(BaseModel):
 
 class BillDraftPayload(BaseModel):
     mode: Literal["invoice", "estimate"]
-    branch_id: str = "B1" # ✅ Connects bill to branch
+    branch_id: str = "B1"
     document_number: Optional[str] = None
     date: str
     customer_name: str
@@ -213,14 +216,15 @@ class CloudStatusResponse(BaseModel):
     enabled: bool
     mode: str
 
+# --- Utilities ---
+
 def supabase_headers(prefer: Optional[str] = "return=representation") -> Dict[str, str]:
     headers = {
         "apikey": supabase_service_role_key,
         "Authorization": f"Bearer {supabase_service_role_key}",
         "Content-Type": "application/json",
     }
-    if prefer:
-        headers["Prefer"] = prefer
+    if prefer: headers["Prefer"] = prefer
     return headers
 
 async def call_supabase_rest(method: str, path: str, *, params: Optional[Dict[str, str]] = None, payload: Optional[Dict] = None, prefer: Optional[str] = "return=representation") -> Optional[requests.Response]:
@@ -277,7 +281,7 @@ async def sync_customer_supabase(customer_doc: Dict) -> None:
             return
     await call_supabase_rest("POST", supabase_customers_table, payload=customer_doc)
 
-# ✅ NEW: Multi-Branch Ledger Update Engine
+# ✅ UPDATED: Automatic Ledger Update & Log Creation
 async def update_ledger(bill: dict, reverse: bool = False):
     multiplier = -1 if reverse else 1
     cash_amt = 0.0
@@ -293,23 +297,19 @@ async def update_ledger(bill: dict, reverse: bool = False):
     if method == "Cash":
         cash_amt = grand_total
     elif method in ["UPI", "Card"]:
-        if mode == "estimate":
-            est_bank_amt = grand_total
-        else:
-            inv_bank_amt = grand_total
+        if mode == "estimate": est_bank_amt = grand_total
+        else: inv_bank_amt = grand_total
     elif method == "Split":
         split_c = float(bill.get("split_cash", 0.0))
         split_b = max(0.0, grand_total - split_c)
         cash_amt = split_c
-        if mode == "estimate":
-            est_bank_amt = split_b
-        else:
-            inv_bank_amt = split_b
+        if mode == "estimate": est_bank_amt = split_b
+        else: inv_bank_amt = split_b
 
     if cash_amt == 0 and est_bank_amt == 0 and inv_bank_amt == 0:
         return
 
-    # Update ONLY the specific branch's money!
+    # 1. Update balances
     await settings_collection.update_one(
         {"key": "app_settings", "branches.id": branch_id},
         {"$inc": {
@@ -318,6 +318,18 @@ async def update_ledger(bill: dict, reverse: bool = False):
             "branches.$.invoice_bank_balance": inv_bank_amt * multiplier
         }}
     )
+
+    # 2. ✅ AUTO-LOG: Create a record in ledger_logs so it shows up in history!
+    log_entry = {
+        "id": str(uuid.uuid4()),
+        "branch_id": branch_id,
+        "date": now_iso(),
+        "reason": f"{'CANCELLED: ' if reverse else ''}Sale {bill.get('document_number')} ({bill.get('customer',{}).get('name','Customer')})",
+        "cash_change": cash_amt * multiplier,
+        "estimate_bank_change": est_bank_amt * multiplier,
+        "invoice_bank_change": inv_bank_amt * multiplier
+    }
+    await ledger_logs_collection.insert_one(log_entry)
 
 def _extract_token(authorization: str) -> str:
     if not authorization or not authorization.lower().startswith("bearer "):
@@ -338,12 +350,10 @@ async def get_or_create_settings() -> SettingsPayload:
     doc = await settings_collection.find_one({"key": "app_settings"}, {"_id": 0})
     if doc and "branches" in doc:
         return SettingsPayload(**{k: v for k, v in doc.items() if k not in {"key", "updated_at"}})
-    # If starting fresh or migrating
     default_settings = SettingsPayload().model_dump()
     await settings_collection.update_one({"key": "app_settings"}, {"$set": {**default_settings, "updated_at": now_iso()}}, upsert=True)
     return SettingsPayload(**default_settings)
 
-# ✅ NEW: Smart Branch Counters
 async def reserve_document_number(mode: str, branch_id: str) -> str:
     prefix = "INV" if mode == "invoice" else "EST"
     if SUPABASE_ENABLED:
@@ -374,9 +384,12 @@ def compute_totals(payload: BillDraftPayload, settings: SettingsPayload, line_am
     round_off = round(payload.round_off, 2) if payload.round_off is not None else round(round(base_total) - base_total, 2)
     return BillTotals(subtotal=taxable_amount, taxable_amount=taxable_amount, cgst=cgst, sgst=sgst, igst=igst, mdr=mdr, discount=round(payload.discount, 2), exchange=round(payload.exchange, 2), round_off=round_off, grand_total=round(base_total + round_off, 2))
 
-@api_router.get("/")
+# --- Routes ---
+
+# ✅ UPDATED: Root response is public and simple for CRON-JOB to succeed!
+@app.get("/")
 async def root():
-    return {"message": "Jalaram Jewellers API"}
+    return {"status": "online", "message": "Jalaram Jewellers API is awake."}
 
 @api_router.post("/auth/login", response_model=AuthTokenResponse)
 async def login(payload: LoginRequest):
@@ -479,18 +492,12 @@ async def save_bill(payload: BillDraftPayload, _: str = Depends(require_auth)):
     provided_num = payload.document_number.strip() if payload.document_number else ""
     if provided_num:
         existing = await bills_collection.find_one({"document_number": provided_num})
-        if existing: raise HTTPException(status_code=400, detail=f"Bill number '{provided_num}' already exists! Please use a different number.")
+        if existing: raise HTTPException(status_code=400, detail=f"Bill number '{provided_num}' already exists!")
         doc_num = provided_num
-        
-        # ✅ Automatically Skip Counter Ahead to prevent overlap
         match = re.search(r'\d+$', doc_num)
         if match:
             new_val = int(match.group())
             await counters_collection.update_one({"mode": payload.mode, "branch_id": payload.branch_id}, {"$set": {"value": new_val}}, upsert=True)
-            if SUPABASE_ENABLED:
-                existing_supa = await call_supabase_rest("GET", supabase_counters_table, params={"mode": f"eq.{payload.branch_id}_{payload.mode}", "select": "mode", "limit": "1"}, prefer=None)
-                if existing_supa is not None and existing_supa.json(): await call_supabase_rest("PATCH", supabase_counters_table, params={"mode": f"eq.{payload.branch_id}_{payload.mode}"}, payload={"value": new_val, "updated_at": now_iso()})
-                else: await call_supabase_rest("POST", supabase_counters_table, payload={"mode": f"{payload.branch_id}_{payload.mode}", "value": new_val, "updated_at": now_iso()})
     else: doc_num = await reserve_document_number(payload.mode, payload.branch_id) 
     
     bill_id = str(uuid.uuid4())
@@ -503,8 +510,7 @@ async def save_bill(payload: BillDraftPayload, _: str = Depends(require_auth)):
     }
     await bills_collection.insert_one(bill_doc)
 
-    if payload.is_payment_done:
-        await update_ledger(bill_doc)
+    if payload.is_payment_done: await update_ledger(bill_doc)
     
     cust_doc = CustomerRecord(name=payload.customer_name, phone=payload.customer_phone, address=payload.customer_address, email=payload.customer_email).model_dump()
     await customers_collection.update_one({"phone": payload.customer_phone} if payload.customer_phone else {"name": payload.customer_name}, {"$set": cust_doc}, upsert=True)
@@ -530,14 +536,9 @@ async def update_bill(document_number: str, payload: BillDraftPayload, _: str = 
         "notes": payload.notes, "items": line_entries, "totals": totals.model_dump(), "updated_at": now_iso()
     }
 
-    # ✅ Fix Ledger if bill was migrated to a new branch!
-    if existing_bill.get("is_payment_done"): 
-        await update_ledger(existing_bill, reverse=True)
-    
+    if existing_bill.get("is_payment_done"): await update_ledger(existing_bill, reverse=True)
     await bills_collection.update_one({"document_number": document_number}, {"$set": update_data})
-    
-    if payload.is_payment_done: 
-        await update_ledger(update_data)
+    if payload.is_payment_done: await update_ledger(update_data)
     
     cust_doc = CustomerRecord(name=payload.customer_name, phone=payload.customer_phone, address=payload.customer_address, email=payload.customer_email).model_dump()
     await customers_collection.update_one({"phone": payload.customer_phone} if payload.customer_phone else {"name": payload.customer_name}, {"$set": cust_doc}, upsert=True)
@@ -550,10 +551,8 @@ async def toggle_payment_status(document_number: str, payload: PaymentToggle, _:
     if not existing: raise HTTPException(status_code=404, detail="Bill not found")
 
     currently_done = existing.get("is_payment_done", False)
-    if payload.is_payment_done and not currently_done:
-        await update_ledger(existing)
-    elif not payload.is_payment_done and currently_done:
-        await update_ledger(existing, reverse=True)
+    if payload.is_payment_done and not currently_done: await update_ledger(existing)
+    elif not payload.is_payment_done and currently_done: await update_ledger(existing, reverse=True)
 
     await bills_collection.update_one({"document_number": document_number}, {"$set": {"is_payment_done": payload.is_payment_done, "updated_at": now_iso()}})
     return {"message": f"Payment status updated to {payload.is_payment_done}"}
@@ -562,25 +561,19 @@ async def toggle_payment_status(document_number: str, payload: PaymentToggle, _:
 async def delete_bill(document_number: str, _: str = Depends(require_auth)):
     existing = await bills_collection.find_one({"document_number": document_number})
     if not existing: raise HTTPException(status_code=404, detail="Bill not found")
-    
-    if existing.get("is_payment_done"):
-        await update_ledger(existing, reverse=True)
-
+    if existing.get("is_payment_done"): await update_ledger(existing, reverse=True)
     await bills_collection.delete_one({"document_number": document_number})
     return {"message": f"Bill {document_number} deleted successfully"}
 
 @api_router.get("/bills/recent")
 async def recent_bills(limit: int = Query(default=15, ge=1, le=50), search: Optional[str] = Query(None), branch_filter: str = Query("ALL"), _: str = Depends(require_auth)):
     query = {}
-    if branch_filter != "ALL":
-        query["branch_id"] = branch_filter
-
+    if branch_filter != "ALL": query["branch_id"] = branch_filter
     if search and search.strip():
         regex = {"$regex": re.escape(search.strip()), "$options": "i"}
         search_query = {"$or": [{"document_number": regex}, {"customer.name": regex}, {"customer.phone": regex}]}
         if query: query = {"$and": [query, search_query]}
         else: query = search_query
-        
     return await bills_collection.find(query, {"_id": 0}).sort("created_at", -1).to_list(limit)
 
 @api_router.get("/bills/today")
@@ -590,10 +583,6 @@ async def today_bills(date: str = Query(...), branch_id: str = Query(...), _: st
 @api_router.post("/bills/reset-counter")
 async def reset_counter(payload: ResetCounterRequest, _: str = Depends(require_auth)):
     await counters_collection.update_one({"mode": payload.mode, "branch_id": payload.branch_id}, {"$set": {"value": 0}}, upsert=True)
-    if SUPABASE_ENABLED:
-        existing = await call_supabase_rest("GET", supabase_counters_table, params={"mode": f"eq.{payload.branch_id}_{payload.mode}", "select": "mode", "limit": "1"}, prefer=None)
-        if existing is not None and existing.json(): await call_supabase_rest("PATCH", supabase_counters_table, params={"mode": f"eq.{payload.branch_id}_{payload.mode}"}, payload={"value": 0, "updated_at": now_iso()})
-        else: await call_supabase_rest("POST", supabase_counters_table, payload={"mode": f"{payload.branch_id}_{payload.mode}", "value": 0, "updated_at": now_iso()})
     return {"message": f"{payload.mode.capitalize()} counter reset successfully"}
 
 @api_router.get("/bills/public/{document_number}")
@@ -612,7 +601,7 @@ async def get_storage_stats(_: str = Depends(require_auth)):
         quota_bytes = 512 * 1024 * 1024 
         percentage = min(100.0, (used_bytes / quota_bytes) * 100) if quota_bytes > 0 else 0
         return {"used_bytes": used_bytes, "quota_bytes": quota_bytes, "percentage": round(percentage, 2)}
-    except Exception as e: return {"used_bytes": 0, "quota_bytes": 512 * 1024 * 1024, "percentage": 0}
+    except Exception: return {"used_bytes": 0, "quota_bytes": 512 * 1024 * 1024, "percentage": 0}
 
 @api_router.get("/bills/export")
 async def export_bills(_: str = Depends(require_auth)):
@@ -624,7 +613,6 @@ async def delete_all_bills(_: str = Depends(require_auth)):
     return {"message": f"Successfully deleted {result.deleted_count} bills.", "deleted_count": result.deleted_count}
 
 app.include_router(api_router)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
