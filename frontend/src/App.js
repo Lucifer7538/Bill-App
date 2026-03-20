@@ -132,7 +132,6 @@ export default function App() {
   const [customer, setCustomer] = useState({ name: "", phone: "", address: "", email: "" });
   const [suggestions, setSuggestions] = useState([]);
 
-  // ✅ VERCEL ERROR FIXED HERE (Removed duplicate variables)
   const [items, setItems] = useState([createItem()]);
 
   const [discount, setDiscount] = useState("0");
@@ -243,6 +242,7 @@ export default function App() {
       finally { setCheckingSession(false); }
     };
     verify();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, isPublicView]);
 
   useEffect(() => {
@@ -258,6 +258,7 @@ export default function App() {
       const timer = setTimeout(fetchRecent, 300);
       return () => clearTimeout(timer);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showRecentBills, token, isPublicView, billSearchQuery, recentBranchFilter]); 
 
   const fetchLedgerHistory = async () => {
@@ -283,6 +284,7 @@ export default function App() {
       };
       fetchLedger();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showLedger, token, isPublicView, globalBranchId]);
 
   useEffect(() => {
@@ -295,6 +297,7 @@ export default function App() {
       };
       fetchStorageStats();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showSettings, token, isPublicView]);
 
   const loadSettings = async () => {
@@ -355,12 +358,14 @@ export default function App() {
       catch { toast.error("Could not load billing settings."); }
     };
     bootstrap();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, isPublicView]);
 
   useEffect(() => {
     if (!token || isPublicView) return;
     const interval = setInterval(() => { fetchCloudStatus(); }, 30000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, isPublicView]);
 
   useEffect(() => {
@@ -374,6 +379,7 @@ export default function App() {
       } catch { setSuggestions([]); }
     }, 250);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customer.phone, customer.name, token, isPublicView]);
 
   const computed = useMemo(() => {
@@ -1243,6 +1249,7 @@ export default function App() {
                 </strong>
               </div>
 
+              {/* ✅ Conditional Dashboard QR */}
               {showDashboardUpi && (
                 <div className="payment-qr-box">
                   <p className="scan-title">Scan Here For Payment</p>
@@ -1493,7 +1500,7 @@ export default function App() {
 
             <div style={{ marginBottom: "30px", padding: "15px", backgroundColor: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "10px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <h4 style={{ margin: 0 }}>Log Expenses & Vault Exchanges</h4>
+                <h4 style={{ margin: "0" }}>Log Expenses & Vault Exchanges</h4>
                 <Button size="sm" onClick={() => setShowLogForm(!showLogForm)} style={{ backgroundColor: "#0f172a" }}>
                   <Plus size={16} style={{ marginRight: "5px" }} /> New Entry
                 </Button>
