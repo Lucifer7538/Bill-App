@@ -173,7 +173,7 @@ export default function App() {
   const [billSearchQuery, setBillSearchQuery] = useState("");
   const [recentBranchFilter, setRecentBranchFilter] = useState("ALL");
   const [recentModeFilter, setRecentModeFilter] = useState("ALL");
-  const [recentDateFilter, setRecentDateFilter] = useState("ALL");
+  const [recentDateFilter, setRecentDateFilter] = useState("ALL"); // 'ALL', 'THIS_MONTH', 'LAST_MONTH', 'CUSTOM'
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
@@ -326,6 +326,7 @@ export default function App() {
       const fetchRecent = async () => {
         setLoadingRecent(true);
         try {
+          // If filtering by date, we pull more bills from backend to ensure we catch the whole month
           const limit = recentDateFilter === "ALL" ? 50 : 500;
           const response = await axios.get(`${API}/bills/recent?limit=${limit}&branch_filter=${recentBranchFilter}&search=${encodeURIComponent(billSearchQuery)}`, { headers: authHeaders });
           setRecentBillsList(response.data);
@@ -340,8 +341,10 @@ export default function App() {
   // FRONTEND FILTERING SYSTEM FOR EXPORT
   const filteredRecentBills = useMemo(() => {
     return recentBillsList.filter(bill => {
+      // 1. Mode Filter
       if (recentModeFilter !== "ALL" && bill.mode !== recentModeFilter) return false;
 
+      // 2. Date Filter
       if (recentDateFilter === "THIS_MONTH") {
         const billMonth = new Date(bill.date).getMonth();
         const billYear = new Date(bill.date).getFullYear();
@@ -377,6 +380,7 @@ export default function App() {
     toast.info(`Generating PDF for ${filteredRecentBills.length} bills... Please wait and do not close the window.`);
 
     try {
+      // Allow React to render the hidden bills in the DOM first
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -405,6 +409,7 @@ export default function App() {
       setIsBulkDownloading(false);
     }
   };
+
 
   const fetchLedgerHistory = async () => {
     try {
@@ -2353,4 +2358,25 @@ export default function App() {
       )}
 
       {showAbout && (
-        <section className="side-drawer no-print
+        <section className="side-drawer no-print">
+          <div className="drawer-header">
+            <h3>About This App</h3>
+            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowAbout(false)}>
+              <ArrowLeft className="drawer-back-icon" /><span>Back</span>
+            </Button>
+          </div>
+          
+          <div className="cloud-note" style={{ marginTop: "15px", padding: "0 15px" }}>
+            <h4>Cloud Database Setup</h4>
+            <ol>
+              <li>Create Supabase project and get project URL + service role key.</li>
+              <li>Add them in backend <code>SUPABASE_URL</code> and <code>SUPABASE_SERVICE_ROLE_KEY</code>.</li>
+              <li>Create <code>customers</code> and <code>number_counters</code> tables as in README.</li>
+            </ol>
+            <p className="cloud-status-text">Cloud status: {cloudStatus.enabled ? "Connected" : "Placeholder mode"} ({cloudStatus.mode})</p>
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
