@@ -111,6 +111,7 @@ export default function App() {
   const [publicBill, setPublicBill] = useState(null);
   const [publicSettings, setPublicSettings] = useState(null);
   const [publicLoading, setPublicLoading] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
   const [passcode, setPasscode] = useState("");
   const [token, setToken] = useState(localStorage.getItem("jj_auth_token") || "");
@@ -137,7 +138,8 @@ export default function App() {
   const [exchange, setExchange] = useState("0");
   const [manualRoundOff, setManualRoundOff] = useState("");
   
-  const [paymentMethod, setPaymentMethod] = useState("Cash");
+  // ✅ FIX: Default is now completely blank
+  const [paymentMethod, setPaymentMethod] = useState("");
   const [splitCash, setSplitCash] = useState("");
   const [isPaymentDone, setIsPaymentDone] = useState(false); 
   const [notes, setNotes] = useState("");
@@ -222,10 +224,11 @@ export default function App() {
       if (showAbout) setShowAbout(false);
       if (showRecentBills) setShowRecentBills(false);
       if (showLedger) setShowLedger(false);
+      if (showFeedbackModal) setShowFeedbackModal(false);
     };
     window.addEventListener("keydown", handleEsc);
     return () => window.removeEventListener("keydown", handleEsc);
-  }, [showSettings, showAbout, showRecentBills, showLedger]);
+  }, [showSettings, showAbout, showRecentBills, showLedger, showFeedbackModal]);
 
   useEffect(() => {
     localStorage.setItem("jj_print_scale", String(clampPrintScale(printScale)));
@@ -423,7 +426,8 @@ export default function App() {
     setItems([createItem(settings.default_hsn)]); 
     setCustomer({ name: "", phone: "", address: "", email: "" });
     setSuggestions([]); setDiscount("0"); setExchange("0"); setManualRoundOff("");
-    setPaymentMethod("Cash"); setSplitCash(""); setIsPaymentDone(false); setNotes("");
+    setPaymentMethod(""); // ✅ FIX: Clears back to blank
+    setSplitCash(""); setIsPaymentDone(false); setNotes("");
     setBillDate(today()); setIsDirty(false);
     await reserveNumber(nextMode, nextBranch);
   };
@@ -435,7 +439,10 @@ export default function App() {
     setDocumentNumber(bill.document_number);
     setBillDate(bill.date || today());
     setCustomer({ name: bill.customer?.name || "", phone: bill.customer?.phone || "", address: bill.customer?.address || "", email: bill.customer?.email || "" });
-    setPaymentMethod(bill.payment_method || "Cash");
+    
+    // ✅ FIX: Load old payment method or leave blank
+    setPaymentMethod(bill.payment_method || "");
+    
     setSplitCash(bill.split_cash !== null && bill.split_cash !== undefined ? String(bill.split_cash) : "");
     setIsPaymentDone(bill.is_payment_done || false); 
     setNotes(bill.notes || "");
@@ -513,6 +520,11 @@ export default function App() {
 
   const handleModeChange = async (nextMode) => {
     if (mode === nextMode) return;
+    // ✅ FIX: Smart Payment Method Block for Mode Change
+    if (isDirty && !paymentMethod) {
+       toast.error("Please select payment method.");
+       return;
+    }
     if (isDirty && !window.confirm("⚠️ You have unsaved changes!\n\nIf you switch modes now, your current data will be lost. Do you want to continue?")) return; 
     setMode(nextMode);
     await clearBill(nextMode, billBranchId);
@@ -633,6 +645,12 @@ export default function App() {
   };
 
   const saveBill = async () => {
+    // ✅ FIX: Hard stop if no payment method selected on save
+    if (!paymentMethod) {
+        toast.error("Please select payment method.");
+        return;
+    }
+
     setSavingBill(true);
     try {
       const payload = {
@@ -701,6 +719,12 @@ export default function App() {
   };
 
   const shareWhatsApp = () => {
+    // ✅ FIX: Hard stop if no payment method selected on share
+    if (!paymentMethod) {
+        toast.error("Please select payment method.");
+        return;
+    }
+    
     const link = `${window.location.origin}/?view=${documentNumber}`;
     const text = `Hello ${customer.name || "Customer"},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`;
     
@@ -713,6 +737,12 @@ export default function App() {
   };
 
   const shareEmail = () => {
+    // ✅ FIX: Hard stop if no payment method selected on email
+    if (!paymentMethod) {
+        toast.error("Please select payment method.");
+        return;
+    }
+
     const link = `${window.location.origin}/?view=${documentNumber}`;
     const subject = `${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber}`;
     const body = `Dear ${customer.name || "Customer"},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`;
@@ -720,6 +750,10 @@ export default function App() {
   };
 
   const goToBillTop = () => { document.getElementById("bill-print-root")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
+
+  const handleSmartFeedback = () => {
+    setShowFeedbackModal(true); 
+  };
 
   const handleWifiClick = () => {
     navigator.clipboard.writeText("12345678").then(() => {
@@ -740,9 +774,7 @@ export default function App() {
     const publicUpiAmountToPay = publicBill.payment_method === "Split" ? num(publicBill.split_upi) : publicBill.totals.grand_total;
     const showPublicUpi = !publicBill.is_payment_done && (publicBill.payment_method === "UPI" || (publicBill.payment_method === "Split" && publicUpiAmountToPay > 0));
     
-    // ✅ Identify the SPECIFIC branch for this public bill
     const pbBranch = publicSettings.branches.find(b => b.id === publicBill.branch_id) || publicSettings.branches[0];
-    
     const publicUpiId = publicBill.mode === "invoice" ? pbBranch.invoice_upi_id : pbBranch.estimate_upi_id;
     const publicUpiUri = `upi://pay?pa=${publicUpiId}&pn=${encodeURIComponent(publicSettings.shop_name)}&am=${money(publicUpiAmountToPay)}&cu=INR&tn=Bill_${publicBill.document_number}`;
 
@@ -763,6 +795,23 @@ export default function App() {
             style={{ width: "100%", maxWidth: "800px", backgroundColor: "#eff6ff", border: "2px solid #3b82f6", borderRadius: "8px", padding: "12px", marginBottom: "20px", display: "flex", justifyContent: "center", alignItems: "center", gap: "10px", color: "#1d4ed8", fontWeight: "bold", cursor: "pointer", boxShadow: "0 4px 6px rgba(0,0,0,0.1)" }}
           >
             <Wifi size={20} /> Slow Internet? Tap here for Free Shop Wi-Fi
+          </div>
+        )}
+
+        {showFeedbackModal && (
+          <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
+            <div style={{ backgroundColor: "white", padding: "30px", borderRadius: "16px", width: "100%", maxWidth: "380px", textAlign: "center", boxShadow: "0 10px 25px rgba(0,0,0,0.2)" }}>
+              <h3 style={{ marginTop: 0, marginBottom: "8px", color: "#0f172a" }}>Leave a Review!</h3>
+              <p style={{ fontSize: "0.9rem", color: "#64748b", marginBottom: "20px" }}>Which branch did you visit today?</p>
+              
+              {publicSettings.branches.map(b => (
+                <a key={b.id} href={b.map_url !== "#" ? b.map_url : "#"} target="_blank" rel="noopener noreferrer" style={{ display: "block", padding: "14px", backgroundColor: b.map_url !== "#" ? "#facc15" : "#e2e8f0", color: b.map_url !== "#" ? "#854d0e" : "#475569", textDecoration: "none", borderRadius: "10px", marginBottom: "12px", fontWeight: "bold", fontSize: "1.1rem" }}>
+                  ⭐ {b.name}
+                </a>
+              ))}
+              
+              <Button variant="ghost" onClick={() => setShowFeedbackModal(false)} style={{ width: "100%", color: "#64748b", marginTop: "10px" }}>Cancel</Button>
+            </div>
           </div>
         )}
         
@@ -804,7 +853,6 @@ export default function App() {
             </div>
 
             <div className="contact-area">
-              {/* ✅ FIXED: ONLY shows the address of the branch the bill was made in! */}
               <div className="contact-address" style={{ fontFamily: publicSettings.address_font || "sans-serif", display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '8px', alignItems: publicSettings.address_align === 'left' ? 'flex-start' : publicSettings.address_align === 'right' ? 'flex-end' : 'center', textAlign: publicSettings.address_align || "center" }}>
                   <a href={pbBranch.map_url !== "#" ? pbBranch.map_url : "#"} target="_blank" rel="noopener noreferrer" style={{ color: publicSettings.address_color || "#475569", fontSize: `${publicSettings.address_size || 14}px`, textDecoration: 'none' }}>
                     {pbBranch.address}
@@ -976,7 +1024,6 @@ export default function App() {
                 <p className="section-title">DECLARATION</p>
                 <p>We declare that this bill shows the actual price of items and all details are correct.</p>
                 <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                  {/* ✅ FIXED: Button instantly redirects to the specific branch's link! */}
                   <div onClick={() => {
                       if(pbBranch.map_url && pbBranch.map_url !== "#") {
                           window.open(pbBranch.map_url, "_blank");
@@ -995,7 +1042,6 @@ export default function App() {
                   <li>You can replace purchased items within 7 days for manufacturing defects.</li>
                 </ul>
                 <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                  {/* ✅ FIXED: Button instantly redirects to the specific branch's link! */}
                   <div onClick={() => {
                       if(pbBranch.map_url && pbBranch.map_url !== "#") {
                           window.open(pbBranch.map_url, "_blank");
@@ -1109,7 +1155,6 @@ export default function App() {
             </div>
 
             <div className="contact-area">
-              {/* ✅ FIXED: ONLY shows the address of the branch the bill is currently assigned to! */}
               <div className="contact-address" style={{ fontFamily: settings.address_font || "sans-serif", display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '8px', alignItems: settings.address_align === 'left' ? 'flex-start' : settings.address_align === 'right' ? 'flex-end' : 'center', textAlign: settings.address_align || "center" }}>
                   <a href={activeBillBranch.map_url !== "#" ? activeBillBranch.map_url : "#"} target="_blank" rel="noopener noreferrer" style={{ color: settings.address_color || "#475569", fontSize: `${settings.address_size || 14}px`, textDecoration: 'none' }}>
                     {activeBillBranch.address}
@@ -1214,16 +1259,19 @@ export default function App() {
                 <strong>₹{money(computed.grandTotal)}</strong>
               </div>
 
+              {/* ✅ FIX: Updates display if payment method is blank */}
               <div className="payment-method-view">
                 <span>Payment Method:</span>
                 <strong>
-                  {paymentMethod === "Split" 
+                  {!paymentMethod 
+                    ? "NOT SELECTED"
+                    : paymentMethod === "Split" 
                     ? `Split (Cash: ₹${money(splitCash)}, UPI: ₹${money(upiAmountToPay)})` 
                     : paymentMethod}
                 </strong>
               </div>
 
-              {showDashboardUpi && (
+              {showDashboardUpi && paymentMethod && (
                 <div className="payment-qr-box">
                   <p className="scan-title">Scan Here For Payment</p>
                   <img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" />
@@ -1243,7 +1291,6 @@ export default function App() {
                   )}
                 </div>
                 <div className="no-print" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                  {/* ✅ FIXED: Button instantly redirects to the specific branch's link! */}
                   <div onClick={() => {
                       if(activeBillBranch.map_url && activeBillBranch.map_url !== "#") {
                           window.open(activeBillBranch.map_url, "_blank");
@@ -1267,7 +1314,6 @@ export default function App() {
                   )}
                 </div>
                 <div className="no-print" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-                  {/* ✅ FIXED: Button instantly redirects to the specific branch's link! */}
                   <div onClick={() => {
                       if(activeBillBranch.map_url && activeBillBranch.map_url !== "#") {
                           window.open(activeBillBranch.map_url, "_blank");
@@ -1294,6 +1340,11 @@ export default function App() {
                 <select 
                     value={billBranchId} 
                     onChange={async (e) => { 
+                        // ✅ FIX: Block changing branch if dirty and missing payment
+                        if (isDirty && !paymentMethod) {
+                            toast.error("Please select payment method.");
+                            return;
+                        }
                         setBillBranchId(e.target.value); 
                         markDirty(); 
                         if (!editingDocNumber) { await reserveNumber(mode, e.target.value); }
@@ -1369,7 +1420,9 @@ export default function App() {
             <Input value={manualRoundOff} onChange={(e) => { setManualRoundOff(e.target.value); markDirty(); }} placeholder="Manual round off (optional)" />
 
             <label htmlFor="payment-method-select" className="select-label">Payment Method</label>
+            {/* ✅ FIX: Dropdown defaults to empty disabled selection */}
             <select id="payment-method-select" value={paymentMethod} onChange={(e) => { setPaymentMethod(e.target.value); markDirty(); }} className="native-select">
+              <option value="" disabled>Select Method</option>
               <option value="Cash">Cash</option>
               <option value="UPI">UPI</option>
               {mode === "invoice" && <option value="Card">Card</option>}
@@ -1918,7 +1971,7 @@ export default function App() {
 
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                   <Button type="button" variant="outline" onClick={handleBackupBills}>⬇️ Download Backup (JSON)</Button>
-                  <Button type="button" variant="destructive" style={{ backgroundColor: "#ef4444", color: "white" }} onClick={handleDeleteAllBills}>⚠️ Wipe All Bills (Clear Storage)</Button>
+                  <Button type="button" variant="destructive" style={{ backgroundColor: "#ef4444", color: "white" onClick={handleDeleteAllBills}>⚠️ Wipe All Bills (Clear Storage)</Button>
                 </div>
               </div>
 
