@@ -239,6 +239,7 @@ export default function App() {
       finally { setCheckingSession(false); }
     };
     verify();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, isPublicView]);
 
   useEffect(() => {
@@ -254,6 +255,7 @@ export default function App() {
       const timer = setTimeout(fetchRecent, 300);
       return () => clearTimeout(timer);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showRecentBills, token, isPublicView, billSearchQuery, recentBranchFilter]); 
 
   const fetchLedgerHistory = async () => {
@@ -277,6 +279,7 @@ export default function App() {
       };
       fetchLedger();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showLedger, token, isPublicView, globalBranchId]);
 
   useEffect(() => {
@@ -289,6 +292,7 @@ export default function App() {
       };
       fetchStorageStats();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showSettings, token, isPublicView]);
 
   const loadSettings = async () => {
@@ -339,12 +343,14 @@ export default function App() {
       catch { toast.error("Could not load billing settings."); }
     };
     bootstrap();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, isPublicView]);
 
   useEffect(() => {
     if (!token || isPublicView) return;
     const interval = setInterval(() => { fetchCloudStatus(); }, 30000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, isPublicView]);
 
   useEffect(() => {
@@ -358,6 +364,7 @@ export default function App() {
       } catch { setSuggestions([]); }
     }, 250);
     return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customer.phone, customer.name, token, isPublicView]);
 
   const computed = useMemo(() => {
