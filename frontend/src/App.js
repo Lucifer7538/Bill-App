@@ -173,7 +173,7 @@ export default function App() {
   const [billSearchQuery, setBillSearchQuery] = useState("");
   const [recentBranchFilter, setRecentBranchFilter] = useState("ALL");
   const [recentModeFilter, setRecentModeFilter] = useState("ALL");
-  const [recentDateFilter, setRecentDateFilter] = useState("ALL"); // 'ALL', 'THIS_MONTH', 'LAST_MONTH', 'CUSTOM'
+  const [recentDateFilter, setRecentDateFilter] = useState("ALL");
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
@@ -208,7 +208,6 @@ export default function App() {
   const activeGlobalBranch = settings.branches.find(b => b.id === globalBranchId) || settings.branches[0];
   const activeBillBranch = settings.branches.find(b => b.id === billBranchId) || settings.branches[0];
 
-  // Custom Font Loading & Component
   useEffect(() => {
     if (settings.custom_fonts && settings.custom_fonts.length > 0) {
       settings.custom_fonts.forEach(f => registerFont(f.name, f.dataUrl));
@@ -341,13 +340,9 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showRecentBills, token, isPublicView, billSearchQuery, recentBranchFilter, recentDateFilter]); 
 
-  // FRONTEND FILTERING SYSTEM FOR EXPORT
   const filteredRecentBills = useMemo(() => {
     return recentBillsList.filter(bill => {
-      // 1. Mode Filter
       if (recentModeFilter !== "ALL" && bill.mode !== recentModeFilter) return false;
-
-      // 2. Date Filter
       if (recentDateFilter === "THIS_MONTH") {
         const billMonth = new Date(bill.date).getMonth();
         const billYear = new Date(bill.date).getFullYear();
@@ -364,13 +359,10 @@ export default function App() {
         if (customStartDate && bill.date < customStartDate) return false;
         if (customEndDate && bill.date > customEndDate) return false;
       }
-
       return true;
     });
   }, [recentBillsList, recentModeFilter, recentDateFilter, customStartDate, customEndDate]);
 
-
-  // BULK PDF GENERATOR
   const handleBulkDownload = async () => {
     if (filteredRecentBills.length === 0) {
       toast.error("No bills to download!"); return;
@@ -383,7 +375,6 @@ export default function App() {
     toast.info(`Generating PDF for ${filteredRecentBills.length} bills... Please wait and do not close the window.`);
 
     try {
-      // Allow React to render the hidden bills in the DOM first
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -412,7 +403,6 @@ export default function App() {
       setIsBulkDownloading(false);
     }
   };
-
 
   const fetchLedgerHistory = async () => {
     try {
@@ -741,6 +731,7 @@ export default function App() {
     catch { toast.error("Could not save settings."); }
   };
 
+  // --- UPGRADED LEDGER LOGGING WITH SMART ERROR CATCHER ---
   const submitLedgerLog = async () => {
     if (!logAmount || isNaN(logAmount) || num(logAmount) <= 0) {
       toast.error("Please enter a valid amount."); return;
@@ -777,7 +768,18 @@ export default function App() {
       setShowLogForm(false); setLogAmount(""); setLogReason("");
       await loadSettings(); 
       await fetchLedgerHistory();
-    } catch (error) { toast.error("Failed to log transaction."); } 
+    } catch (error) { 
+      console.error("Ledger Error:", error);
+      if (error.response) {
+          // Backend responded with an error (e.g. 500 server error, missing column, etc)
+          toast.error(`Backend Error: ${error.response.data?.detail || error.response.statusText || "Check backend logs."}`);
+      } else if (error.request) {
+          // No response from server (Timeout / Sleeping)
+          toast.error("Network Error: Server is sleeping or unreachable. Try again in 10s ⏳");
+      } else {
+          toast.error(`Error: ${error.message}`);
+      }
+    } 
     finally { setSubmittingLog(false); }
   };
 
@@ -829,7 +831,11 @@ export default function App() {
         setEditingDocNumber(res.data.document_number);
         setDocumentNumber(res.data.document_number);
       }
+      
       await loadSettings(); 
+      // Force Ledger Log Refresh automatically after saving a bill
+      await fetchLedgerHistory();
+
     } catch (error) { toast.error(error.response?.data?.detail || "Could not save bill."); } 
     finally { setSavingBill(false); }
   };
