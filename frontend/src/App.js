@@ -39,70 +39,31 @@ const getInitialPrintScale = () => { const saved = Number(localStorage.getItem("
 const splitAmount = (amt) => { const validAmt = Number.isFinite(amt) ? amt : 0; const rupees = Math.floor(validAmt); const paise = Math.round((validAmt - rupees) * 100).toString().padStart(2, "0"); return { rupees, paise }; };
 const registerFont = (name, dataUrl) => { const styleId = `custom-font-${name.replace(/\s+/g, '-').toLowerCase()}`; if (document.getElementById(styleId)) return; const style = document.createElement('style'); style.id = styleId; style.innerHTML = `@font-face { font-family: '${name}'; src: url('${dataUrl}'); }`; document.head.appendChild(style); };
 
-// --- REUSABLE COMPONENTS TO PREVENT VERCEL TRUNCATION ---
-const FontSelectOptions = ({ customFonts }) => (
-  <><option value="sans-serif">Sans-serif</option><option value="Arial, Helvetica, sans-serif">Arial</option><option value="'Times New Roman', Times, serif">Times New Roman</option><option value="'Courier New', Courier, monospace">Courier New</option><option value="Georgia, serif">Georgia</option><option value="'Trebuchet MS', sans-serif">Trebuchet MS</option><option value="'Brush Script MT', cursive">Brush Script MT (Cursive)</option>{customFonts?.map(f => (<option key={f.name} value={`'${f.name}'`}>{f.name} (Custom)</option>))}</>
-);
-
-const ConnectWithUs = ({ phoneLink, instaLink = "https://www.instagram.com/jalaram_jewellers_?igsh=MWZnNmlzMTYyOWNzeA%3D%3D&utm_source=qr" }) => (
-  <div style={{ marginTop: "25px", borderTop: "1px dashed #e2e8f0", paddingTop: "20px" }}>
-    <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Connect With Us:</p>
-    <div style={{ display: 'flex', gap: '10px' }}>
-      <a href="https://chat.whatsapp.com/FHoih8XtTXGLtPvHWx7MO6?mode=gi_t" target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "12px", backgroundColor: "#25D366", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}><span style={{ fontSize: "1.2rem" }}>💬</span> WhatsApp</a>
-      <a href={instaLink} target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "12px", background: "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}><span style={{ fontSize: "1.2rem" }}>📸</span> Instagram</a>
-    </div>
-  </div>
-);
-
-const UpiAppsRow = ({ upiUri }) => (
-  <div style={{ marginTop: "20px" }}>
-    <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Or select your app directly:</p>
-    <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
-      <a href={upiUri.replace("upi://pay", "phonepe://pay")} style={{ padding: "8px 16px", backgroundColor: "#5f259f", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>PhonePe</a>
-      <a href={upiUri.replace("upi://pay", "tez://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#1a73e8", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>G-Pay</a>
-      <a href={upiUri.replace("upi://pay", "paytmmp://pay")} style={{ padding: "8px 16px", backgroundColor: "#00baf2", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>Paytm</a>
-      <a href={upiUri.replace("upi://pay", "credpay://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#212121", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>CRED</a>
-    </div>
-  </div>
-);
-
-// ✅ STRICT FIXED WIDTHS FOR PERFECT PDF ALIGNMENT
-const BillTable = ({ mode, items }) => (
-  <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
-    <thead>
-      {mode === "invoice" ? (
-        <tr>
-          <th style={{width: "8%"}}>Sl. No.</th>
-          <th style={{width: "40%"}}>DESCRIPTION</th>
-          <th style={{width: "12%"}}>HSN</th>
-          <th style={{width: "14%"}}>WEIGHT (g)</th>
-          <th style={{width: "12%"}}>RATE Rs.</th>
-          <th style={{width: "14%"}}>AMOUNT</th>
-        </tr>
-      ) : (
-        <tr>
-          <th style={{width: "8%"}}>Sl. No.</th>
-          <th style={{width: "42%"}}>Particulars</th>
-          <th style={{width: "14%"}}>Weight</th>
-          <th style={{width: "14%"}}>Qty x Rate</th>
-          <th style={{width: "12%"}}>Rs.</th>
-          <th style={{width: "10%"}}>Ps.</th>
-        </tr>
-      )}
-    </thead>
-    <tbody>
-      {items.map((item, idx) => (
-        <tr key={idx}>
-          {mode === "invoice" ? (
-            <><td>{item.sl_no || item.slNo}</td><td>{item.description || "-"}</td><td>{item.hsn || "-"}</td><td>{money(item.weight)}</td><td>{money(item.rate)}</td><td>{item.rupees}.{item.paise}</td></>
-          ) : (
-            <><td>{item.sl_no || item.slNo}</td><td>{item.description || "-"}</td><td>{money(item.weight)}</td><td>{money(item.quantity)} x {money(item.rate)}</td><td>{item.rupees}</td><td>{item.paise}</td></>
-          )}
-        </tr>
-      ))}
-    </tbody>
-  </table>
-);
+// ✅ BULLETPROOF TABLE HEADERS FOR FLAWLESS PDF ALIGNMENT
+const TableHeaders = ({ mode }) => {
+  if (mode === "invoice") {
+    return (
+      <tr>
+        <th style={{ width: "8%" }}>Sl. No.</th>
+        <th style={{ width: "40%" }}>DESCRIPTION</th>
+        <th style={{ width: "10%" }}>HSN</th>
+        <th style={{ width: "14%" }}>WEIGHT (g)</th>
+        <th style={{ width: "14%" }}>RATE Rs.</th>
+        <th style={{ width: "14%" }}>AMOUNT</th>
+      </tr>
+    );
+  }
+  return (
+    <tr>
+      <th style={{ width: "8%" }}>Sl. No.</th>
+      <th style={{ width: "42%" }}>Particulars</th>
+      <th style={{ width: "12%" }}>Weight</th>
+      <th style={{ width: "16%" }}>Qty x Rate</th>
+      <th style={{ width: "14%" }}>Amount Rs.</th>
+      <th style={{ width: "8%" }}>Ps.</th>
+    </tr>
+  );
+};
 
 export default function App() {
   const [isCompactView, setIsCompactView] = useState(window.innerWidth <= 520);
@@ -191,8 +152,8 @@ export default function App() {
   
   const authHeaders = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
 
-  const activeGlobalBranch = settings.branches.find(b => b.id === globalBranchId) || settings.branches[0];
-  const activeBillBranch = settings.branches.find(b => b.id === billBranchId) || settings.branches[0];
+  const activeGlobalBranch = (settings.branches || []).find(b => b.id === globalBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
+  const activeBillBranch = (settings.branches || []).find(b => b.id === billBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
 
   useEffect(() => {
     if (settings.custom_fonts && settings.custom_fonts.length > 0) {
@@ -278,7 +239,7 @@ export default function App() {
   }, [showRecentBills, token, isPublicView, billSearchQuery, recentBranchFilter, recentDateFilter, authHeaders]); 
 
   const filteredRecentBills = useMemo(() => {
-    return recentBillsList.filter(bill => {
+    return (recentBillsList || []).filter(bill => {
       if (recentModeFilter !== "ALL" && bill.mode !== recentModeFilter) return false;
       if (recentDateFilter === "THIS_MONTH") {
         const billMonth = new Date(bill.date).getMonth(); const billYear = new Date(bill.date).getFullYear(); const now = new Date();
@@ -297,11 +258,12 @@ export default function App() {
   }, [recentBillsList, recentModeFilter, recentDateFilter, customStartDate, customEndDate]);
 
   const handleBulkDownload = async () => {
-    if (filteredRecentBills.length === 0) { toast.error("No bills to download!"); return; }
-    if (filteredRecentBills.length > 20) { if (!window.confirm(`Generate PDF with ${filteredRecentBills.length} pages? This might take a minute.`)) return; }
+    if ((filteredRecentBills || []).length === 0) { toast.error("No bills to download!"); return; }
+    if ((filteredRecentBills || []).length > 20) { if (!window.confirm(`Generate PDF with ${filteredRecentBills.length} pages? This might take a minute.`)) return; }
     setIsBulkDownloading(true); toast.info(`Generating PDF for ${filteredRecentBills.length} bills...`);
-    
+    const wasCompact = isCompactView; if (wasCompact) setIsCompactView(false);
     await new Promise(resolve => setTimeout(resolve, 800));
+
     try {
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const pageWidth = pdf.internal.pageSize.getWidth();
@@ -310,30 +272,25 @@ export default function App() {
         const bill = filteredRecentBills[i];
         const node = document.getElementById(`bulk-bill-${bill.document_number}`);
         if (!node) continue;
-        
-        node.style.display = "block"; 
-        
+        node.style.display = "block"; node.style.width = "800px"; node.style.minWidth = "800px"; node.style.maxWidth = "800px";
         const canvas = await html2canvas(node, { 
-          scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#ffffff", windowWidth: 1024,
+          scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#ffffff", 
           onclone: (clonedDoc) => {
             const clonedNode = clonedDoc.getElementById(`bulk-bill-${bill.document_number}`);
             if (clonedNode) {
-              clonedNode.style.width = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.maxWidth = "800px"; 
-              clonedNode.style.padding = "20px"; clonedNode.style.margin = "0";
-              const tables = clonedNode.getElementsByTagName('table'); for (let t of tables) { t.style.tableLayout = "fixed"; t.style.width = "100%"; }
+              clonedNode.style.width = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.padding = "20px";
               const images = clonedNode.getElementsByTagName('img'); for (let img of images) img.crossOrigin = "anonymous";
             }
           }
         });
         node.style.display = "none";
-        
         const imgData = canvas.toDataURL("image/png", 1.0);
         const pageHeight = (canvas.height * pageWidth) / canvas.width;
         if (i > 0) pdf.addPage();
         pdf.addImage(imgData, "PNG", 0, 0, pageWidth, pageHeight);
       }
       pdf.save(`Jalaram_Bills_Export_${today()}.pdf`); toast.success("Bulk PDF Downloaded!");
-    } catch (error) { toast.error("Error generating bulk PDF."); } finally { setIsBulkDownloading(false); }
+    } catch (error) { toast.error("Error generating bulk PDF."); } finally { setIsBulkDownloading(false); if (wasCompact) setIsCompactView(true); }
   };
 
   const fetchLedgerHistory = async () => {
@@ -362,12 +319,12 @@ export default function App() {
     const response = await axios.get(`${API}/settings`, { headers: authHeaders });
     const savedLogo = localStorage.getItem("jj_logo_data_url");
     const savedAboutQr = localStorage.getItem("jj_about_qr_data_url");
-    let dbData = response.data;
+    let dbData = response.data || {};
     if (!dbData.branches) dbData.branches = defaultSettings.branches;
     let localFonts = []; const localFontsRaw = localStorage.getItem("jj_custom_fonts"); if (localFontsRaw) { try { localFonts = JSON.parse(localFontsRaw); } catch (e) {} }
     const newSettings = { ...defaultSettings, ...dbData, logo_data_url: savedLogo || dbData.logo_data_url || "", about_qr_data_url: savedAboutQr || dbData.about_qr_data_url || STATIC_ABOUT_QR_URL, custom_fonts: dbData.custom_fonts || localFonts };
     setSettings(newSettings);
-    if (!newSettings.branches.find(b => b.id === globalBranchId)) { setGlobalBranchId(newSettings.branches[0].id); setBillBranchId(newSettings.branches[0].id); }
+    if (!(newSettings.branches || []).find(b => b.id === globalBranchId)) { setGlobalBranchId(newSettings.branches[0].id); setBillBranchId(newSettings.branches[0].id); }
     setItems((prev) => { if (prev.length === 1 && !prev[0].description && !prev[0].weight && !prev[0].hsn) return [{ ...prev[0], hsn: newSettings.default_hsn }]; return prev; });
   };
 
@@ -406,7 +363,7 @@ export default function App() {
     const baseMCPerGram = num(settings.making_charge_per_gram);
     const flatMCBelow5g = num(settings.flat_mc_below_5g);
 
-    const mapped = items.map((item, index) => {
+    const mapped = (items || []).map((item, index) => {
       const weight = num(item.weight);
       const quantity = Math.max(num(item.quantity || 1), 1);
       const silverRate = item.rate_override !== "" ? num(item.rate_override) : baseSilverRate;
@@ -441,7 +398,7 @@ export default function App() {
 
   const updateItem = (id, key, value) => { markDirty(); setItems((prev) => prev.map((item) => (item.id === id ? { ...item, [key]: value } : item))); };
 
-  const checkIsBlank = () => { return !customer.name.trim() && !customer.phone.trim() && !customer.address.trim() && !items.some(i => i.description.trim() || i.weight.trim() || i.amount_override.trim()) && (!discount || discount === "0") && (!exchange || exchange === "0") && !paymentMethod && !advanceMethod && !advanceAmount && !splitCash; };
+  const checkIsBlank = () => { return !customer.name.trim() && !customer.phone.trim() && !customer.address.trim() && !(items || []).some(i => i.description.trim() || i.weight.trim() || i.amount_override.trim()) && (!discount || discount === "0") && (!exchange || exchange === "0") && !paymentMethod && !advanceMethod && !advanceAmount && !splitCash; };
 
   const clearBill = async (nextMode = mode, nextBranch = billBranchId) => {
     setCurrentBillId(null); setEditingDocNumber(null); setItems([createItem(settings.default_hsn)]); setCustomer({ name: "", phone: "", address: "", email: "" });
@@ -531,7 +488,7 @@ export default function App() {
   };
 
   const saveBalances = async () => {
-    try { const payload = { branch_id: globalBranchId, cash_balance: num(manualCash), estimate_bank_balance: num(manualEstBank), invoice_bank_balance: num(manualInvBank) }; await axios.put(`${API}/settings/balances`, payload, { headers: authHeaders }); setSettings(prev => { const updatedBranches = prev.branches.map(b => b.id === globalBranchId ? { ...b, ...payload } : b); return { ...prev, branches: updatedBranches }; }); setEditingBalances(false); toast.success(`Ledger balances for ${activeGlobalBranch.name} manually updated!`); } 
+    try { const payload = { branch_id: globalBranchId, cash_balance: num(manualCash), estimate_bank_balance: num(manualEstBank), invoice_bank_balance: num(manualInvBank) }; await axios.put(`${API}/settings/balances`, payload, { headers: authHeaders }); setSettings(prev => { const updatedBranches = (prev.branches || []).map(b => b.id === globalBranchId ? { ...b, ...payload } : b); return { ...prev, branches: updatedBranches }; }); setEditingBalances(false); toast.success(`Ledger balances for ${activeGlobalBranch.name} manually updated!`); } 
     catch { toast.error("Failed to update balances."); }
   };
 
@@ -560,15 +517,10 @@ export default function App() {
   const downloadPdf = async (elementId, filename) => {
     toast.info("Preparing PDF..."); const node = document.getElementById(elementId); if (!node) return;
     try {
-      const canvas = await html2canvas(node, { 
-        scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#ffffff", windowWidth: 1024,
+      const canvas = await html2canvas(node, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#ffffff", windowWidth: 1024,
         onclone: (clonedDoc) => {
           const clonedNode = clonedDoc.getElementById(elementId);
-          if (clonedNode) { 
-             clonedNode.style.width = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.position = "absolute"; clonedNode.style.top = "0"; clonedNode.style.left = "0"; clonedNode.style.margin = "0"; clonedNode.style.padding = "20px"; clonedNode.style.boxSizing = "border-box";
-             const tables = clonedNode.getElementsByTagName('table'); for (let t of tables) { t.style.tableLayout = "fixed"; t.style.width = "100%"; } 
-             const images = clonedNode.getElementsByTagName('img'); for (let img of images) img.crossOrigin = "anonymous"; 
-          }
+          if (clonedNode) { clonedNode.style.width = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.position = "absolute"; clonedNode.style.top = "0"; clonedNode.style.left = "0"; clonedNode.style.margin = "0"; clonedNode.style.padding = "20px"; clonedNode.style.boxSizing = "border-box"; const images = clonedNode.getElementsByTagName('img'); for (let img of images) img.crossOrigin = "anonymous"; }
         }
       });
       const imageData = canvas.toDataURL("image/png", 1.0); const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" }); const pageWidth = pdf.internal.pageSize.getWidth(); const pageHeight = (canvas.height * pageWidth) / canvas.width;
@@ -581,9 +533,9 @@ export default function App() {
   const goToBillTop = () => { document.getElementById("bill-print-root")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
   const handleWifiClick = () => { navigator.clipboard.writeText("12345678").then(() => { toast.success("✅ Password '12345678' Copied! Go to settings and connect to 'JalaramJewellers Unlimited'.", { duration: 6000 }); }).catch(() => { toast.info("Wi-Fi: JalaramJewellers Unlimited | Pass: 12345678", { duration: 6000 }); }); };
 
-  const todaysTotalCash = todayBills.filter(b => b.is_payment_done).reduce((sum, b) => sum + (b.payment_method === 'Cash' ? b.totals.grand_total : b.payment_method === 'Split' ? num(b.split_cash) : 0), 0);
-  const todaysTotalEstBank = todayBills.filter(b => b.is_payment_done && b.mode === 'estimate').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? b.totals.grand_total : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
-  const todaysTotalInvBank = todayBills.filter(b => b.is_payment_done && b.mode === 'invoice').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? b.totals.grand_total : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
+  const todaysTotalCash = (todayBills || []).filter(b => b.is_payment_done).reduce((sum, b) => sum + (b.payment_method === 'Cash' ? b.totals.grand_total : b.payment_method === 'Split' ? num(b.split_cash) : 0), 0);
+  const todaysTotalEstBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'estimate').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? b.totals.grand_total : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
+  const todaysTotalInvBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'invoice').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? b.totals.grand_total : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
 
   const publicComputedItems = useMemo(() => {
     if (!publicBill || !publicSettings) return [];
@@ -591,7 +543,7 @@ export default function App() {
     const baseMCPerGram = num(publicSettings.making_charge_per_gram);
     const flatMCBelow5g = num(publicSettings.flat_mc_below_5g);
 
-    return publicBill.items.map((item, index) => {
+    return (publicBill.items || []).map((item, index) => {
       const weight = num(item.weight);
       const quantity = Math.max(num(item.quantity || 1), 1);
       const silverRate = (item.rate_override !== undefined && item.rate_override !== null) ? num(item.rate_override) : baseSilverRate;
@@ -635,7 +587,7 @@ export default function App() {
         else if (publicBill.is_advance_paid && !publicBill.is_balance_paid && (publicBill.balance_method === "UPI" || publicBill.balance_method === "Split")) { const bal = Math.max(0, publicBill.totals.grand_total - num(publicBill.advance_amount)); publicUpiAmt = publicBill.balance_method === "Split" ? Math.max(0, bal - num(publicBill.balance_split_cash)) : bal; }
     }
     const showPublicUpi = publicUpiAmt > 0 && !(publicBill.tx_type === "sale" ? publicBill.is_payment_done : publicBill.is_balance_paid);
-    const pbBranch = publicSettings.branches.find(b => b.id === publicBill.branch_id) || publicSettings.branches[0];
+    const pbBranch = (publicSettings.branches || []).find(b => b.id === publicBill.branch_id) || (publicSettings.branches || [])[0] || defaultSettings.branches[0];
     const publicUpiId = publicBill.mode === "invoice" ? pbBranch.invoice_upi_id : pbBranch.estimate_upi_id;
     const publicUpiUri = `upi://pay?pa=${publicUpiId}&pn=${encodeURIComponent(publicSettings.shop_name)}&am=${money(publicUpiAmt)}&cu=INR&tn=Bill_${publicBill.document_number}`;
 
@@ -652,7 +604,7 @@ export default function App() {
             <div style={{ backgroundColor: "white", padding: "30px", borderRadius: "16px", width: "100%", maxWidth: "380px", textAlign: "center", boxShadow: "0 10px 25px rgba(0,0,0,0.2)" }}>
               <h3 style={{ marginTop: 0, marginBottom: "8px", color: "#0f172a" }}>Leave a Review!</h3>
               <p style={{ fontSize: "0.9rem", color: "#64748b", marginBottom: "20px" }}>Which branch did you visit today?</p>
-              {publicSettings.branches.map(b => (
+              {(publicSettings.branches || []).map(b => (
                 <a key={b.id} href={b.map_url !== "#" ? b.map_url : "#"} target="_blank" rel="noopener noreferrer" style={{ display: "block", padding: "14px", backgroundColor: b.map_url !== "#" ? "#facc15" : "#e2e8f0", color: b.map_url !== "#" ? "#854d0e" : "#475569", textDecoration: "none", borderRadius: "10px", marginBottom: "12px", fontWeight: "bold", fontSize: "1.1rem" }}>⭐ {b.name}</a>
               ))}
               <Button variant="ghost" onClick={() => setShowFeedbackModal(false)} style={{ width: "100%", color: "#64748b", marginTop: "10px" }}>Cancel</Button>
@@ -683,7 +635,7 @@ export default function App() {
                   <a href={pbBranch.map_url !== "#" ? pbBranch.map_url : "#"} target="_blank" rel="noopener noreferrer" style={{ color: publicSettings.address_color || "#475569", fontSize: `${publicSettings.address_size || 14}px`, textDecoration: 'none' }}>{pbBranch.address}</a>
               </div>
               <div style={{ width: "100%", textAlign: publicSettings.phone_align || "center", fontFamily: publicSettings.phone_font || "sans-serif", fontSize: `${publicSettings.phone_size || 13}px`, marginBottom: "4px" }}>
-                {publicSettings.phone_numbers.join(" | ")}
+                {(publicSettings.phone_numbers || []).join(" | ")}
               </div>
               <div style={{ width: "100%", textAlign: publicSettings.email_align || "center", fontFamily: publicSettings.email_font || "sans-serif", fontSize: `${publicSettings.email_size || 13}px`, marginBottom: "4px" }}>
                 <a href={`mailto:${publicSettings.email}`} style={{ color: publicSettings.email_color || "#475569", textDecoration: 'none' }}>{publicSettings.email}</a>
@@ -705,26 +657,39 @@ export default function App() {
             <p><strong>Phone:</strong> {publicBill.customer_phone || publicBill.customer?.phone || "-"}</p>
           </div>
 
-          <BillTable mode={publicBill.mode} items={publicComputedItems} />
+          <table className="bill-table" style={{ width: "100%", tableLayout: isCompactView ? "auto" : "fixed", wordWrap: "break-word" }}>
+            <thead><TableHeaders mode={publicBill.mode} /></thead>
+            <tbody>
+              {publicComputedItems.map((item, idx) => (
+                <tr key={idx}>
+                  {publicBill.mode === "invoice" ? (
+                    <><td>{item.sl_no}</td><td>{item.description || "-"}</td><td>{item.hsn || "-"}</td><td>{money(item.weight)}</td><td>{money(item.rate)}</td><td>{item.rupees}.{item.paise}</td></>
+                  ) : (
+                    <><td>{item.sl_no}</td><td>{item.description || "-"}</td><td>{money(item.weight)}</td><td>{money(item.quantity)} x {money(item.rate)}</td><td>{item.rupees}</td><td>{item.paise}</td></>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
 
           <div className="sheet-bottom-stack">
             <div className="totals">
-              <div className="totals-row"><span>{publicBill.mode === "invoice" ? "Taxable Amt." : "TOTAL"}</span><strong>₹{money(publicBill.totals.taxable_amount || publicBill.totals.subtotal)}</strong></div>
+              <div className="totals-row"><span>{publicBill.mode === "invoice" ? "Taxable Amt." : "TOTAL"}</span><strong>₹{money(publicBill.totals?.taxable_amount || publicBill.totals?.subtotal)}</strong></div>
               {publicBill.mode === "invoice" ? (
                 <>
-                  <div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(publicBill.totals.cgst)}</strong></div><div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(publicBill.totals.sgst)}</strong></div><div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(publicBill.totals.igst)}</strong></div>
+                  <div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(publicBill.totals?.cgst)}</strong></div><div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(publicBill.totals?.sgst)}</strong></div><div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(publicBill.totals?.igst)}</strong></div>
                 </>
               ) : (
-                <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(publicBill.totals.discount)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(publicBill.totals.exchange)}</strong></div></>
+                <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(publicBill.totals?.discount)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(publicBill.totals?.exchange)}</strong></div></>
               )}
-              <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(publicBill.totals.mdr)}</strong></div>
-              <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(publicBill.totals.round_off)}</strong></div>
-              <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(publicBill.totals.grand_total)}</strong></div>
+              <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(publicBill.totals?.mdr)}</strong></div>
+              <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(publicBill.totals?.round_off)}</strong></div>
+              <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(publicBill.totals?.grand_total)}</strong></div>
 
               {publicBill.tx_type && publicBill.tx_type !== "sale" && (
                 <>
                   <div className="totals-row" style={{ marginTop: "10px", color: "#16a34a" }}><span>ADVANCE RECEIVED</span><strong>₹{money(publicBill.advance_amount)}</strong></div>
-                  <div className="totals-row" style={{ color: "#dc2626" }}><span>BALANCE DUE</span><strong>₹{money(Math.max(0, publicBill.totals.grand_total - num(publicBill.advance_amount)))}</strong></div>
+                  <div className="totals-row" style={{ color: "#dc2626" }}><span>BALANCE DUE</span><strong>₹{money(Math.max(0, num(publicBill.totals?.grand_total) - num(publicBill.advance_amount)))}</strong></div>
                 </>
               )}
 
@@ -737,17 +702,21 @@ export default function App() {
               )}
             </div>
 
-            <ConnectWithUs phoneLink={publicSettings.phone_numbers[0]} />
+            <ConnectWithUs phoneLink={(publicSettings.phone_numbers || [])[0]} />
 
             {publicBill.mode === "invoice" ? (
-              <div className="declaration" style={{ marginTop: "20px" }}>
+              <div className="declaration">
                 <p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p>
-                <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}><div onClick={() => { if(pbBranch.map_url && pbBranch.map_url !== "#") window.open(pbBranch.map_url, "_blank"); else toast.info("Feedback link not set for this branch yet!"); }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div></div>
+                <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                  <div onClick={() => { if(pbBranch.map_url && pbBranch.map_url !== "#") window.open(pbBranch.map_url, "_blank"); else toast.info("Feedback link not set for this branch yet!"); }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
+                </div>
               </div>
             ) : (
-              <div className="policies" style={{ marginTop: "20px" }}>
+              <div className="policies">
                 <p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul>
-                <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}><div onClick={() => { if(pbBranch.map_url && pbBranch.map_url !== "#") window.open(pbBranch.map_url, "_blank"); else toast.info("Feedback link not set for this branch yet!"); }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div></div>
+                <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                  <div onClick={() => { if(pbBranch.map_url && pbBranch.map_url !== "#") window.open(pbBranch.map_url, "_blank"); else toast.info("Feedback link not set for this branch yet!"); }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
+                </div>
               </div>
             )}
           </div>
@@ -790,12 +759,12 @@ export default function App() {
     <div className="billing-app">
       <Toaster position="bottom-right" />
 
-      {/* INVISIBLE BULK PDF RENDERER */}
+      {/* INVISIBLE BULK PDF RENDERER - NO ABOUT QR */}
       <div style={{ position: "absolute", top: "-9999px", left: "-9999px", opacity: 0, pointerEvents: "none" }}>
-        {filteredRecentBills.map(b => {
-           const billBranch = settings.branches.find(br => br.id === b.branch_id) || settings.branches[0];
+        {(filteredRecentBills || []).map(b => {
+           const billBranch = (settings.branches || []).find(br => br.id === b.branch_id) || (settings.branches || [])[0] || defaultSettings.branches[0];
            const bulkUpiAmountToPay = b.payment_method === "Split" ? num(b.split_upi) : (b.totals?.grand_total || 0);
-           const printedItems = b.items.map((item, index) => {
+           const printedItems = (b.items || []).map((item, index) => {
              const rate = (item.rate !== undefined && item.rate !== null) ? num(item.rate) : (item.rate_override ? num(item.rate_override) : 0);
              const amount = (item.amount !== undefined && item.amount !== null) ? num(item.amount) : (item.amount_override ? num(item.amount_override) : 0);
              const { rupees, paise } = splitAmount(amount);
@@ -821,7 +790,7 @@ export default function App() {
                         <span style={{ color: settings.address_color || "#475569", fontSize: `${settings.address_size || 14}px` }}>{billBranch.address}</span>
                     </div>
                     <div style={{ width: "100%", textAlign: settings.phone_align || "center", fontFamily: settings.phone_font || "sans-serif", fontSize: `${settings.phone_size || 13}px`, marginBottom: "4px" }}>
-                      {settings.phone_numbers.join(" | ")}
+                      {(settings.phone_numbers || []).join(" | ")}
                     </div>
                     {b.mode === "invoice" && billBranch.gstin && <p style={{ margin: "4px 0", textAlign: "center", fontWeight: "bold" }}>GSTIN: {billBranch.gstin}</p>}
                   </div>
@@ -870,7 +839,7 @@ export default function App() {
           <div><h1 className="brand-title">{settings.shop_name}</h1><p className="brand-tagline">{settings.tagline}</p></div>
           <div style={{ paddingLeft: "15px", borderLeft: "2px solid rgba(255,255,255,0.2)" }}>
              <select value={globalBranchId} onChange={(e) => handleGlobalBranchChange(e.target.value)} style={{ backgroundColor: "rgba(255,255,255,0.1)", color: "white", border: "1px solid rgba(255,255,255,0.3)", padding: "6px 12px", borderRadius: "6px", fontWeight: "bold", outline: "none", cursor: "pointer" }}>
-                {settings.branches.map(b => <option key={b.id} value={b.id} style={{ color: "black" }}>📍 {b.name}</option>)}
+                {(settings.branches || []).map(b => <option key={b.id} value={b.id} style={{ color: "black" }}>📍 {b.name}</option>)}
              </select>
           </div>
         </div>
@@ -907,7 +876,7 @@ export default function App() {
                   <a href={activeBillBranch.map_url !== "#" ? activeBillBranch.map_url : "#"} target="_blank" rel="noopener noreferrer" style={{ color: settings.address_color || "#475569", fontSize: `${settings.address_size || 14}px`, textDecoration: 'none' }}>{activeBillBranch.address}</a>
               </div>
               <div style={{ width: "100%", textAlign: settings.phone_align || "center", fontFamily: settings.phone_font || "sans-serif", fontSize: `${settings.phone_size || 13}px`, marginBottom: "4px" }}>
-                {settings.phone_numbers.join(" | ")}
+                {(settings.phone_numbers || []).join(" | ")}
               </div>
               <div style={{ width: "100%", textAlign: settings.email_align || "center", fontFamily: settings.email_font || "sans-serif", fontSize: `${settings.email_size || 13}px`, marginBottom: "4px" }}>
                 <a href={`mailto:${settings.email}`} style={{ color: settings.email_color || "#475569", textDecoration: 'none' }}>{settings.email}</a>
@@ -929,7 +898,22 @@ export default function App() {
             <p><strong>Phone:</strong> {customer.phone || "-"}</p>
           </div>
 
-          <BillTable mode={mode} items={computed.items} />
+          <table className="bill-table" style={{ width: "100%", tableLayout: isCompactView ? "auto" : "fixed", wordWrap: "break-word" }}>
+            <thead><TableHeaders mode={mode} /></thead>
+            <tbody>
+              {computed.items.map((item) => (
+                <tr key={item.id}>
+                  {isCompactView ? (
+                    <><td>{item.slNo}</td><td><strong>{item.description || "-"}</strong>{mode === "invoice" && <div>HSN: {item.hsn || "-"}</div>}</td><td>{money(item.weight)}g x ₹{money(item.rate)}</td><td>{item.rupees}.{item.paise}</td></>
+                  ) : mode === "invoice" ? (
+                    <><td>{item.slNo}</td><td>{item.description || "-"}</td><td>{item.hsn || "-"}</td><td>{money(item.weight)}</td><td>{money(item.rate)}</td><td>{item.rupees}.{item.paise}</td></>
+                  ) : (
+                    <><td>{item.slNo}</td><td>{item.description || "-"}</td><td>{money(item.weight)}</td><td>{money(item.quantity)} x {money(item.rate)}</td><td>{item.rupees}</td><td>{item.paise}</td></>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
 
           <div className="sheet-bottom-stack">
             <div className="totals">
@@ -986,7 +970,7 @@ export default function App() {
                     const nextBranch = e.target.value; setBillBranchId(nextBranch); markDirty(); 
                     if (currentBillId) { try { const res = await axios.get(`${API}/bills/next-number?mode=${mode}&branch_id=${nextBranch}`, { headers: authHeaders }); setDocumentNumber(res.data.document_number); toast.info(`Migrating to Branch: ${nextBranch}`); } catch (err) { toast.error("Failed to fetch new number for migration."); } } else { await reserveNumber(mode, nextBranch); }
                 }} style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem", outline: "none", cursor: "pointer" }}>
-                    {settings.branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    {(settings.branches || []).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                 </select>
             </div>
 
@@ -1001,9 +985,9 @@ export default function App() {
             <Input value={customer.email} onChange={(e) => { setCustomer((prev) => ({ ...prev, email: e.target.value })); markDirty(); }} placeholder="Email" />
             <Input type="text" value={billDate} onChange={(e) => { setBillDate(e.target.value); markDirty(); }} placeholder="YYYY-MM-DD" />
 
-            {suggestions.length > 0 && (
+            {(suggestions || []).length > 0 && (
               <div className="suggestions">
-                {suggestions.map((entry) => (
+                {(suggestions || []).map((entry) => (
                   <button key={entry.id} type="button" className="suggestion-item" onClick={() => { setCustomer({ name: entry.name, phone: entry.phone, address: entry.address, email: entry.email }); setSuggestions([]); markDirty(); }}>
                     {entry.name} · {entry.phone}
                   </button>
@@ -1014,7 +998,7 @@ export default function App() {
 
           <div className="control-card">
             <h3>Item Lines</h3>
-            {items.map((item) => (
+            {(items || []).map((item) => (
               <div key={item.id} className="item-row-editor">
                 <Input value={item.description} onChange={(e) => updateItem(item.id, "description", e.target.value)} placeholder="Description" />
                 <Input value={item.hsn} onChange={(e) => updateItem(item.id, "hsn", e.target.value)} placeholder="HSN" />
@@ -1194,9 +1178,9 @@ export default function App() {
 
             <div style={{ marginBottom: "30px" }}>
               <h4 style={{ margin: "0 0 15px 0", fontSize: "1.1rem", color: "#1e293b", display: "flex", alignItems: "center", gap: "8px" }}><History size={18} /> Ledger History (Expenses & Exchanges)</h4>
-              {ledgerLogs.length === 0 ? (<p style={{ color: "#666", fontStyle: "italic" }}>No manual transactions logged yet.</p>) : (
+              {(ledgerLogs || []).length === 0 ? (<p style={{ color: "#666", fontStyle: "italic" }}>No manual transactions logged yet.</p>) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  {ledgerLogs.map(log => (
+                  {(ledgerLogs || []).map(log => (
                     <div key={log.id} style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", backgroundColor: "white" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}><strong style={{ color: "#0f172a" }}>{log.reason}</strong><span style={{ fontSize: "0.75rem", color: "#94a3b8" }}>{new Date(log.date).toLocaleDateString()}</span></div>
                       <div style={{ fontSize: "0.85rem", display: "flex", flexDirection: "column", gap: "2px" }}>
@@ -1212,9 +1196,9 @@ export default function App() {
             
             <div>
               <h4 style={{ margin: "0 0 15px 0", fontSize: "1.1rem", color: "#1e293b" }}>Today's Bills</h4>
-              {ledgerLoading ? (<p>Loading bills...</p>) : todayBills.length === 0 ? (<p style={{ color: "#666" }}>No bills generated today yet.</p>) : (
+              {ledgerLoading ? (<p>Loading bills...</p>) : (todayBills || []).length === 0 ? (<p style={{ color: "#666" }}>No bills generated today yet.</p>) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  {todayBills.map(b => (
+                  {(todayBills || []).map(b => (
                     <div key={b.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px", border: "1px solid #e2e8f0", borderRadius: "6px", backgroundColor: "white" }}>
                       <div>
                         <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "4px" }}>
@@ -1247,15 +1231,15 @@ export default function App() {
 
           <div style={{ padding: "15px" }}>
             <div style={{ marginBottom: "20px" }}>
-              <Button onClick={handleBulkDownload} disabled={isBulkDownloading || filteredRecentBills.length === 0} style={{ width: "100%", backgroundColor: "#0f172a", height: "auto", padding: "10px", display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", justifyContent: "center", fontSize: "1rem", boxSizing: "border-box" }}>
-                {isBulkDownloading ? "Generating PDF... Please Wait" : <><Download size={18} /> Download {filteredRecentBills.length} Bills as Single PDF</>}
+              <Button onClick={handleBulkDownload} disabled={isBulkDownloading || (filteredRecentBills || []).length === 0} style={{ width: "100%", backgroundColor: "#0f172a", height: "auto", padding: "10px", display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", justifyContent: "center", fontSize: "1rem", boxSizing: "border-box" }}>
+                {isBulkDownloading ? "Generating PDF... Please Wait" : <><Download size={18} /> Download {(filteredRecentBills || []).length} Bills as Single PDF</>}
               </Button>
             </div>
 
             <div style={{ backgroundColor: "#f8fafc", padding: "15px", borderRadius: "8px", border: "1px solid #cbd5e1", marginBottom: "20px" }}>
                <h4 style={{ margin: "0 0 10px 0", color: "#334155", fontSize: "0.9rem" }}>Filter Bills</h4>
                <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "10px" }}>
-                 <div style={{ flex: "1 1 120px" }}><label style={{ fontSize: "0.75rem", color: "#64748b" }}>Branch</label><select value={recentBranchFilter} onChange={(e) => setRecentBranchFilter(e.target.value)} className="native-select"><option value="ALL">All Branches</option>{settings.branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
+                 <div style={{ flex: "1 1 120px" }}><label style={{ fontSize: "0.75rem", color: "#64748b" }}>Branch</label><select value={recentBranchFilter} onChange={(e) => setRecentBranchFilter(e.target.value)} className="native-select"><option value="ALL">All Branches</option>{(settings.branches || []).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
                  <div style={{ flex: "1 1 120px" }}><label style={{ fontSize: "0.75rem", color: "#64748b" }}>Bill Type</label><select value={recentModeFilter} onChange={(e) => setRecentModeFilter(e.target.value)} className="native-select"><option value="ALL">All Types</option><option value="invoice">Invoices Only</option><option value="estimate">Estimates Only</option></select></div>
                </div>
                <div style={{ marginBottom: "10px" }}><label style={{ fontSize: "0.75rem", color: "#64748b" }}>Date Range</label><select value={recentDateFilter} onChange={(e) => setRecentDateFilter(e.target.value)} className="native-select"><option value="ALL">All Time</option><option value="THIS_MONTH">This Month</option><option value="LAST_MONTH">Last Month</option><option value="CUSTOM">Custom Date Range</option></select></div>
@@ -1275,11 +1259,11 @@ export default function App() {
 
             {loadingRecent ? (
               <p style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>Loading bills from database...</p>
-            ) : filteredRecentBills.length === 0 ? (
+            ) : (filteredRecentBills || []).length === 0 ? (
               <p style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>No bills found matching these filters.</p>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                {filteredRecentBills.map((b) => (
+                {(filteredRecentBills || []).map((b) => (
                   <div key={b.id} style={{ border: "1px solid var(--border)", padding: "12px", borderRadius: "8px", backgroundColor: "white" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", marginBottom: "8px" }}>
                       <strong style={{ color: b.mode === "invoice" ? "#dc2626" : "#2563eb" }}>{b.document_number}</strong><span style={{ fontSize: "0.85rem", color: "#666" }}>{b.date}</span>
@@ -1335,7 +1319,7 @@ export default function App() {
                 <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f0fdf4", width: "100%", boxSizing: "border-box" }}>
                   <h4 style={{ margin: "0 0 10px 0", color: "#166534", display: "flex", alignItems: "center", gap: "8px" }}><Upload size={18} /> Upload Custom Font</h4>
                   <label style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px", border: "2px dashed #16a34a", borderRadius: "8px", cursor: "pointer", backgroundColor: "white", flexWrap: "wrap" }}><span style={{ fontSize: "0.85rem", fontWeight: "bold" }}>📁 Choose Font File</span><input type="file" accept=".ttf,.otf,.woff,.woff2" onChange={handleFontUpload} style={{ display: "none" }} /></label>
-                  {settings.custom_fonts?.length > 0 && (<div style={{ marginTop: "10px" }}><p style={{ fontSize: "0.75rem", fontWeight: "bold", margin: "0 0 5px 0" }}>Uploaded Fonts:</p><ul style={{ fontSize: "0.75rem", margin: 0, paddingLeft: "15px" }}>{settings.custom_fonts.map(f => <li key={f.name}>{f.name}</li>)}</ul></div>)}
+                  {(settings.custom_fonts || []).length > 0 && (<div style={{ marginTop: "10px" }}><p style={{ fontSize: "0.75rem", fontWeight: "bold", margin: "0 0 5px 0" }}>Uploaded Fonts:</p><ul style={{ fontSize: "0.75rem", margin: 0, paddingLeft: "15px" }}>{(settings.custom_fonts || []).map(f => <li key={f.name}>{f.name}</li>)}</ul></div>)}
                 </div>
 
                 <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
@@ -1348,8 +1332,12 @@ export default function App() {
                 </div>
 
                 <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
+                  <h4 style={{ margin: "0 0 10px 0" }}>Global Business IDs</h4><label className="select-label" style={{ fontSize: "0.8rem" }}>GSTIN</label><Input value={settings.gstin} onChange={(e) => setSettings((prev) => ({ ...prev, gstin: e.target.value }))} style={{ marginBottom: "8px", width: "100%" }} />
+                </div>
+
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
                   <h4 style={{ margin: "0 0 10px 0" }}>Printing & Uploads</h4>
-                  <label className="select-label" htmlFor="print-scale-range" style={{ fontSize: "0.8rem" }}>Auto Print Scale: {printScale.toFixed(1)}%</label>
+                  <label className="select-label" htmlFor="print-scale-range" style={{ fontSize: "0.8rem" }}>Auto Print Scale: {Number(printScale).toFixed(1)}%</label>
                   <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "15px", flexWrap: "wrap" }}><input id="print-scale-range" type="range" min="98" max="102" step="0.1" value={printScale} onChange={(e) => setPrintScale(clampPrintScale(Number(e.target.value)))} style={{ flex: "1 1 150px" }} /><Button type="button" variant="outline" size="sm" onClick={() => setPrintScale(100)}>Reset</Button></div>
                   <div style={{ marginBottom: "15px", width: "100%" }}><label className="file-label" htmlFor="logo-upload-input" style={{ fontSize: "0.8rem" }}>Upload Shop Logo</label><input id="logo-upload-input" type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/*" onChange={handleLogoUpload} style={{ display: "block", marginBottom: "5px", maxWidth: "100%" }} /><span style={{ fontSize: "0.75rem", color: "#666", wordBreak: "break-all" }}>{logoUploadName ? `Selected: ${logoUploadName}` : "No logo selected"}</span>{settings.logo_data_url && <img src={settings.logo_data_url} alt="Logo preview" style={{ maxWidth: "80px", marginTop: "5px", display: "block" }} />}</div>
                   <div style={{ width: "100%" }}><label className="file-label" htmlFor="about-qr-upload-input" style={{ fontSize: "0.8rem" }}>Upload About Us QR</label><input id="about-qr-upload-input" type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/*" onChange={handleAboutQrUpload} style={{ display: "block", marginBottom: "5px", maxWidth: "100%" }} /><span style={{ fontSize: "0.75rem", color: "#666", wordBreak: "break-all" }}>{aboutUploadName ? `Selected: ${aboutUploadName}` : "No QR selected"}</span>{(settings.about_qr_data_url || STATIC_ABOUT_QR_URL) && <img src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="QR preview" style={{ maxWidth: "80px", marginTop: "5px", display: "block" }} />}</div>
@@ -1359,7 +1347,7 @@ export default function App() {
 
                 <div style={{ marginTop: "20px", padding: "15px", border: "1px solid #ef4444", borderRadius: "8px", backgroundColor: "#fef2f2", width: "100%", boxSizing: "border-box" }}>
                   <h4 style={{ margin: "0 0 10px 0", color: "#b91c1c" }}>Database & Backup</h4>
-                  <div style={{ marginBottom: "15px" }}><div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginBottom: "5px", color: "#7f1d1d" }}><span>Storage Used: {(storageStats.used_bytes / 1024).toFixed(2)} KB</span><span>{storageStats.percentage}%</span></div><div style={{ width: "100%", backgroundColor: "#fca5a5", borderRadius: "4px", height: "10px", overflow: "hidden" }}><div style={{ width: `${storageStats.percentage}%`, backgroundColor: "#dc2626", height: "100%", transition: "width 0.5s ease" }}></div></div></div>
+                  <div style={{ marginBottom: "15px" }}><div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginBottom: "5px", color: "#7f1d1d" }}><span>Storage Used: {((storageStats?.used_bytes || 0) / 1024).toFixed(2)} KB</span><span>{storageStats?.percentage || 0}%</span></div><div style={{ width: "100%", backgroundColor: "#fca5a5", borderRadius: "4px", height: "10px", overflow: "hidden" }}><div style={{ width: `${storageStats?.percentage || 0}%`, backgroundColor: "#dc2626", height: "100%", transition: "width 0.5s ease" }}></div></div></div>
                   <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}><Button type="button" variant="outline" onClick={handleBackupBills}>⬇️ Download Backup (JSON)</Button><Button type="button" variant="destructive" style={{ backgroundColor: "#ef4444", color: "white" }} onClick={handleDeleteAllBills}>⚠️ Wipe All Bills (Clear Storage)</Button></div>
                 </div>
               </div>
@@ -1367,16 +1355,16 @@ export default function App() {
 
             {settingsTab === "branches" && (
                <div className="settings-branches-tab" style={{ width: "100%" }}>
-                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px", flexWrap: "wrap", gap: "10px" }}><p style={{ margin: 0, fontSize: "0.9rem", color: "#475569" }}>Manage isolated branch ledgers and addresses here.</p><Button size="sm" onClick={() => { const newBranch = { id: `B${Date.now()}`, name: "New Branch", address: "", map_url: "#", invoice_upi_id: "", estimate_upi_id: "", gstin: "", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 }; setSettings(prev => ({ ...prev, branches: [...prev.branches, newBranch] })); }}>+ Add Branch</Button></div>
-                   {settings.branches.map((b, index) => (
+                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px", flexWrap: "wrap", gap: "10px" }}><p style={{ margin: 0, fontSize: "0.9rem", color: "#475569" }}>Manage isolated branch ledgers and addresses here.</p><Button size="sm" onClick={() => { const newBranch = { id: `B${Date.now()}`, name: "New Branch", address: "", map_url: "#", invoice_upi_id: "", estimate_upi_id: "", gstin: "", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 }; setSettings(prev => ({ ...prev, branches: [...(prev.branches || []), newBranch] })); }}>+ Add Branch</Button></div>
+                   {(settings.branches || []).map((b, index) => (
                        <div key={b.id} style={{ padding: "15px", border: "1px solid #cbd5e1", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
-                           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "10px" }}><h4 style={{ margin: 0, color: "var(--brand)" }}>Branch: {b.name}</h4>{settings.branches.length > 1 && (<Button size="sm" variant="outline" style={{ borderColor: "#ef4444", color: "#ef4444", padding: "0 8px", height: "24px" }} onClick={() => { if(window.confirm(`Delete ${b.name}?`)) { setSettings(prev => ({ ...prev, branches: prev.branches.filter(x => x.id !== b.id) })); } }}>Delete</Button>)}</div>
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Branch Name (Internal Use)</label><Input value={b.name} onChange={(e) => { const newBranches = [...settings.branches]; newBranches[index].name = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Printed Bill Address</label><Input value={b.address} onChange={(e) => { const newBranches = [...settings.branches]; newBranches[index].address = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Google Maps Review Link</label><Input value={b.map_url} onChange={(e) => { const newBranches = [...settings.branches]; newBranches[index].map_url = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Invoice UPI ID</label><Input value={b.invoice_upi_id} onChange={(e) => { const newBranches = [...settings.branches]; newBranches[index].invoice_upi_id = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Estimate UPI ID</label><Input value={b.estimate_upi_id} onChange={(e) => { const newBranches = [...settings.branches]; newBranches[index].estimate_upi_id = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>GSTIN</label><Input value={b.gstin || ""} onChange={(e) => { const newBranches = [...settings.branches]; newBranches[index].gstin = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
+                           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "10px" }}><h4 style={{ margin: 0, color: "var(--brand)" }}>Branch: {b.name}</h4>{(settings.branches || []).length > 1 && (<Button size="sm" variant="outline" style={{ borderColor: "#ef4444", color: "#ef4444", padding: "0 8px", height: "24px" }} onClick={() => { if(window.confirm(`Delete ${b.name}?`)) { setSettings(prev => ({ ...prev, branches: (prev.branches || []).filter(x => x.id !== b.id) })); } }}>Delete</Button>)}</div>
+                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Branch Name (Internal Use)</label><Input value={b.name} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].name = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
+                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Printed Bill Address</label><Input value={b.address} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].address = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
+                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Google Maps Review Link</label><Input value={b.map_url} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].map_url = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
+                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Invoice UPI ID</label><Input value={b.invoice_upi_id} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].invoice_upi_id = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
+                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Estimate UPI ID</label><Input value={b.estimate_upi_id} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].estimate_upi_id = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
+                           <label className="select-label" style={{ fontSize: "0.8rem" }}>GSTIN</label><Input value={b.gstin || ""} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].gstin = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
                        </div>
                    ))}
                    <Button onClick={saveSettings} style={{ width: "100%", marginBottom: "15px" }}>Save Branch Settings</Button>
