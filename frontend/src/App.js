@@ -9,7 +9,6 @@ import { Toaster, toast } from "sonner";
 import "@/App.css";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-// Fix 1: Removed trailing slashes from the API URL to prevent "Not Found" Network errors
 const API = `${BACKEND_URL ? BACKEND_URL.replace(/\/$/, '') : ""}/api`;
 const STATIC_ABOUT_QR_URL = process.env.REACT_APP_ABOUT_QR_URL;
 
@@ -28,73 +27,49 @@ const defaultSettings = {
   tagline: "The Silver Specialist",
   phone_numbers: ["+91 9583221115", "+91 9776177296", "+91 7538977527"],
   email: "jalaramjewellers26@gmail.com",
-
   shop_name_color: "#000000",
   shop_name_size: 26,
   shop_name_font: "sans-serif",
   shop_name_align: "center",
-
   tagline_color: "#475569",
   tagline_size: 12,
   tagline_font: "sans-serif",
   tagline_align: "center",
-
   address_color: "#475569",
   address_size: 14,
   address_font: "sans-serif",
   address_align: "center",
-
   phone_color: "#475569",
   phone_size: 13,
   phone_font: "sans-serif",
   phone_align: "center",
-
   email_color: "#475569",
   email_size: 13,
   email_font: "sans-serif",
   email_align: "center",
-
   gstin: "21AAUFJ1925F1ZH",
   silver_rate_per_gram: 240,
   making_charge_per_gram: 15,
   default_hsn: "7113",
   formula_note: "Line total = Weight × (Silver rate per gram + Making charge per gram)",
-  
   logo_data_url: "",
   about_qr_data_url: STATIC_ABOUT_QR_URL,
   custom_fonts: [],
-  
   branches: [
-    {
-      id: "B1",
-      name: "Branch 1 (Old Town)",
-      address: "Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2",
-      map_url: "https://g.page/r/CVvnomQZn7zxEBE/review",
-      invoice_upi_id: "eazypay.0000048595@icici",
-      estimate_upi_id: "7538977527@ybl",
-      cash_balance: 0,
-      estimate_bank_balance: 0,
-      invoice_bank_balance: 0
-    },
-    {
-      id: "B2",
-      name: "Branch 2 (Unit-2)",
-      address: "Branch - 2 : Shop No.14, BMC Market Complex, Market Building, Near Petrol Pump, Unit-2, BBSR-9",
-      map_url: "#",
-      invoice_upi_id: "eazypay.0000048595@icici",
-      estimate_upi_id: "7538977527@ybl",
-      cash_balance: 0,
-      estimate_bank_balance: 0,
-      invoice_bank_balance: 0
-    }
+    { id: "B1", name: "Branch 1 (Old Town)", address: "Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2", map_url: "https://g.page/r/CVvnomQZn7zxEBE/review", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 },
+    { id: "B2", name: "Branch 2 (Unit-2)", address: "Branch - 2 : Shop No.14, BMC Market Complex, Market Building, Near Petrol Pump, Unit-2, BBSR-9", map_url: "#", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 }
   ]
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
+
+// ✅ BULLETPROOF MATH TO PREVENT NaN.NaN
 const num = (val) => {
+  if (val === null || val === undefined || val === "") return 0;
   const parsed = Number.parseFloat(val);
   return Number.isFinite(parsed) ? parsed : 0;
 };
+
 const money = (val) => num(val).toFixed(2);
 const clampPrintScale = (value) => Math.min(102, Math.max(98, value));
 
@@ -104,9 +79,11 @@ const getInitialPrintScale = () => {
   return clampPrintScale(saved);
 };
 
+// ✅ BULLETPROOF SPLIT FOR RUPEES AND PAISE
 const splitAmount = (amt) => {
-  const rupees = Math.floor(amt);
-  const paise = Math.round((amt - rupees) * 100).toString().padStart(2, "0");
+  const validAmt = Number.isFinite(amt) ? amt : 0;
+  const rupees = Math.floor(validAmt);
+  const paise = Math.round((validAmt - rupees) * 100).toString().padStart(2, "0");
   return { rupees, paise };
 };
 
@@ -344,20 +321,18 @@ export default function App() {
     });
   }, [recentBillsList, recentModeFilter, recentDateFilter, customStartDate, customEndDate]);
 
-  // 🚨 FIX 2: Added exact dimension locks for HTML2Canvas to fix PDF right-side cropping
+  // ✅ FIX: Force strict 800px Layout and CORS rendering for BULK PDF Export
   const handleBulkDownload = async () => {
     if (filteredRecentBills.length === 0) { toast.error("No bills to download!"); return; }
     if (filteredRecentBills.length > 20) {
       if (!window.confirm(`Generate PDF with ${filteredRecentBills.length} pages? This might take a minute.`)) return;
     }
     setIsBulkDownloading(true);
-    toast.info(`Generating PDF for ${filteredRecentBills.length} bills...`);
+    toast.info(`Preparing ${filteredRecentBills.length} bills for PDF...`);
     
     const wasCompact = isCompactView;
-    if (wasCompact) {
-      setIsCompactView(false);
-      await new Promise(resolve => setTimeout(resolve, 400));
-    }
+    if (wasCompact) setIsCompactView(false);
+    await new Promise(resolve => setTimeout(resolve, 500)); // Wait for React DOM & Images to mount
 
     try {
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -368,9 +343,27 @@ export default function App() {
         const node = document.getElementById(`bulk-bill-${bill.document_number}`);
         if (!node) continue;
         
-        node.setAttribute('style', `width: 800px !important; min-width: 800px !important; max-width: 800px !important; margin: 0 !important; padding: 20px !important; box-sizing: border-box !important; position: relative !important; transform: none !important;`);
+        const canvas = await html2canvas(node, { 
+          scale: 2, 
+          useCORS: true, 
+          allowTaint: true,
+          backgroundColor: "#ffffff", 
+          windowWidth: 1200, // Forces Desktop view in CSS
+          onclone: (clonedDoc) => {
+            const clonedNode = clonedDoc.getElementById(`bulk-bill-${bill.document_number}`);
+            if (clonedNode) {
+              clonedNode.style.width = "800px";
+              clonedNode.style.minWidth = "800px";
+              clonedNode.style.maxWidth = "800px";
+              clonedNode.style.padding = "20px";
+              
+              // Force Images to render properly
+              const images = clonedNode.getElementsByTagName('img');
+              for (let img of images) img.crossOrigin = "anonymous";
+            }
+          }
+        });
 
-        const canvas = await html2canvas(node, { scale: 2, useCORS: true, backgroundColor: "#ffffff", windowWidth: 800 });
         const imgData = canvas.toDataURL("image/png", 1.0);
         const pageHeight = (canvas.height * pageWidth) / canvas.width;
         if (i > 0) pdf.addPage();
@@ -838,13 +831,14 @@ export default function App() {
     finally { setSavingBill(false); }
   };
 
-  // 🚨 FIX 3: Robust PDF width lock (forces table layout)
+  // ✅ FIX: Force strict 800px Desktop Layout & Allow CORS Images for PDF capture
   const downloadPdf = async (elementId, filename) => {
+    toast.info("Preparing PDF...");
     const wasCompact = isCompactView;
-    if (wasCompact) {
-      setIsCompactView(false);
-      await new Promise(resolve => setTimeout(resolve, 400));
-    }
+    if (wasCompact) setIsCompactView(false);
+
+    // Wait for React to completely update the DOM before capturing
+    await new Promise(resolve => setTimeout(resolve, 500));
 
     const node = document.getElementById(elementId); 
     if (!node) {
@@ -852,33 +846,29 @@ export default function App() {
       return;
     }
 
-    const originalStyle = node.getAttribute('style');
-
-    // Force the element to strictly stay within 800px width before rendering
-    node.setAttribute('style', `
-      width: 800px !important;
-      max-width: 800px !important;
-      min-width: 800px !important;
-      margin: 0 !important;
-      padding: 20px !important;
-      box-sizing: border-box !important;
-      position: relative !important;
-      transform: none !important;
-    `);
-
     try {
-      await new Promise(resolve => setTimeout(resolve, 200));
       const canvas = await html2canvas(node, { 
         scale: 2, 
         useCORS: true, 
-        backgroundColor: "#ffffff", 
-        windowWidth: 800,
+        allowTaint: true,
+        backgroundColor: "#ffffff",
+        windowWidth: 1200, // Tricks CSS into thinking it is a Desktop screen
         onclone: (clonedDoc) => {
           const clonedNode = clonedDoc.getElementById(elementId);
           if (clonedNode) {
              clonedNode.style.width = "800px";
              clonedNode.style.maxWidth = "800px";
              clonedNode.style.minWidth = "800px";
+             clonedNode.style.margin = "0";
+             clonedNode.style.padding = "20px";
+             clonedNode.style.transform = "none";
+             clonedNode.style.overflow = "visible";
+             
+             // Ensure images are fully visible in the cloned DOM
+             const images = clonedNode.getElementsByTagName('img');
+             for (let img of images) {
+                img.crossOrigin = "anonymous";
+             }
           }
         }
       });
@@ -888,14 +878,10 @@ export default function App() {
       const pageHeight = (canvas.height * pageWidth) / canvas.width;
       pdf.addImage(imageData, "PNG", 0, 0, pageWidth, pageHeight); 
       pdf.save(`${filename}.pdf`);
+      toast.success("PDF Downloaded Successfully");
     } catch (error) {
       toast.error("Failed to download PDF.");
     } finally {
-      if (originalStyle) {
-        node.setAttribute('style', originalStyle);
-      } else {
-        node.removeAttribute('style');
-      }
       if (wasCompact) setIsCompactView(true);
     }
   };
@@ -928,15 +914,16 @@ export default function App() {
   const todaysTotalEstBank = todayBills.filter(b => b.is_payment_done && b.mode === 'estimate').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? b.totals.grand_total : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
   const todaysTotalInvBank = todayBills.filter(b => b.is_payment_done && b.mode === 'invoice').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? b.totals.grand_total : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
 
+  // ✅ FIX: Bulletproof calculation fallback for older bills missing data
   const publicComputedItems = useMemo(() => {
     if (!publicBill || !publicSettings) return [];
     const baseRate = num(publicSettings.silver_rate_per_gram) + num(publicSettings.making_charge_per_gram);
     return publicBill.items.map((item, index) => {
-      const rate = item.rate !== undefined ? num(item.rate) : (item.rate_override ? num(item.rate_override) : baseRate);
+      const rate = (item.rate !== undefined && item.rate !== null) ? num(item.rate) : (item.rate_override ? num(item.rate_override) : baseRate);
       const weight = num(item.weight);
       const quantity = Math.max(num(item.quantity || 1), 1);
       const formulaAmount = publicBill.mode === "estimate" ? weight * rate * quantity : weight * rate;
-      const amount = item.amount !== undefined ? num(item.amount) : (item.amount_override ? num(item.amount_override) : formulaAmount);
+      const amount = (item.amount !== undefined && item.amount !== null) ? num(item.amount) : (item.amount_override ? num(item.amount_override) : formulaAmount);
       const { rupees, paise } = splitAmount(amount);
       return { ...item, sl_no: item.sl_no || (index + 1), rate, amount, rupees, paise, weight, quantity };
     });
@@ -1003,7 +990,7 @@ export default function App() {
           <div className="bill-header">
             <div className="logo-area">
               {publicSettings.logo_data_url ? (
-                <img src={publicSettings.logo_data_url} alt="Shop Logo" className="shop-logo" />
+                <img src={publicSettings.logo_data_url} alt="Shop Logo" className="shop-logo" crossOrigin="anonymous" />
               ) : (
                 <div className="shop-logo-fallback">JJ</div>
               )}
@@ -1064,8 +1051,7 @@ export default function App() {
             <p><strong>Phone:</strong> {publicBill.customer?.phone || "-"}</p>
           </div>
 
-          {/* 🚨 FIX: Forced table layout to prevent columns from pushing out of the PDF */}
-          <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
+          <table className="bill-table">
             <thead>
               {isCompactView ? (
                 <tr><th>#</th><th>Item</th><th>Wt / Rate</th><th>Amount</th></tr>
@@ -1141,7 +1127,7 @@ export default function App() {
               {showPublicUpi && (
                 <div className="payment-qr-box">
                   <p className="scan-title" style={{ marginBottom: "15px" }}>Click Below to Pay</p>
-                  
+                  <img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" crossOrigin="anonymous" />
                   <a 
                     href={publicUpiUri} 
                     style={{
@@ -1153,7 +1139,8 @@ export default function App() {
                       fontWeight: "bold",
                       borderRadius: "8px",
                       textAlign: "center",
-                      boxShadow: "0 4px 6px rgba(0,0,0,0.1)"
+                      boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
+                      marginTop: "10px"
                     }}
                   >
                     📱 Pay ₹{money(publicUpiAmountToPay)} via UPI App
@@ -1180,6 +1167,12 @@ export default function App() {
               <div className="declaration" style={{ marginTop: "20px" }}>
                 <p className="section-title">DECLARATION</p>
                 <p>We declare that this bill shows the actual price of items and all details are correct.</p>
+                <div className="about-qr">
+                  <p className="section-title">About Us QR</p>
+                  {(publicSettings.about_qr_data_url || STATIC_ABOUT_QR_URL) && (
+                    <img src={publicSettings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="About us QR" className="about-qr-image" crossOrigin="anonymous" />
+                  )}
+                </div>
                 <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
                   <div onClick={() => {
                       if(pbBranch.map_url && pbBranch.map_url !== "#") {
@@ -1198,6 +1191,12 @@ export default function App() {
                   <li>6 Months of repair and polishing warranty only on silver ornaments.</li>
                   <li>You can replace purchased items within 7 days for manufacturing defects.</li>
                 </ul>
+                <div className="about-qr">
+                  <p className="section-title">About Us QR</p>
+                  {(publicSettings.about_qr_data_url || STATIC_ABOUT_QR_URL) && (
+                    <img src={publicSettings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="About us QR" className="about-qr-image" crossOrigin="anonymous" />
+                  )}
+                </div>
                 <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
                   <div onClick={() => {
                       if(pbBranch.map_url && pbBranch.map_url !== "#") {
@@ -1225,6 +1224,20 @@ export default function App() {
     return (
       <div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#0f172a' }}>Loading billing dashboard...</div>
+        {isWakingUp && (
+          <div style={{ marginTop: '20px', textAlign: 'center', padding: '15px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', maxWidth: '320px' }}>
+            <p style={{ margin: '0 0 15px 0', fontSize: '0.9rem', color: '#64748b' }}>
+              The database server is currently waking up from sleep mode. This usually takes about <strong>30 to 60 seconds</strong>.
+            </p>
+            <Button 
+              variant="outline" 
+              onClick={() => { localStorage.clear(); window.location.reload(); }} 
+              style={{ width: '100%', borderColor: '#ef4444', color: '#ef4444' }}
+            >
+              Force Quit & Clear Session
+            </Button>
+          </div>
+        )}
       </div>
     );
   }
@@ -1245,6 +1258,7 @@ export default function App() {
 
   return (
     <div className="billing-app">
+
       <Toaster position="bottom-right" />
 
       {/* INVISIBLE BULK PDF RENDERER */}
@@ -1258,7 +1272,7 @@ export default function App() {
                 
                 <div className="bill-header">
                   <div className="logo-area">
-                    {settings.logo_data_url ? <img src={settings.logo_data_url} alt="Shop Logo" className="shop-logo" /> : <div className="shop-logo-fallback">JJ</div>}
+                    {settings.logo_data_url ? <img src={settings.logo_data_url} alt="Shop Logo" className="shop-logo" crossOrigin="anonymous" /> : <div className="shop-logo-fallback">JJ</div>}
                     <div style={{ width: "100%", textAlign: settings.shop_name_align || "center" }}>
                       <h2 className="sheet-shop-title" style={{ fontFamily: settings.shop_name_font || "sans-serif", color: settings.shop_name_color || "#000", fontSize: `${settings.shop_name_size}px`, margin: 0 }}>{settings.shop_name}</h2>
                     </div>
@@ -1290,7 +1304,6 @@ export default function App() {
                   <p><strong>Phone:</strong> {b.customer?.phone || "-"}</p>
                 </div>
 
-                {/* 🚨 FIX: Forced table layout to prevent columns from pushing out of the PDF */}
                 <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
                   <thead>
                     {b.mode === "invoice" ? (
@@ -1401,7 +1414,7 @@ export default function App() {
           <div className="bill-header">
             <div className="logo-area">
               {settings.logo_data_url ? (
-                <img src={settings.logo_data_url} alt="Shop Logo" className="shop-logo" />
+                <img src={settings.logo_data_url} alt="Shop Logo" className="shop-logo" crossOrigin="anonymous" />
               ) : (
                 <div className="shop-logo-fallback">JJ</div>
               )}
@@ -1462,7 +1475,6 @@ export default function App() {
             <p><strong>Phone:</strong> {customer.phone || "-"}</p>
           </div>
 
-          {/* 🚨 FIX: Forced table layout to prevent columns from pushing out of the PDF */}
           <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
             <thead>
               {isCompactView ? (
@@ -1539,7 +1551,7 @@ export default function App() {
               {showDashboardUpi && paymentMethod && (
                 <div className="payment-qr-box">
                   <p className="scan-title">Scan Here For Payment</p>
-                  <img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" />
+                  <img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" crossOrigin="anonymous" />
                   <p className="upi-id">UPI: {upiId}</p>
                 </div>
               )}
@@ -1552,7 +1564,7 @@ export default function App() {
                 <div className="about-qr">
                   <p className="section-title">About Us QR</p>
                   {(settings.about_qr_data_url || STATIC_ABOUT_QR_URL) && (
-                    <img src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="About us QR" className="about-qr-image" />
+                    <img src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="About us QR" className="about-qr-image" crossOrigin="anonymous" />
                   )}
                 </div>
                 <div className="no-print" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
@@ -1575,7 +1587,7 @@ export default function App() {
                 <div className="about-qr">
                   <p className="section-title">About Us QR</p>
                   {(settings.about_qr_data_url || STATIC_ABOUT_QR_URL) && (
-                    <img src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="About us QR" className="about-qr-image" />
+                    <img src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="About us QR" className="about-qr-image" crossOrigin="anonymous" />
                   )}
                 </div>
                 <div className="no-print" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
@@ -2041,7 +2053,6 @@ export default function App() {
                </div>
             </div>
 
-            {/* 🚨 RESTORED RESET COUNTER BUTTONS */}
             <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "15px", paddingBottom: "15px", borderBottom: "1px dashed #cbd5e1" }}>
               <Button size="sm" variant="outline" onClick={() => handleResetCounter("invoice")} style={{ flex: "1 1 100%", borderColor: "#dc2626", color: "#dc2626" }}>Reset Invoice No.</Button>
               <Button size="sm" variant="outline" onClick={() => handleResetCounter("estimate")} style={{ flex: "1 1 100%", borderColor: "#2563eb", color: "#2563eb" }}>Reset Estimate No.</Button>
