@@ -566,7 +566,6 @@ export default function App() {
     setCustomer({ name: "", phone: "", address: "", email: "" });
     setSuggestions([]); setDiscount("0"); setExchange("0"); setManualRoundOff("");
     
-    // Reset transaction states
     setTxType("sale");
     setPaymentMethod(""); setSplitCash(""); setIsPaymentDone(false); 
     setAdvanceAmount(""); setAdvanceMethod(""); setAdvanceSplitCash(""); setIsAdvancePaid(false);
@@ -595,7 +594,6 @@ export default function App() {
     setDocumentNumber(bill.document_number);
     setBillDate(bill.date || today());
     
-    // Load Customer perfectly mapping flat fields
     setCustomer({ 
       name: bill.customer_name || bill.customer?.name || "", 
       phone: bill.customer_phone || bill.customer?.phone || "", 
@@ -841,37 +839,13 @@ export default function App() {
     setSavingBill(true);
     try {
       const payload = {
-        mode, 
-        branch_id: billBranchId, 
-        document_number: documentNumber, 
-        date: billDate,
-        customer_name: customer.name, 
-        customer_phone: customer.phone, 
-        customer_address: customer.address, 
-        customer_email: customer.email,
-        
+        mode, branch_id: billBranchId, document_number: documentNumber, date: billDate,
+        customer_name: customer.name, customer_phone: customer.phone, customer_address: customer.address, customer_email: customer.email,
         tx_type: txType,
-        
-        // Sale fields
-        payment_method: paymentMethod, 
-        is_payment_done: isPaymentDone, 
-        split_cash: num(splitCash), 
-        
-        // Booking / Service fields
-        advance_amount: num(advanceAmount),
-        advance_method: advanceMethod,
-        advance_split_cash: num(advanceSplitCash),
-        is_advance_paid: isAdvancePaid,
-        
-        balance_method: balanceMethod,
-        balance_split_cash: num(balanceSplitCash),
-        is_balance_paid: isBalancePaid,
-
-        discount: num(discount), 
-        exchange: num(exchange), 
-        round_off: manualRoundOff === "" ? null : num(manualRoundOff), 
-        notes,
-        
+        payment_method: paymentMethod, is_payment_done: isPaymentDone, split_cash: num(splitCash), split_upi: Math.max(0, computed.grandTotal - num(splitCash)),
+        advance_amount: num(advanceAmount), advance_method: advanceMethod, advance_split_cash: num(advanceSplitCash), is_advance_paid: isAdvancePaid,
+        balance_method: balanceMethod, balance_split_cash: num(balanceSplitCash), is_balance_paid: isBalancePaid,
+        discount: num(discount), exchange: num(exchange), round_off: manualRoundOff === "" ? null : num(manualRoundOff), notes,
         items: computed.items.map((item) => ({ 
           description: item.description, 
           hsn: item.hsn, 
@@ -888,15 +862,16 @@ export default function App() {
 
       if (currentBillId) {
         await axios.put(`${API}/bills/update-by-id/${currentBillId}`, payload, { headers: authHeaders });
-        toast.success(`Bill updated & ledger synced securely.`);
+        toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} updated & migrated successfully.`);
         setIsDirty(false);
+        setEditingDocNumber(documentNumber);
       } else {
         const res = await axios.post(`${API}/bills/save`, payload, { headers: authHeaders });
-        toast.success(`Bill saved securely.`);
+        toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} saved successfully.`);
         setIsDirty(false);
         setCurrentBillId(res.data.id);
-        setDocumentNumber(res.data.document_number);
         setEditingDocNumber(res.data.document_number);
+        setDocumentNumber(res.data.document_number);
       }
       
       await loadSettings(); 
@@ -1125,7 +1100,7 @@ export default function App() {
             <p><strong>Phone:</strong> {publicBill.customer_phone || publicBill.customer?.phone || "-"}</p>
           </div>
 
-          <table className="bill-table" style={{ width: "100%", tableLayout: isCompactView ? "auto" : "fixed", wordWrap: "break-word" }}>
+          <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
             <thead>
               {isCompactView ? (
                 <tr><th>#</th><th>Item</th><th>Wt / Rate</th><th>Amount</th></tr>
@@ -1215,6 +1190,7 @@ export default function App() {
               {showPublicUpi && (
                 <div className="payment-qr-box">
                   <p className="scan-title" style={{ marginBottom: "15px" }}>Click Below to Pay ₹{money(publicUpiAmt)}</p>
+                  
                   <a 
                     href={publicUpiUri} 
                     style={{
@@ -1229,8 +1205,20 @@ export default function App() {
                       boxShadow: "0 4px 6px rgba(0,0,0,0.1)"
                     }}
                   >
-                    📱 Pay ₹{money(publicUpiAmt)} via UPI App
+                    📱 Pay ₹{money(publicUpiAmt)} via Any UPI App
                   </a>
+
+                  <div style={{ marginTop: "20px" }}>
+                    <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>
+                      Or select your app directly:
+                    </p>
+                    <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
+                      <a href={publicUpiUri.replace("upi://pay", "phonepe://pay")} style={{ padding: "8px 16px", backgroundColor: "#5f259f", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>PhonePe</a>
+                      <a href={publicUpiUri.replace("upi://pay", "tez://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#1a73e8", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>G-Pay</a>
+                      <a href={publicUpiUri.replace("upi://pay", "paytmmp://pay")} style={{ padding: "8px 16px", backgroundColor: "#00baf2", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>Paytm</a>
+                      <a href={publicUpiUri.replace("upi://pay", "credpay://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#212121", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>CRED</a>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -2494,7 +2482,7 @@ export default function App() {
                    {settings.branches.map((b, index) => (
                        <div key={b.id} style={{ padding: "15px", border: "1px solid #cbd5e1", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "10px" }}>
-                              <h4 style={{ margin: "0", color: "var(--brand)" }}>Branch: {b.name}</h4>
+                              <h4 style={{ margin: 0, color: "var(--brand)" }}>Branch: {b.name}</h4>
                               {settings.branches.length > 1 && (
                                   <Button size="sm" variant="outline" style={{ borderColor: "#ef4444", color: "#ef4444", padding: "0 8px", height: "24px" }} onClick={() => {
                                       if(window.confirm(`Delete ${b.name}?`)) {
