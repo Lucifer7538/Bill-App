@@ -39,7 +39,6 @@ const getInitialPrintScale = () => { const saved = Number(localStorage.getItem("
 const splitAmount = (amt) => { const validAmt = Number.isFinite(amt) ? amt : 0; const rupees = Math.floor(validAmt); const paise = Math.round((validAmt - rupees) * 100).toString().padStart(2, "0"); return { rupees, paise }; };
 const registerFont = (name, dataUrl) => { const styleId = `custom-font-${name.replace(/\s+/g, '-').toLowerCase()}`; if (document.getElementById(styleId)) return; const style = document.createElement('style'); style.id = styleId; style.innerHTML = `@font-face { font-family: '${name}'; src: url('${dataUrl}'); }`; document.head.appendChild(style); };
 
-// ✅ BULLETPROOF UI COMPONENTS
 const FontSelectOptions = ({ customFonts }) => (
   <><option value="sans-serif">Sans-serif</option><option value="Arial, Helvetica, sans-serif">Arial</option><option value="'Times New Roman', Times, serif">Times New Roman</option><option value="'Courier New', Courier, monospace">Courier New</option><option value="Georgia, serif">Georgia</option><option value="'Trebuchet MS', sans-serif">Trebuchet MS</option><option value="'Brush Script MT', cursive">Brush Script MT (Cursive)</option>{customFonts?.map(f => (<option key={f.name} value={`'${f.name}'`}>{f.name} (Custom)</option>))}</>
 );
@@ -66,7 +65,6 @@ const UpiAppsRow = ({ upiUri }) => (
   </div>
 );
 
-// ✅ STRICT FIXED WIDTHS FOR PERFECT PDF ALIGNMENT (NO SQUISHING)
 const TableHeaders = ({ mode }) => (
   mode === "invoice" ? (
     <tr>
@@ -104,7 +102,6 @@ const DesignSettingRow = ({ title, fieldPrefix, settings, setSettings }) => (
   </div>
 );
 
-// --- MAIN APP ---
 export default function App() {
   const [isCompactView, setIsCompactView] = useState(window.innerWidth <= 520);
   const [isDirty, setIsDirty] = useState(false);
@@ -576,23 +573,19 @@ export default function App() {
   const goToBillTop = () => { document.getElementById("bill-print-root")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
   const handleWifiClick = () => { navigator.clipboard.writeText("12345678").then(() => { toast.success("✅ Password '12345678' Copied! Go to settings and connect to 'JalaramJewellers Unlimited'.", { duration: 6000 }); }).catch(() => { toast.info("Wi-Fi: JalaramJewellers Unlimited | Pass: 12345678", { duration: 6000 }); }); };
 
-  const todaysTotalCash = (todayBills || []).filter(b => b.is_payment_done).reduce((sum, b) => sum + (b.payment_method === 'Cash' ? b.totals.grand_total : b.payment_method === 'Split' ? num(b.split_cash) : 0), 0);
-  const todaysTotalEstBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'estimate').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? b.totals.grand_total : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
-  const todaysTotalInvBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'invoice').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? b.totals.grand_total : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
+  // ✅ SAFELY ADDING `?.` TO PREVENT "Cannot read properties of undefined" ON OLD BILLS
+  const todaysTotalCash = (todayBills || []).filter(b => b.is_payment_done).reduce((sum, b) => sum + (b.payment_method === 'Cash' ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_cash) : 0), 0);
+  const todaysTotalEstBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'estimate').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
+  const todaysTotalInvBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'invoice').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
 
-  // ✅ BULLETPROOF COMPUTATION FOR OLD BILLS WITHOUT TOTALS
+  // ✅ BULLETPROOF PUBLIC COMPUTED FOR MISSING DATABASE TOTALS
   const publicComputed = useMemo(() => {
-    if (!publicBill || !publicSettings) return { items: [], grandTotal: 0, taxable: 0, cgst: 0, sgst: 0, igst: 0, mdr: 0, roundOff: 0, discount: 0, exchange: 0 };
-    
-    const baseSilverRate = num(publicSettings.silver_rate_per_gram);
-    const baseMCPerGram = num(publicSettings.making_charge_per_gram);
-    const flatMCBelow5g = num(publicSettings.flat_mc_below_5g);
+    if (!publicBill || !publicSettings) return { items: [], taxable: 0, cgst: 0, sgst: 0, igst: 0, mdr: 0, roundOff: 0, grandTotal: 0, discount: 0, exchange: 0 };
+    const baseSilverRate = num(publicSettings.silver_rate_per_gram); const baseMCPerGram = num(publicSettings.making_charge_per_gram); const flatMCBelow5g = num(publicSettings.flat_mc_below_5g);
 
     const mapped = (publicBill.items || []).map((item, index) => {
-      const weight = num(item.weight);
-      const quantity = Math.max(num(item.quantity || 1), 1);
+      const weight = num(item.weight); const quantity = Math.max(num(item.quantity || 1), 1);
       const silverRate = (item.rate_override !== undefined && item.rate_override !== null && item.rate_override !== "") ? num(item.rate_override) : baseSilverRate;
-
       let mcAmount = 0;
       if (item.mc_override !== undefined && item.mc_override !== null && item.mc_override !== "") { mcAmount = weight * num(item.mc_override); } 
       else if (flatMCBelow5g > 0 && weight > 0 && weight < 5) { mcAmount = flatMCBelow5g; } 
@@ -600,7 +593,6 @@ export default function App() {
 
       const totalItemCost = (weight * silverRate) + mcAmount;
       const formulaAmount = publicBill.mode === "estimate" ? totalItemCost * quantity : totalItemCost;
-      
       const amount = (item.amount !== undefined && item.amount !== null && item.amount !== "") ? num(item.amount) : (item.amount_override ? num(item.amount_override) : formulaAmount);
       const { rupees, paise } = splitAmount(amount);
       const rateForPrint = weight > 0 ? (amount / (publicBill.mode === "estimate" ? quantity : 1)) / weight : 0;
@@ -608,30 +600,19 @@ export default function App() {
       return { ...item, sl_no: item.sl_no || (index + 1), rate: rateForPrint, amount, rupees, paise, weight, quantity };
     });
 
-    const subtotal = mapped.reduce((sum, row) => sum + row.amount, 0);
-    const taxable = subtotal;
-    const cgst = publicBill.mode === "invoice" ? taxable * 0.015 : 0;
-    const sgst = publicBill.mode === "invoice" ? taxable * 0.015 : 0;
-    const igst = 0;
+    const subtotal = mapped.reduce((sum, row) => sum + row.amount, 0); const taxable = subtotal;
+    const cgst = publicBill.mode === "invoice" ? taxable * 0.015 : 0; const sgst = publicBill.mode === "invoice" ? taxable * 0.015 : 0; const igst = 0;
     const gstApplied = publicBill.mode === "invoice" ? cgst + sgst + igst : 0;
-    
-    const discount = num(publicBill.discount || publicBill.totals?.discount || 0);
-    const exchange = num(publicBill.exchange || publicBill.totals?.exchange || 0);
-    
+    const discount = num(publicBill.discount || publicBill.totals?.discount || 0); const exchange = num(publicBill.exchange || publicBill.totals?.exchange || 0);
     const mdr = publicBill.payment_method === "Card" ? (taxable + gstApplied) * 0.02 : 0;
-    const baseTotal = taxable + gstApplied + mdr - discount - exchange;
-    const autoRound = Math.round(baseTotal) - baseTotal;
-    
-    const roundOff = publicBill.round_off !== undefined && publicBill.round_off !== null 
-      ? num(publicBill.round_off) 
-      : (publicBill.totals?.round_off !== undefined && publicBill.totals?.round_off !== null ? num(publicBill.totals.round_off) : autoRound);
-      
+    const baseTotal = taxable + gstApplied + mdr - discount - exchange; const autoRound = Math.round(baseTotal) - baseTotal;
+    const roundOff = publicBill.round_off !== undefined && publicBill.round_off !== null ? num(publicBill.round_off) : (publicBill.totals?.round_off !== undefined && publicBill.totals?.round_off !== null ? num(publicBill.totals?.round_off) : autoRound);
     const grandTotal = publicBill.totals?.grand_total !== undefined && publicBill.totals?.grand_total !== null ? num(publicBill.totals.grand_total) : (baseTotal + roundOff);
 
     return { 
-      items: mapped, subtotal: publicBill.totals?.subtotal ?? subtotal, taxable: publicBill.totals?.taxable_amount ?? taxable, 
+      items: mapped, taxable: publicBill.totals?.taxable_amount || publicBill.totals?.subtotal || taxable, 
       cgst: publicBill.totals?.cgst ?? cgst, sgst: publicBill.totals?.sgst ?? sgst, igst: publicBill.totals?.igst ?? igst, 
-      mdr: publicBill.totals?.mdr ?? mdr, roundOff: roundOff, grandTotal, discount, exchange
+      mdr: publicBill.totals?.mdr ?? mdr, roundOff, grandTotal, discount, exchange 
     };
   }, [publicBill, publicSettings]);
 
@@ -654,15 +635,10 @@ export default function App() {
     let publicUpiAmt = 0;
     const isSale = publicBill.tx_type === "sale" || !publicBill.tx_type;
     
-    if (isSale) { 
-        publicUpiAmt = publicBill.payment_method === "Split" ? num(publicBill.split_upi) : publicComputed.grandTotal; 
-    } else {
-        if (!publicBill.is_advance_paid && (publicBill.advance_method === "UPI" || publicBill.advance_method === "Split")) { 
-            publicUpiAmt = publicBill.advance_method === "Split" ? Math.max(0, num(publicBill.advance_amount) - num(publicBill.advance_split_cash)) : num(publicBill.advance_amount); 
-        } else if (publicBill.is_advance_paid && !publicBill.is_balance_paid && (publicBill.balance_method === "UPI" || publicBill.balance_method === "Split")) { 
-            const bal = Math.max(0, publicComputed.grandTotal - num(publicBill.advance_amount)); 
-            publicUpiAmt = publicBill.balance_method === "Split" ? Math.max(0, bal - num(publicBill.balance_split_cash)) : bal; 
-        }
+    if (isSale) { publicUpiAmt = publicBill.payment_method === "Split" ? num(publicBill.split_upi) : publicComputed.grandTotal; } 
+    else {
+        if (!publicBill.is_advance_paid && (publicBill.advance_method === "UPI" || publicBill.advance_method === "Split")) { publicUpiAmt = publicBill.advance_method === "Split" ? Math.max(0, num(publicBill.advance_amount) - num(publicBill.advance_split_cash)) : num(publicBill.advance_amount); } 
+        else if (publicBill.is_advance_paid && !publicBill.is_balance_paid && (publicBill.balance_method === "UPI" || publicBill.balance_method === "Split")) { const bal = Math.max(0, publicComputed.grandTotal - num(publicBill.advance_amount)); publicUpiAmt = publicBill.balance_method === "Split" ? Math.max(0, bal - num(publicBill.balance_split_cash)) : bal; }
     }
     
     const showPublicUpi = publicUpiAmt > 0 && !(isSale ? publicBill.is_payment_done : publicBill.is_balance_paid);
@@ -792,7 +768,7 @@ export default function App() {
     );
   }
 
-  // --- DASHBOARD VIEW ---
+  // --- LOGIN & LOADING SCREENS FOR MAIN DASHBOARD ---
   if (checkingSession) {
     return (
       <div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
@@ -879,17 +855,17 @@ export default function App() {
 
                 <div className="sheet-bottom-stack">
                   <div className="totals">
-                    <div className="totals-row"><span>{b.mode === "invoice" ? "Taxable Amt." : "TOTAL"}</span><strong>₹{money(b.totals?.taxable_amount || b.totals?.subtotal)}</strong></div>
+                    <div className="totals-row"><span>{b.mode === "invoice" ? "Taxable Amt." : "TOTAL"}</span><strong>₹{money(b.totals?.taxable_amount || b.totals?.subtotal || 0)}</strong></div>
                     {b.mode === "invoice" ? (
                       <>
-                        <div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(b.totals?.cgst)}</strong></div><div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(b.totals?.sgst)}</strong></div><div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(b.totals?.igst)}</strong></div>
+                        <div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(b.totals?.cgst || 0)}</strong></div><div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(b.totals?.sgst || 0)}</strong></div><div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(b.totals?.igst || 0)}</strong></div>
                       </>
                     ) : (
-                      <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(b.totals?.discount)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(b.totals?.exchange)}</strong></div></>
+                      <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(b.totals?.discount || 0)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(b.totals?.exchange || 0)}</strong></div></>
                     )}
-                    <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(b.totals?.grand_total)}</strong></div>
+                    <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(b.totals?.grand_total || 0)}</strong></div>
                     {b.tx_type && b.tx_type !== "sale" && (
-                      <><div className="totals-row" style={{ marginTop: "10px", color: "#16a34a" }}><span>ADVANCE RECEIVED</span><strong>₹{money(b.advance_amount)}</strong></div><div className="totals-row" style={{ color: "#dc2626" }}><span>BALANCE DUE</span><strong>₹{money(Math.max(0, num(b.totals?.grand_total) - num(b.advance_amount)))}</strong></div></>
+                      <><div className="totals-row" style={{ marginTop: "10px", color: "#16a34a" }}><span>ADVANCE RECEIVED</span><strong>₹{money(b.advance_amount)}</strong></div><div className="totals-row" style={{ color: "#dc2626" }}><span>BALANCE DUE</span><strong>₹{money(Math.max(0, num(b.totals?.grand_total || 0) - num(b.advance_amount)))}</strong></div></>
                     )}
                   </div>
                 </div>
@@ -1261,7 +1237,7 @@ export default function App() {
                         <div style={{ fontSize: "0.85rem", color: "#475569" }}>{b.customer_name || b.customer?.name || "Unknown"} • {b.tx_type || "Sale"}</div>
                       </div>
                       <div style={{ textAlign: "right" }}>
-                        <strong style={{ fontSize: "1.1rem" }}>₹{money(b.totals?.grand_total)}</strong>
+                        <strong style={{ fontSize: "1.1rem" }}>₹{money(b.totals?.grand_total || 0)}</strong>
                       </div>
                     </div>
                   ))}
@@ -1321,7 +1297,7 @@ export default function App() {
                     </div>
                     <div style={{ marginBottom: "8px", fontWeight: "500" }}>{b.customer_name || b.customer?.name || "Unknown Customer"}</div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
-                      <strong>₹{b.totals?.grand_total}</strong>
+                      <strong>₹{money(b.totals?.grand_total || 0)}</strong>
                       <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
                         <label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85rem", cursor: "pointer", marginRight: "5px", padding: "4px 8px", backgroundColor: (b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "#dcfce7" : "#fef3c7", color: (b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "#166534" : "#b45309", borderRadius: "5px", fontWeight: "bold" }}>
                           <input type="checkbox" checked={(b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) || false} onChange={() => handleQuickPaymentToggle(b)} style={{ cursor: "pointer" }} />
