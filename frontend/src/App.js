@@ -39,87 +39,14 @@ const getInitialPrintScale = () => { const saved = Number(localStorage.getItem("
 const splitAmount = (amt) => { const validAmt = Number.isFinite(amt) ? amt : 0; const rupees = Math.floor(validAmt); const paise = Math.round((validAmt - rupees) * 100).toString().padStart(2, "0"); return { rupees, paise }; };
 const registerFont = (name, dataUrl) => { const styleId = `custom-font-${name.replace(/\s+/g, '-').toLowerCase()}`; if (document.getElementById(styleId)) return; const style = document.createElement('style'); style.id = styleId; style.innerHTML = `@font-face { font-family: '${name}'; src: url('${dataUrl}'); }`; document.head.appendChild(style); };
 
-// ✅ PROPERLY DEFINED UI COMPONENTS (Prevents ReferenceError Crashes)
+// Safe Font Option Generator
 const FontSelectOptions = ({ customFonts }) => (
-  <><option value="sans-serif">Sans-serif</option><option value="Arial, Helvetica, sans-serif">Arial</option><option value="'Times New Roman', Times, serif">Times New Roman</option><option value="'Courier New', Courier, monospace">Courier New</option><option value="Georgia, serif">Georgia</option><option value="'Trebuchet MS', sans-serif">Trebuchet MS</option><option value="'Brush Script MT', cursive">Brush Script MT (Cursive)</option>{customFonts?.map(f => (<option key={f.name} value={`'${f.name}'`}>{f.name} (Custom)</option>))}</>
+  <>
+    <option value="sans-serif">Sans-serif</option><option value="Arial, Helvetica, sans-serif">Arial</option><option value="'Times New Roman', Times, serif">Times New Roman</option><option value="'Courier New', Courier, monospace">Courier New</option><option value="Georgia, serif">Georgia</option><option value="'Trebuchet MS', sans-serif">Trebuchet MS</option><option value="'Brush Script MT', cursive">Brush Script MT (Cursive)</option>
+    {customFonts?.map(f => (<option key={f.name} value={`'${f.name}'`}>{f.name} (Custom)</option>))}
+  </>
 );
 
-const ConnectWithUs = ({ phoneLink, instaLink = "https://www.instagram.com/jalaram_jewellers_?igsh=MWZnNmlzMTYyOWNzeA%3D%3D&utm_source=qr" }) => (
-  <div style={{ marginTop: "25px", borderTop: "1px dashed #e2e8f0", paddingTop: "20px" }}>
-    <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Connect With Us:</p>
-    <div style={{ display: 'flex', gap: '10px' }}>
-      <a href="https://chat.whatsapp.com/FHoih8XtTXGLtPvHWx7MO6?mode=gi_t" target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "12px", backgroundColor: "#25D366", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}><span style={{ fontSize: "1.2rem" }}>💬</span> WhatsApp</a>
-      <a href={instaLink} target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "12px", background: "linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%)", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}><span style={{ fontSize: "1.2rem" }}>📸</span> Instagram</a>
-    </div>
-  </div>
-);
-
-const UpiAppsRow = ({ upiUri }) => (
-  <div style={{ marginTop: "20px" }}>
-    <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Or select your app directly:</p>
-    <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
-      <a href={upiUri.replace("upi://pay", "phonepe://pay")} style={{ padding: "8px 16px", backgroundColor: "#5f259f", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>PhonePe</a>
-      <a href={upiUri.replace("upi://pay", "tez://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#1a73e8", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>G-Pay</a>
-      <a href={upiUri.replace("upi://pay", "paytmmp://pay")} style={{ padding: "8px 16px", backgroundColor: "#00baf2", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>Paytm</a>
-      <a href={upiUri.replace("upi://pay", "credpay://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#212121", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>CRED</a>
-    </div>
-  </div>
-);
-
-// ✅ BULLETPROOF BILL TABLE COMPONENT (This replaces the missing component)
-const BillTable = ({ mode, items }) => (
-  <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
-    <thead>
-      {mode === "invoice" ? (
-        <tr>
-          <th style={{ width: "8%" }}>Sl. No.</th>
-          <th style={{ width: "38%" }}>DESCRIPTION</th>
-          <th style={{ width: "10%" }}>HSN</th>
-          <th style={{ width: "14%", whiteSpace: "nowrap" }}>WEIGHT (g)</th>
-          <th style={{ width: "15%", whiteSpace: "nowrap" }}>RATE Rs.</th>
-          <th style={{ width: "15%", whiteSpace: "nowrap" }}>AMOUNT</th>
-        </tr>
-      ) : (
-        <tr>
-          <th style={{ width: "8%" }}>Sl. No.</th>
-          <th style={{ width: "40%" }}>Particulars</th>
-          <th style={{ width: "14%", whiteSpace: "nowrap" }}>Weight</th>
-          <th style={{ width: "18%", whiteSpace: "nowrap" }}>Qty x Rate</th>
-          <th style={{ width: "12%", whiteSpace: "nowrap" }}>Rs.</th>
-          <th style={{ width: "8%", whiteSpace: "nowrap" }}>Ps.</th>
-        </tr>
-      )}
-    </thead>
-    <tbody>
-      {items.map((item, idx) => (
-        <tr key={idx}>
-          {mode === "invoice" ? (
-            <><td>{item.sl_no || item.slNo}</td><td>{item.description || "-"}</td><td>{item.hsn || "-"}</td><td>{money(item.weight)}</td><td>{money(item.rate)}</td><td>{item.rupees}.{item.paise}</td></>
-          ) : (
-            <><td>{item.sl_no || item.slNo}</td><td>{item.description || "-"}</td><td>{money(item.weight)}</td><td>{money(item.quantity)} x {money(item.rate)}</td><td>{item.rupees}</td><td>{item.paise}</td></>
-          )}
-        </tr>
-      ))}
-    </tbody>
-  </table>
-);
-
-const DesignSettingRow = ({ title, fieldPrefix, settings, setSettings }) => (
-  <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
-    <h4 style={{ margin: "0 0 10px 0" }}>{title}</h4>
-    {fieldPrefix !== "address" && (
-      <Input value={Array.isArray(settings[fieldPrefix]) ? settings[fieldPrefix].join(", ") : settings[fieldPrefix] || ""} onChange={(e) => setSettings((prev) => ({ ...prev, [fieldPrefix]: fieldPrefix === 'phone_numbers' ? e.target.value.split(",").map(i=>i.trim()).filter(Boolean) : e.target.value }))} placeholder={title} style={{ marginBottom: "10px", width: "100%", boxSizing: "border-box" }} />
-    )}
-    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", width: "100%" }}>
-      <input type="color" value={settings[`${fieldPrefix}_color`] || "#000000"} onChange={(e) => setSettings((prev) => ({ ...prev, [`${fieldPrefix}_color`]: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px", flexShrink: 0 }} title="Color" />
-      <Input type="number" min="8" max="60" value={settings[`${fieldPrefix}_size`] || 14} onChange={(e) => setSettings((prev) => ({ ...prev, [`${fieldPrefix}_size`]: Number(e.target.value) }))} style={{ width: "70px", padding: "0 5px", textAlign: "center", flexShrink: 0 }} title="Font Size (px)" />
-      <select value={settings[`${fieldPrefix}_font`] || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, [`${fieldPrefix}_font`]: e.target.value }))} style={{ flex: "1 1 120px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "120px" }} title="Font Style"><FontSelectOptions customFonts={settings.custom_fonts || []} /></select>
-      <select value={settings[`${fieldPrefix}_align`] || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, [`${fieldPrefix}_align`]: e.target.value }))} style={{ flex: "1 1 80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "80px" }} title="Alignment"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select>
-    </div>
-  </div>
-);
-
-// --- MAIN APP ---
 export default function App() {
   const [isCompactView, setIsCompactView] = useState(window.innerWidth <= 520);
   const [isDirty, setIsDirty] = useState(false);
@@ -329,11 +256,12 @@ export default function App() {
         if (!node) continue;
         node.style.display = "block"; node.style.width = "800px"; node.style.minWidth = "800px"; node.style.maxWidth = "800px";
         const canvas = await html2canvas(node, { 
-          scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#ffffff", 
+          scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#ffffff", windowWidth: 1024,
           onclone: (clonedDoc) => {
             const clonedNode = clonedDoc.getElementById(`bulk-bill-${bill.document_number}`);
             if (clonedNode) {
               clonedNode.style.width = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.padding = "20px";
+              const tables = clonedNode.getElementsByTagName('table'); for (let t of tables) { t.style.tableLayout = "fixed"; t.style.width = "100%"; }
               const images = clonedNode.getElementsByTagName('img'); for (let img of images) img.crossOrigin = "anonymous";
             }
           }
@@ -577,6 +505,7 @@ export default function App() {
           const clonedNode = clonedDoc.getElementById(elementId);
           if (clonedNode) { 
              clonedNode.style.width = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.position = "absolute"; clonedNode.style.top = "0"; clonedNode.style.left = "0"; clonedNode.style.margin = "0"; clonedNode.style.padding = "20px"; clonedNode.style.boxSizing = "border-box";
+             const tables = clonedNode.getElementsByTagName('table'); for (let t of tables) { t.style.tableLayout = "fixed"; t.style.width = "100%"; } 
              const images = clonedNode.getElementsByTagName('img'); for (let img of images) img.crossOrigin = "anonymous"; 
           }
         }
@@ -591,12 +520,10 @@ export default function App() {
   const goToBillTop = () => { document.getElementById("bill-print-root")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
   const handleWifiClick = () => { navigator.clipboard.writeText("12345678").then(() => { toast.success("✅ Password '12345678' Copied! Go to settings and connect to 'JalaramJewellers Unlimited'.", { duration: 6000 }); }).catch(() => { toast.info("Wi-Fi: JalaramJewellers Unlimited | Pass: 12345678", { duration: 6000 }); }); };
 
-  // ✅ SAFE FALLBACKS FOR OLDER BILLS
   const todaysTotalCash = (todayBills || []).filter(b => b.is_payment_done).reduce((sum, b) => sum + (b.payment_method === 'Cash' ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_cash) : 0), 0);
   const todaysTotalEstBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'estimate').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
   const todaysTotalInvBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'invoice').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
 
-  // ✅ SAFELY RE-COMPUTE OLD PUBLIC BILLS THAT ARE MISSING 'TOTALS'
   const publicComputed = useMemo(() => {
     if (!publicBill || !publicSettings) return { items: [], taxable: 0, cgst: 0, sgst: 0, igst: 0, mdr: 0, roundOff: 0, grandTotal: 0, discount: 0, exchange: 0 };
     const baseSilverRate = num(publicSettings.silver_rate_per_gram); const baseMCPerGram = num(publicSettings.making_charge_per_gram); const flatMCBelow5g = num(publicSettings.flat_mc_below_5g);
@@ -627,11 +554,7 @@ export default function App() {
     const roundOff = publicBill.round_off !== undefined && publicBill.round_off !== null ? num(publicBill.round_off) : (publicBill.totals?.round_off !== undefined && publicBill.totals?.round_off !== null ? num(publicBill.totals?.round_off) : autoRound);
     const grandTotal = publicBill.totals?.grand_total !== undefined && publicBill.totals?.grand_total !== null ? num(publicBill.totals.grand_total) : (baseTotal + roundOff);
 
-    return { 
-      items: mapped, taxable: publicBill.totals?.taxable_amount || publicBill.totals?.subtotal || taxable, 
-      cgst: publicBill.totals?.cgst ?? cgst, sgst: publicBill.totals?.sgst ?? sgst, igst: publicBill.totals?.igst ?? igst, 
-      mdr: publicBill.totals?.mdr ?? mdr, roundOff, grandTotal, discount, exchange 
-    };
+    return { items: mapped, taxable: publicBill.totals?.taxable_amount || publicBill.totals?.subtotal || taxable, cgst: publicBill.totals?.cgst ?? cgst, sgst: publicBill.totals?.sgst ?? sgst, igst: publicBill.totals?.igst ?? igst, mdr: publicBill.totals?.mdr ?? mdr, roundOff, grandTotal, discount, exchange };
   }, [publicBill, publicSettings]);
 
   const getUpiAmount = () => {
@@ -645,23 +568,16 @@ export default function App() {
   const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
   const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
 
-  // --- PUBLIC VIEW ---
   if (isPublicView) {
     if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
     if (publicBill === "NOT_FOUND" || !publicBill) return <div className="loading-screen">Bill not found or has been deleted.</div>;
 
     let publicUpiAmt = 0;
     const isSale = publicBill.tx_type === "sale" || !publicBill.tx_type;
-    
-    if (isSale) { 
-        publicUpiAmt = publicBill.payment_method === "Split" ? num(publicBill.split_upi) : publicComputed.grandTotal; 
-    } else {
-        if (!publicBill.is_advance_paid && (publicBill.advance_method === "UPI" || publicBill.advance_method === "Split")) { 
-            publicUpiAmt = publicBill.advance_method === "Split" ? Math.max(0, num(publicBill.advance_amount) - num(publicBill.advance_split_cash)) : num(publicBill.advance_amount); 
-        } else if (publicBill.is_advance_paid && !publicBill.is_balance_paid && (publicBill.balance_method === "UPI" || publicBill.balance_method === "Split")) { 
-            const bal = Math.max(0, publicComputed.grandTotal - num(publicBill.advance_amount)); 
-            publicUpiAmt = publicBill.balance_method === "Split" ? Math.max(0, bal - num(publicBill.balance_split_cash)) : bal; 
-        }
+    if (isSale) { publicUpiAmt = publicBill.payment_method === "Split" ? num(publicBill.split_upi) : publicComputed.grandTotal; } 
+    else {
+        if (!publicBill.is_advance_paid && (publicBill.advance_method === "UPI" || publicBill.advance_method === "Split")) { publicUpiAmt = publicBill.advance_method === "Split" ? Math.max(0, num(publicBill.advance_amount) - num(publicBill.advance_split_cash)) : num(publicBill.advance_amount); } 
+        else if (publicBill.is_advance_paid && !publicBill.is_balance_paid && (publicBill.balance_method === "UPI" || publicBill.balance_method === "Split")) { const bal = Math.max(0, publicComputed.grandTotal - num(publicBill.advance_amount)); publicUpiAmt = publicBill.balance_method === "Split" ? Math.max(0, bal - num(publicBill.balance_split_cash)) : bal; }
     }
     
     const showPublicUpi = publicUpiAmt > 0 && !(isSale ? publicBill.is_payment_done : publicBill.is_balance_paid);
@@ -700,12 +616,8 @@ export default function App() {
           <div className="bill-header">
             <div className="logo-area">
               {publicSettings?.logo_data_url ? <img src={publicSettings.logo_data_url} alt="Shop Logo" className="shop-logo" crossOrigin="anonymous" /> : <div className="shop-logo-fallback">JJ</div>}
-              <div style={{ width: "100%", textAlign: publicSettings?.shop_name_align || "center" }}>
-                <h2 className="sheet-shop-title" style={{ fontFamily: publicSettings?.shop_name_font || "sans-serif", color: publicSettings?.shop_name_color || "#000", fontSize: `${publicSettings?.shop_name_size}px`, margin: 0 }}>{publicSettings?.shop_name}</h2>
-              </div>
-              <div style={{ width: "100%", textAlign: publicSettings?.tagline_align || "center" }}>
-                <p className="sheet-tagline" style={{ fontFamily: publicSettings?.tagline_font || "sans-serif", color: publicSettings?.tagline_color || "#475569", fontSize: `${publicSettings?.tagline_size}px`, margin: "5px 0" }}>{publicSettings?.tagline}</p>
-              </div>
+              <div style={{ width: "100%", textAlign: publicSettings?.shop_name_align || "center" }}><h2 className="sheet-shop-title" style={{ fontFamily: publicSettings?.shop_name_font || "sans-serif", color: publicSettings?.shop_name_color || "#000", fontSize: `${publicSettings?.shop_name_size}px`, margin: 0 }}>{publicSettings?.shop_name}</h2></div>
+              <div style={{ width: "100%", textAlign: publicSettings?.tagline_align || "center" }}><p className="sheet-tagline" style={{ fontFamily: publicSettings?.tagline_font || "sans-serif", color: publicSettings?.tagline_color || "#475569", fontSize: `${publicSettings?.tagline_size}px`, margin: "5px 0" }}>{publicSettings?.tagline}</p></div>
             </div>
 
             <div className="contact-area">
@@ -735,7 +647,26 @@ export default function App() {
             <p><strong>Phone:</strong> {publicBill.customer_phone || publicBill.customer?.phone || "-"}</p>
           </div>
 
-          <BillTable mode={publicBill.mode} items={publicComputed.items} />
+          <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
+            <thead>
+              {publicBill.mode === "invoice" ? (
+                <tr><th style={{ width: "8%" }}>Sl. No.</th><th style={{ width: "38%" }}>DESCRIPTION</th><th style={{ width: "10%" }}>HSN</th><th style={{ width: "14%", whiteSpace: "nowrap" }}>WEIGHT (g)</th><th style={{ width: "15%", whiteSpace: "nowrap" }}>RATE Rs.</th><th style={{ width: "15%", whiteSpace: "nowrap" }}>AMOUNT</th></tr>
+              ) : (
+                <tr><th style={{ width: "8%" }}>Sl. No.</th><th style={{ width: "40%" }}>Particulars</th><th style={{ width: "14%", whiteSpace: "nowrap" }}>Weight</th><th style={{ width: "18%", whiteSpace: "nowrap" }}>Qty x Rate</th><th style={{ width: "12%", whiteSpace: "nowrap" }}>Rs.</th><th style={{ width: "8%", whiteSpace: "nowrap" }}>Ps.</th></tr>
+              )}
+            </thead>
+            <tbody>
+              {publicComputed.items.map((item, idx) => (
+                <tr key={idx}>
+                  {publicBill.mode === "invoice" ? (
+                    <><td>{item.sl_no}</td><td>{item.description || "-"}</td><td>{item.hsn || "-"}</td><td style={{ whiteSpace: "nowrap" }}>{money(item.weight)}</td><td style={{ whiteSpace: "nowrap" }}>{money(item.rate)}</td><td style={{ whiteSpace: "nowrap" }}>{item.rupees}.{item.paise}</td></>
+                  ) : (
+                    <><td>{item.sl_no}</td><td>{item.description || "-"}</td><td style={{ whiteSpace: "nowrap" }}>{money(item.weight)}</td><td style={{ whiteSpace: "nowrap" }}>{money(item.quantity)} x {money(item.rate)}</td><td style={{ whiteSpace: "nowrap" }}>{item.rupees}</td><td style={{ whiteSpace: "nowrap" }}>{item.paise}</td></>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
 
           <div className="sheet-bottom-stack">
             <div className="totals">
@@ -791,7 +722,6 @@ export default function App() {
     );
   }
 
-  // --- LOGIN & LOADING SCREENS FOR MAIN DASHBOARD ---
   if (checkingSession) {
     return (
       <div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
@@ -828,14 +758,7 @@ export default function App() {
       <div style={{ position: "absolute", top: "-9999px", left: "-9999px", opacity: 0, pointerEvents: "none" }}>
         {(filteredRecentBills || []).map(b => {
            const billBranch = (settings.branches || []).find(br => br.id === b.branch_id) || (settings.branches || [])[0] || defaultSettings.branches[0];
-           const bulkUpiAmountToPay = b.payment_method === "Split" ? num(b.split_upi) : (b.totals?.grand_total || 0);
-           const printedItems = (b.items || []).map((item, index) => {
-             const rate = (item.rate !== undefined && item.rate !== null) ? num(item.rate) : (item.rate_override ? num(item.rate_override) : 0);
-             const amount = (item.amount !== undefined && item.amount !== null) ? num(item.amount) : (item.amount_override ? num(item.amount_override) : 0);
-             const { rupees, paise } = splitAmount(amount);
-             return { ...item, sl_no: item.sl_no || (index + 1), rate, amount, rupees, paise };
-           });
-
+           
            return (
              <section key={b.id} id={`bulk-bill-${b.document_number}`} className="bill-sheet" style={{ width: "800px", maxWidth: "800px", margin: 0, "--print-scale-factor": 1 }}>
                 {(b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) && <div className="watermark-done">FULLY PAID</div>}
@@ -843,20 +766,12 @@ export default function App() {
                 <div className="bill-header">
                   <div className="logo-area">
                     {settings.logo_data_url ? <img src={settings.logo_data_url} alt="Shop Logo" className="shop-logo" crossOrigin="anonymous" /> : <div className="shop-logo-fallback">JJ</div>}
-                    <div style={{ width: "100%", textAlign: settings.shop_name_align || "center" }}>
-                      <h2 className="sheet-shop-title" style={{ fontFamily: settings.shop_name_font || "sans-serif", color: settings.shop_name_color || "#000", fontSize: `${settings.shop_name_size}px`, margin: 0 }}>{settings.shop_name}</h2>
-                    </div>
-                    <div style={{ width: "100%", textAlign: settings.tagline_align || "center" }}>
-                      <p className="sheet-tagline" style={{ fontFamily: settings.tagline_font || "sans-serif", color: settings.tagline_color || "#475569", fontSize: `${settings.tagline_size}px`, margin: "5px 0" }}>{settings.tagline}</p>
-                    </div>
+                    <div style={{ width: "100%", textAlign: settings.shop_name_align || "center" }}><h2 className="sheet-shop-title" style={{ fontFamily: settings.shop_name_font || "sans-serif", color: settings.shop_name_color || "#000", fontSize: `${settings.shop_name_size}px`, margin: 0 }}>{settings.shop_name}</h2></div>
+                    <div style={{ width: "100%", textAlign: settings.tagline_align || "center" }}><p className="sheet-tagline" style={{ fontFamily: settings.tagline_font || "sans-serif", color: settings.tagline_color || "#475569", fontSize: `${settings.tagline_size}px`, margin: "5px 0" }}>{settings.tagline}</p></div>
                   </div>
                   <div className="contact-area">
-                    <div className="contact-address" style={{ fontFamily: settings.address_font || "sans-serif", textAlign: settings.address_align || "center" }}>
-                        <span style={{ color: settings.address_color || "#475569", fontSize: `${settings.address_size || 14}px` }}>{billBranch.address}</span>
-                    </div>
-                    <div style={{ width: "100%", textAlign: settings.phone_align || "center", fontFamily: settings.phone_font || "sans-serif", fontSize: `${settings.phone_size || 13}px`, marginBottom: "4px" }}>
-                      {(settings.phone_numbers || []).join(" | ")}
-                    </div>
+                    <div className="contact-address" style={{ fontFamily: settings.address_font || "sans-serif", textAlign: settings.address_align || "center" }}><span style={{ color: settings.address_color || "#475569", fontSize: `${settings.address_size || 14}px` }}>{billBranch.address}</span></div>
+                    <div style={{ width: "100%", textAlign: settings.phone_align || "center", fontFamily: settings.phone_font || "sans-serif", fontSize: `${settings.phone_size || 13}px`, marginBottom: "4px" }}>{(settings.phone_numbers || []).join(" | ")}</div>
                     {b.mode === "invoice" && billBranch.gstin && <p style={{ margin: "4px 0", textAlign: "center", fontWeight: "bold" }}>GSTIN: {billBranch.gstin}</p>}
                   </div>
                 </div>
@@ -874,7 +789,28 @@ export default function App() {
                   <p><strong>Phone:</strong> {b.customer_phone || b.customer?.phone || "-"}</p>
                 </div>
 
-                <BillTable mode={b.mode} items={printedItems} />
+                <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
+                  <thead>
+                    {b.mode === "invoice" ? (
+                      <tr><th style={{ width: "8%" }}>Sl. No.</th><th style={{ width: "38%" }}>DESCRIPTION</th><th style={{ width: "10%" }}>HSN</th><th style={{ width: "14%", whiteSpace: "nowrap" }}>WEIGHT (g)</th><th style={{ width: "15%", whiteSpace: "nowrap" }}>RATE Rs.</th><th style={{ width: "15%", whiteSpace: "nowrap" }}>AMOUNT</th></tr>
+                    ) : (
+                      <tr><th style={{ width: "8%" }}>Sl. No.</th><th style={{ width: "40%" }}>Particulars</th><th style={{ width: "14%", whiteSpace: "nowrap" }}>Weight</th><th style={{ width: "18%", whiteSpace: "nowrap" }}>Qty x Rate</th><th style={{ width: "12%", whiteSpace: "nowrap" }}>Rs.</th><th style={{ width: "8%", whiteSpace: "nowrap" }}>Ps.</th></tr>
+                    )}
+                  </thead>
+                  <tbody>
+                    {(b.items || []).map((item, idx) => {
+                      const amount = (item.amount !== undefined && item.amount !== null && item.amount !== "") ? num(item.amount) : num(item.amount_override || 0);
+                      const { rupees, paise } = splitAmount(amount);
+                      const rate = (item.rate !== undefined && item.rate !== null) ? num(item.rate) : num(item.rate_override || 0);
+                      
+                      return b.mode === "invoice" ? (
+                        <tr key={idx}><td>{item.sl_no || (idx + 1)}</td><td>{item.description || "-"}</td><td>{item.hsn || "-"}</td><td style={{ whiteSpace: "nowrap" }}>{money(item.weight)}</td><td style={{ whiteSpace: "nowrap" }}>{money(rate)}</td><td style={{ whiteSpace: "nowrap" }}>{rupees}.{paise}</td></tr>
+                      ) : (
+                        <tr key={idx}><td>{item.sl_no || (idx + 1)}</td><td>{item.description || "-"}</td><td style={{ whiteSpace: "nowrap" }}>{money(item.weight)}</td><td style={{ whiteSpace: "nowrap" }}>{money(item.quantity || 1)} x {money(rate)}</td><td style={{ whiteSpace: "nowrap" }}>{rupees}</td><td style={{ whiteSpace: "nowrap" }}>{paise}</td></tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
 
                 <div className="sheet-bottom-stack">
                   <div className="totals">
@@ -897,7 +833,6 @@ export default function App() {
            );
         })}
       </div>
-      {/* END OF BULK PDF RENDERER */}
 
       <header className="top-bar no-print">
         <div className="brand-block" style={{ display: "flex", alignItems: "center", gap: "15px" }}>
@@ -928,12 +863,8 @@ export default function App() {
           <div className="bill-header">
             <div className="logo-area">
               {settings.logo_data_url ? <img src={settings.logo_data_url} alt="Shop Logo" className="shop-logo" crossOrigin="anonymous" /> : <div className="shop-logo-fallback">JJ</div>}
-              <div style={{ width: "100%", textAlign: settings.shop_name_align || "center" }}>
-                <h2 className="sheet-shop-title" style={{ fontFamily: settings.shop_name_font || "sans-serif", color: settings.shop_name_color || "#000", fontSize: `${settings.shop_name_size}px`, margin: 0 }}>{settings.shop_name}</h2>
-              </div>
-              <div style={{ width: "100%", textAlign: settings.tagline_align || "center" }}>
-                <p className="sheet-tagline" style={{ fontFamily: settings.tagline_font || "sans-serif", color: settings.tagline_color || "#475569", fontSize: `${settings.tagline_size}px`, margin: "5px 0" }}>{settings.tagline}</p>
-              </div>
+              <div style={{ width: "100%", textAlign: settings.shop_name_align || "center" }}><h2 className="sheet-shop-title" style={{ fontFamily: settings.shop_name_font || "sans-serif", color: settings.shop_name_color || "#000", fontSize: `${settings.shop_name_size}px`, margin: 0 }}>{settings.shop_name}</h2></div>
+              <div style={{ width: "100%", textAlign: settings.tagline_align || "center" }}><p className="sheet-tagline" style={{ fontFamily: settings.tagline_font || "sans-serif", color: settings.tagline_color || "#475569", fontSize: `${settings.tagline_size}px`, margin: "5px 0" }}>{settings.tagline}</p></div>
             </div>
 
             <div className="contact-area">
@@ -963,7 +894,26 @@ export default function App() {
             <p><strong>Phone:</strong> {customer.phone || "-"}</p>
           </div>
 
-          <BillTable mode={mode} items={computed.items} />
+          <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
+            <thead>
+              {mode === "invoice" ? (
+                <tr><th style={{ width: "8%" }}>Sl. No.</th><th style={{ width: "38%" }}>DESCRIPTION</th><th style={{ width: "10%" }}>HSN</th><th style={{ width: "14%", whiteSpace: "nowrap" }}>WEIGHT (g)</th><th style={{ width: "15%", whiteSpace: "nowrap" }}>RATE Rs.</th><th style={{ width: "15%", whiteSpace: "nowrap" }}>AMOUNT</th></tr>
+              ) : (
+                <tr><th style={{ width: "8%" }}>Sl. No.</th><th style={{ width: "40%" }}>Particulars</th><th style={{ width: "14%", whiteSpace: "nowrap" }}>Weight</th><th style={{ width: "18%", whiteSpace: "nowrap" }}>Qty x Rate</th><th style={{ width: "12%", whiteSpace: "nowrap" }}>Rs.</th><th style={{ width: "8%", whiteSpace: "nowrap" }}>Ps.</th></tr>
+              )}
+            </thead>
+            <tbody>
+              {computed.items.map((item, idx) => (
+                <tr key={item.id}>
+                  {mode === "invoice" ? (
+                    <><td>{item.slNo}</td><td>{item.description || "-"}</td><td>{item.hsn || "-"}</td><td style={{ whiteSpace: "nowrap" }}>{money(item.weight)}</td><td style={{ whiteSpace: "nowrap" }}>{money(item.rate)}</td><td style={{ whiteSpace: "nowrap" }}>{item.rupees}.{item.paise}</td></>
+                  ) : (
+                    <><td>{item.slNo}</td><td>{item.description || "-"}</td><td style={{ whiteSpace: "nowrap" }}>{money(item.weight)}</td><td style={{ whiteSpace: "nowrap" }}>{money(item.quantity)} x {money(item.rate)}</td><td style={{ whiteSpace: "nowrap" }}>{item.rupees}</td><td style={{ whiteSpace: "nowrap" }}>{item.paise}</td></>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
 
           <div className="sheet-bottom-stack">
             <div className="totals">
@@ -1355,11 +1305,86 @@ export default function App() {
 
             {settingsTab === "design" && (
               <div className="settings-design-tab" style={{ width: "100%" }}>
-                <DesignSettingRow title="Shop Name" fieldPrefix="shop_name" settings={settings} setSettings={setSettings} />
-                <DesignSettingRow title="Tagline" fieldPrefix="tagline" settings={settings} setSettings={setSettings} />
-                <DesignSettingRow title="Address Style (Edit info in Branches)" fieldPrefix="address" settings={settings} setSettings={setSettings} />
-                <DesignSettingRow title="Phone Numbers" fieldPrefix="phone" settings={settings} setSettings={setSettings} />
-                <DesignSettingRow title="Email" fieldPrefix="email" settings={settings} setSettings={setSettings} />
+                
+                {/* SHOP NAME */}
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
+                  <h4 style={{ margin: "0 0 10px 0" }}>Shop Name</h4>
+                  <Input value={settings.shop_name || ""} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name: e.target.value }))} placeholder="Shop Name" style={{ marginBottom: "10px", width: "100%", boxSizing: "border-box" }} />
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", width: "100%" }}>
+                    <input type="color" value={settings.shop_name_color || "#000000"} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px", flexShrink: 0 }} />
+                    <Input type="number" min="8" max="60" value={settings.shop_name_size || 26} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_size: Number(e.target.value) }))} style={{ width: "70px", padding: "0 5px", textAlign: "center", flexShrink: 0 }} />
+                    <select value={settings.shop_name_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_font: e.target.value }))} style={{ flex: "1 1 120px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "120px" }}>
+                      <FontSelectOptions customFonts={settings.custom_fonts || []} />
+                    </select>
+                    <select value={settings.shop_name_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_align: e.target.value }))} style={{ flex: "1 1 80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "80px" }}>
+                      <option value="left">Left</option><option value="center">Center</option><option value="right">Right</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* TAGLINE */}
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
+                  <h4 style={{ margin: "0 0 10px 0" }}>Tagline</h4>
+                  <Input value={settings.tagline || ""} onChange={(e) => setSettings((prev) => ({ ...prev, tagline: e.target.value }))} placeholder="Tagline" style={{ marginBottom: "10px", width: "100%", boxSizing: "border-box" }} />
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", width: "100%" }}>
+                    <input type="color" value={settings.tagline_color || "#475569"} onChange={(e) => setSettings((prev) => ({ ...prev, tagline_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px", flexShrink: 0 }} />
+                    <Input type="number" min="8" max="60" value={settings.tagline_size || 12} onChange={(e) => setSettings((prev) => ({ ...prev, tagline_size: Number(e.target.value) }))} style={{ width: "70px", padding: "0 5px", textAlign: "center", flexShrink: 0 }} />
+                    <select value={settings.tagline_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, tagline_font: e.target.value }))} style={{ flex: "1 1 120px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "120px" }}>
+                      <FontSelectOptions customFonts={settings.custom_fonts || []} />
+                    </select>
+                    <select value={settings.tagline_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, tagline_align: e.target.value }))} style={{ flex: "1 1 80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "80px" }}>
+                      <option value="left">Left</option><option value="center">Center</option><option value="right">Right</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* ADDRESS STYLE */}
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
+                  <h4 style={{ margin: "0 0 10px 0" }}>Address Style</h4>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", width: "100%" }}>
+                    <input type="color" value={settings.address_color || "#475569"} onChange={(e) => setSettings((prev) => ({ ...prev, address_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px", flexShrink: 0 }} />
+                    <Input type="number" min="8" max="60" value={settings.address_size || 14} onChange={(e) => setSettings((prev) => ({ ...prev, address_size: Number(e.target.value) }))} style={{ width: "70px", padding: "0 5px", textAlign: "center", flexShrink: 0 }} />
+                    <select value={settings.address_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, address_font: e.target.value }))} style={{ flex: "1 1 120px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "120px" }}>
+                      <FontSelectOptions customFonts={settings.custom_fonts || []} />
+                    </select>
+                    <select value={settings.address_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, address_align: e.target.value }))} style={{ flex: "1 1 80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "80px" }}>
+                      <option value="left">Left</option><option value="center">Center</option><option value="right">Right</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* PHONE NUMBERS */}
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
+                  <h4 style={{ margin: "0 0 10px 0" }}>Phone Numbers</h4>
+                  <Input value={(settings.phone_numbers || []).join(", ")} onChange={(e) => setSettings((prev) => ({ ...prev, phone_numbers: e.target.value.split(",").map(i=>i.trim()).filter(Boolean) }))} placeholder="Phone numbers (comma separated)" style={{ marginBottom: "10px", width: "100%", boxSizing: "border-box" }} />
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", width: "100%" }}>
+                    <input type="color" value={settings.phone_color || "#475569"} onChange={(e) => setSettings((prev) => ({ ...prev, phone_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px", flexShrink: 0 }} />
+                    <Input type="number" min="8" max="60" value={settings.phone_size || 13} onChange={(e) => setSettings((prev) => ({ ...prev, phone_size: Number(e.target.value) }))} style={{ width: "70px", padding: "0 5px", textAlign: "center", flexShrink: 0 }} />
+                    <select value={settings.phone_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, phone_font: e.target.value }))} style={{ flex: "1 1 120px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "120px" }}>
+                      <FontSelectOptions customFonts={settings.custom_fonts || []} />
+                    </select>
+                    <select value={settings.phone_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, phone_align: e.target.value }))} style={{ flex: "1 1 80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "80px" }}>
+                      <option value="left">Left</option><option value="center">Center</option><option value="right">Right</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* EMAIL */}
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
+                  <h4 style={{ margin: "0 0 10px 0" }}>Email</h4>
+                  <Input value={settings.email || ""} onChange={(e) => setSettings((prev) => ({ ...prev, email: e.target.value }))} placeholder="Email" style={{ marginBottom: "10px", width: "100%", boxSizing: "border-box" }} />
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", width: "100%" }}>
+                    <input type="color" value={settings.email_color || "#475569"} onChange={(e) => setSettings((prev) => ({ ...prev, email_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px", flexShrink: 0 }} />
+                    <Input type="number" min="8" max="60" value={settings.email_size || 13} onChange={(e) => setSettings((prev) => ({ ...prev, email_size: Number(e.target.value) }))} style={{ width: "70px", padding: "0 5px", textAlign: "center", flexShrink: 0 }} />
+                    <select value={settings.email_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, email_font: e.target.value }))} style={{ flex: "1 1 120px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "120px" }}>
+                      <FontSelectOptions customFonts={settings.custom_fonts || []} />
+                    </select>
+                    <select value={settings.email_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, email_align: e.target.value }))} style={{ flex: "1 1 80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "80px" }}>
+                      <option value="left">Left</option><option value="center">Center</option><option value="right">Right</option>
+                    </select>
+                  </div>
+                </div>
+
                 <Button onClick={saveSettings} style={{ width: "100%", marginBottom: "15px", boxSizing: "border-box" }}>Save Design Settings</Button>
               </div>
             )}
@@ -1408,7 +1433,7 @@ export default function App() {
                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px", flexWrap: "wrap", gap: "10px" }}><p style={{ margin: 0, fontSize: "0.9rem", color: "#475569" }}>Manage isolated branch ledgers and addresses here.</p><Button size="sm" onClick={() => { const newBranch = { id: `B${Date.now()}`, name: "New Branch", address: "", map_url: "#", invoice_upi_id: "", estimate_upi_id: "", gstin: "", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 }; setSettings(prev => ({ ...prev, branches: [...(prev.branches || []), newBranch] })); }}>+ Add Branch</Button></div>
                    {(settings.branches || []).map((b, index) => (
                        <div key={b.id} style={{ padding: "15px", border: "1px solid #cbd5e1", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
-                           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "10px" }}><h4 style={{ margin: 0, color: "var(--brand)" }}>Branch: {b.name}</h4>{(settings.branches || []).length > 1 && (<Button size="sm" variant="outline" style={{ borderColor: "#ef4444", color: "#ef4444", padding: "0 8px", height: "24px" }} onClick={() => { if(window.confirm(`Delete ${b.name}?`)) { setSettings(prev => ({ ...prev, branches: (prev.branches || []).filter(x => x.id !== b.id) })); } }}>Delete</Button>)}</div>
+                           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "10px" }}><h4 style={{ margin: "0", color: "var(--brand)" }}>Branch: {b.name}</h4>{(settings.branches || []).length > 1 && (<Button size="sm" variant="outline" style={{ borderColor: "#ef4444", color: "#ef4444", padding: "0 8px", height: "24px" }} onClick={() => { if(window.confirm(`Delete ${b.name}?`)) { setSettings(prev => ({ ...prev, branches: (prev.branches || []).filter(x => x.id !== b.id) })); } }}>Delete</Button>)}</div>
                            <label className="select-label" style={{ fontSize: "0.8rem" }}>Branch Name (Internal Use)</label><Input value={b.name || ""} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].name = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
                            <label className="select-label" style={{ fontSize: "0.8rem" }}>Printed Bill Address</label><Input value={b.address || ""} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].address = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
                            <label className="select-label" style={{ fontSize: "0.8rem" }}>Google Maps Review Link</label><Input value={b.map_url || ""} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].map_url = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
