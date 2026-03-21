@@ -112,12 +112,10 @@ export default function App() {
   const [loggingIn, setLoggingIn] = useState(false);
 
   const [settings, setSettings] = useState(defaultSettings);
-  
   const [globalBranchId, setGlobalBranchId] = useState("B1");
   const [billBranchId, setBillBranchId] = useState("B1");
 
   const [currentBillId, setCurrentBillId] = useState(null);
-  
   const [mode, setMode] = useState("invoice");
   const [documentNumber, setDocumentNumber] = useState("");
   const [editingDocNumber, setEditingDocNumber] = useState(null);
@@ -126,22 +124,34 @@ export default function App() {
 
   const [customer, setCustomer] = useState({ name: "", phone: "", address: "", email: "" });
   const [suggestions, setSuggestions] = useState([]);
-
   const [items, setItems] = useState([createItem()]);
-
   const [discount, setDiscount] = useState("0");
   const [exchange, setExchange] = useState("0");
   const [manualRoundOff, setManualRoundOff] = useState("");
+  const [notes, setNotes] = useState("");
+
+  // ✅ NEW: TRANSACTION TYPES & ADVANCE TRACKING
+  const [txType, setTxType] = useState("sale"); // "sale", "booking", "service"
   
+  // Standard Sale Logic
   const [paymentMethod, setPaymentMethod] = useState("");
   const [splitCash, setSplitCash] = useState("");
   const [isPaymentDone, setIsPaymentDone] = useState(false); 
-  const [notes, setNotes] = useState("");
 
+  // Booking / Service Logic
+  const [advanceAmount, setAdvanceAmount] = useState("");
+  const [advanceMethod, setAdvanceMethod] = useState("");
+  const [advanceSplitCash, setAdvanceSplitCash] = useState("");
+  const [isAdvancePaid, setIsAdvancePaid] = useState(false);
+
+  const [balanceMethod, setBalanceMethod] = useState("");
+  const [balanceSplitCash, setBalanceSplitCash] = useState("");
+  const [isBalancePaid, setIsBalancePaid] = useState(false);
+
+  // UI Drawers
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState("design"); 
   const [showAbout, setShowAbout] = useState(false);
-  
   const [showRecentBills, setShowRecentBills] = useState(false);
   const [recentBillsList, setRecentBillsList] = useState([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
@@ -152,11 +162,9 @@ export default function App() {
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
-
   const [showLedger, setShowLedger] = useState(false);
   const [todayBills, setTodayBills] = useState([]);
   const [ledgerLoading, setLedgerLoading] = useState(false);
-  
   const [ledgerLogs, setLedgerLogs] = useState([]);
   const [showLogForm, setShowLogForm] = useState(false);
   const [logType, setLogType] = useState("expense"); 
@@ -165,12 +173,10 @@ export default function App() {
   const [logSourceVault, setLogSourceVault] = useState("cash");
   const [logTargetVault, setLogTargetVault] = useState("estimate_bank");
   const [submittingLog, setSubmittingLog] = useState(false);
-
   const [editingBalances, setEditingBalances] = useState(false);
   const [manualCash, setManualCash] = useState("");
   const [manualEstBank, setManualEstBank] = useState("");
   const [manualInvBank, setManualInvBank] = useState("");
-
   const [storageStats, setStorageStats] = useState({ used_bytes: 0, quota_bytes: 524288000, percentage: 0 });
   const [savingBill, setSavingBill] = useState(false);
   const [printScale, setPrintScale] = useState(getInitialPrintScale);
@@ -319,7 +325,6 @@ export default function App() {
     });
   }, [recentBillsList, recentModeFilter, recentDateFilter, customStartDate, customEndDate]);
 
-  // ✅ PERFECT BULK DOWNLOAD: Forces Absolute Virtual Desktop Rendering
   const handleBulkDownload = async () => {
     if (filteredRecentBills.length === 0) { toast.error("No bills to download!"); return; }
     if (filteredRecentBills.length > 20) {
@@ -519,13 +524,6 @@ export default function App() {
     return { items: mapped, baseRate, subtotal, taxable, cgst, sgst, igst, mdr, roundOff, grandTotal };
   }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff]);
 
-  const upiAmountToPay = paymentMethod === "Split" ? Math.max(0, computed.grandTotal - num(splitCash)) : computed.grandTotal;
-  const showDashboardUpi = !isPaymentDone && (paymentMethod === "UPI" || (paymentMethod === "Split" && upiAmountToPay > 0));
-  
-  const upiId = mode === "invoice" ? activeBillBranch.invoice_upi_id : activeBillBranch.estimate_upi_id;
-  const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
-  const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
-
   const updateItem = (id, key, value) => { markDirty(); setItems((prev) => prev.map((item) => (item.id === id ? { ...item, [key]: value } : item))); };
 
   const checkIsBlank = () => {
@@ -536,6 +534,8 @@ export default function App() {
            (!discount || discount === "0") && 
            (!exchange || exchange === "0") && 
            !paymentMethod && 
+           !advanceMethod &&
+           !advanceAmount &&
            !splitCash;
   };
 
@@ -545,8 +545,14 @@ export default function App() {
     setItems([createItem(settings.default_hsn)]); 
     setCustomer({ name: "", phone: "", address: "", email: "" });
     setSuggestions([]); setDiscount("0"); setExchange("0"); setManualRoundOff("");
-    setPaymentMethod(""); 
-    setSplitCash(""); setIsPaymentDone(false); setNotes("");
+    
+    // Reset transaction states
+    setTxType("sale");
+    setPaymentMethod(""); setSplitCash(""); setIsPaymentDone(false); 
+    setAdvanceAmount(""); setAdvanceMethod(""); setAdvanceSplitCash(""); setIsAdvancePaid(false);
+    setBalanceMethod(""); setBalanceSplitCash(""); setIsBalancePaid(false);
+    setNotes("");
+    
     setBillDate(today()); setIsDirty(false);
     await reserveNumber(nextMode, nextBranch);
     goToBillTop();
@@ -569,9 +575,22 @@ export default function App() {
     setDocumentNumber(bill.document_number);
     setBillDate(bill.date || today());
     setCustomer({ name: bill.customer?.name || "", phone: bill.customer?.phone || "", address: bill.customer?.address || "", email: bill.customer?.email || "" });
+    
+    setTxType(bill.tx_type || "sale");
+    
     setPaymentMethod(bill.payment_method || "");
     setSplitCash(bill.split_cash !== null && bill.split_cash !== undefined ? String(bill.split_cash) : "");
     setIsPaymentDone(bill.is_payment_done || false); 
+
+    setAdvanceAmount(bill.advance_amount ? String(bill.advance_amount) : "");
+    setAdvanceMethod(bill.advance_method || "");
+    setAdvanceSplitCash(bill.advance_split_cash ? String(bill.advance_split_cash) : "");
+    setIsAdvancePaid(bill.is_advance_paid || false);
+
+    setBalanceMethod(bill.balance_method || "");
+    setBalanceSplitCash(bill.balance_split_cash ? String(bill.balance_split_cash) : "");
+    setIsBalancePaid(bill.is_balance_paid || false);
+
     setNotes(bill.notes || "");
     setDiscount(bill.totals?.discount ? String(bill.totals.discount) : "0");
     setExchange(bill.totals?.exchange ? String(bill.totals.exchange) : "0");
@@ -601,6 +620,11 @@ export default function App() {
   };
 
   const handleQuickPaymentToggle = async (bill) => {
+    if (bill.tx_type === "booking" || bill.tx_type === "service") {
+       toast.info("Please open the bill and click Edit to manage Booking/Service balances.");
+       return;
+    }
+    
     const newStatus = !bill.is_payment_done;
     try {
       await axios.put(`${API}/bills/${bill.document_number}/toggle-payment`, { is_payment_done: newStatus }, { headers: authHeaders });
@@ -782,18 +806,45 @@ export default function App() {
   };
 
   const saveBill = async () => {
-    if (!paymentMethod) {
-        toast.error("Please select payment method.");
-        return;
+    if (txType === "sale" && !paymentMethod) { toast.error("Please select a payment method."); return; }
+    if ((txType === "booking" || txType === "service")) {
+        if (isAdvancePaid && !advanceMethod) { toast.error("Please select a method for the Advance payment."); return; }
+        if (isBalancePaid && !balanceMethod) { toast.error("Please select a method for the Balance payment."); return; }
     }
 
     setSavingBill(true);
     try {
       const payload = {
-        mode, branch_id: billBranchId, document_number: documentNumber, date: billDate,
-        customer_name: customer.name, customer_phone: customer.phone, customer_address: customer.address, customer_email: customer.email,
-        payment_method: paymentMethod, is_payment_done: isPaymentDone, split_cash: num(splitCash), split_upi: Math.max(0, computed.grandTotal - num(splitCash)),
-        discount: num(discount), exchange: num(exchange), round_off: manualRoundOff === "" ? null : num(manualRoundOff), notes,
+        mode, 
+        branch_id: billBranchId, 
+        document_number: documentNumber, 
+        date: billDate,
+        customer_name: customer.name, 
+        customer_phone: customer.phone, 
+        customer_address: customer.address, 
+        customer_email: customer.email,
+        
+        tx_type: txType,
+        
+        payment_method: paymentMethod, 
+        is_payment_done: isPaymentDone, 
+        split_cash: num(splitCash), 
+        split_upi: Math.max(0, computed.grandTotal - num(splitCash)),
+        
+        advance_amount: num(advanceAmount),
+        advance_method: advanceMethod,
+        advance_split_cash: num(advanceSplitCash),
+        is_advance_paid: isAdvancePaid,
+        
+        balance_method: balanceMethod,
+        balance_split_cash: num(balanceSplitCash),
+        is_balance_paid: isBalancePaid,
+
+        discount: num(discount), 
+        exchange: num(exchange), 
+        round_off: manualRoundOff === "" ? null : num(manualRoundOff), 
+        notes,
+        
         items: computed.items.map((item) => ({ 
           description: item.description, 
           hsn: item.hsn, 
@@ -810,16 +861,15 @@ export default function App() {
 
       if (currentBillId) {
         await axios.put(`${API}/bills/update-by-id/${currentBillId}`, payload, { headers: authHeaders });
-        toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} updated & migrated successfully.`);
+        toast.success(`Bill updated & ledger synced securely.`);
         setIsDirty(false);
-        setEditingDocNumber(documentNumber);
       } else {
         const res = await axios.post(`${API}/bills/save`, payload, { headers: authHeaders });
-        toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} saved successfully.`);
+        toast.success(`Bill saved securely.`);
         setIsDirty(false);
         setCurrentBillId(res.data.id);
-        setEditingDocNumber(res.data.document_number);
         setDocumentNumber(res.data.document_number);
+        setEditingDocNumber(res.data.document_number);
       }
       
       await loadSettings(); 
@@ -831,7 +881,6 @@ export default function App() {
     finally { setSavingBill(false); }
   };
 
-  // ✅ PERFECT SINGLE PDF DOWNLOAD: Forces Absolute Virtual Desktop Rendering
   const downloadPdf = async (elementId, filename) => {
     toast.info("Preparing PDF...");
     const node = document.getElementById(elementId); 
@@ -877,7 +926,6 @@ export default function App() {
   };
 
   const shareWhatsApp = () => {
-    if (!paymentMethod) { toast.error("Please select payment method."); return; }
     const link = `${window.location.origin}/?view=${documentNumber}`;
     const text = `Hello ${customer.name || "Customer"},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`;
     let cleanedPhone = customer.phone.replace(/\D/g, "");
@@ -886,7 +934,6 @@ export default function App() {
   };
 
   const shareEmail = () => {
-    if (!paymentMethod) { toast.error("Please select payment method."); return; }
     const link = `${window.location.origin}/?view=${documentNumber}`;
     const subject = `${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber}`;
     const body = `Dear ${customer.name || "Customer"},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`;
@@ -918,22 +965,56 @@ export default function App() {
     });
   }, [publicBill, publicSettings]);
 
+  // ✅ DYNAMIC UPI CALCULATOR FOR QR
+  const getUpiAmount = () => {
+      if (txType === "sale") {
+          return paymentMethod === "Split" ? Math.max(0, computed.grandTotal - num(splitCash)) : computed.grandTotal;
+      }
+      if (!isAdvancePaid && (advanceMethod === "UPI" || advanceMethod === "Split")) {
+          return advanceMethod === "Split" ? Math.max(0, num(advanceAmount) - num(advanceSplitCash)) : num(advanceAmount);
+      }
+      if (isAdvancePaid && !isBalancePaid && (balanceMethod === "UPI" || balanceMethod === "Split")) {
+          const bal = Math.max(0, computed.grandTotal - num(advanceAmount));
+          return balanceMethod === "Split" ? Math.max(0, bal - num(balanceSplitCash)) : bal;
+      }
+      return 0;
+  };
+  
+  const upiAmountToPay = getUpiAmount();
+  const showDashboardUpi = upiAmountToPay > 0;
+  
+  const upiId = mode === "invoice" ? activeBillBranch.invoice_upi_id : activeBillBranch.estimate_upi_id;
+  const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
+  const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
+
   if (isPublicView) {
     if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
     if (publicBill === "NOT_FOUND" || !publicBill) return <div className="loading-screen">Bill not found or has been deleted.</div>;
 
-    const publicUpiAmountToPay = publicBill.payment_method === "Split" ? num(publicBill.split_upi) : publicBill.totals.grand_total;
-    const showPublicUpi = !publicBill.is_payment_done && (publicBill.payment_method === "UPI" || (publicBill.payment_method === "Split" && publicUpiAmountToPay > 0));
+    // Public View Dynamic UPI Logic
+    let publicUpiAmt = 0;
+    if (publicBill.tx_type === "sale" || !publicBill.tx_type) {
+        publicUpiAmt = publicBill.payment_method === "Split" ? num(publicBill.split_upi) : publicBill.totals.grand_total;
+    } else {
+        if (!publicBill.is_advance_paid && (publicBill.advance_method === "UPI" || publicBill.advance_method === "Split")) {
+            publicUpiAmt = publicBill.advance_method === "Split" ? Math.max(0, num(publicBill.advance_amount) - num(publicBill.advance_split_cash)) : num(publicBill.advance_amount);
+        } else if (publicBill.is_advance_paid && !publicBill.is_balance_paid && (publicBill.balance_method === "UPI" || publicBill.balance_method === "Split")) {
+            const bal = Math.max(0, publicBill.totals.grand_total - num(publicBill.advance_amount));
+            publicUpiAmt = publicBill.balance_method === "Split" ? Math.max(0, bal - num(publicBill.balance_split_cash)) : bal;
+        }
+    }
+    
+    const showPublicUpi = publicUpiAmt > 0 && !(publicBill.tx_type === "sale" ? publicBill.is_payment_done : publicBill.is_balance_paid);
     
     const pbBranch = publicSettings.branches.find(b => b.id === publicBill.branch_id) || publicSettings.branches[0];
     const publicUpiId = publicBill.mode === "invoice" ? pbBranch.invoice_upi_id : pbBranch.estimate_upi_id;
-    const publicUpiUri = `upi://pay?pa=${publicUpiId}&pn=${encodeURIComponent(publicSettings.shop_name)}&am=${money(publicUpiAmountToPay)}&cu=INR&tn=Bill_${publicBill.document_number}`;
+    const publicUpiUri = `upi://pay?pa=${publicUpiId}&pn=${encodeURIComponent(publicSettings.shop_name)}&am=${money(publicUpiAmt)}&cu=INR&tn=Bill_${publicBill.document_number}`;
 
     return (
       <div className="billing-app" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px' }}>
         <Toaster position="bottom-right" />
 
-        {!publicBill.is_payment_done && (
+        {!(publicBill.tx_type === "sale" ? publicBill.is_payment_done : publicBill.is_balance_paid) && (
           <div 
             className="no-print" 
             onClick={handleWifiClick} 
@@ -970,9 +1051,9 @@ export default function App() {
         </div>
 
         <section id="public-bill-root" className="bill-sheet" style={{ "--print-scale-factor": 1, position: 'relative', zIndex: 1 }}>
-          {publicBill.is_payment_done && (
+          {(publicBill.tx_type === "sale" ? publicBill.is_payment_done : publicBill.is_balance_paid) && (
             <div className="watermark-done">
-              PAYMENT DONE
+              FULLY PAID
             </div>
           )}
 
@@ -1026,7 +1107,7 @@ export default function App() {
           </div>
 
           <div className="sheet-banner">
-            {publicBill.mode === "invoice" ? "TAX INVOICE" : "ESTIMATE"}
+            {publicBill.tx_type === "booking" ? "BOOKING RECEIPT" : publicBill.tx_type === "service" ? "SERVICE ORDER" : publicBill.mode === "invoice" ? "TAX INVOICE" : "ESTIMATE"}
           </div>
 
           <div className="meta-grid">
@@ -1099,24 +1180,29 @@ export default function App() {
 
               <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(publicBill.totals.mdr)}</strong></div>
               <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(publicBill.totals.round_off)}</strong></div>
+              
               <div className="totals-row total-highlight">
                 <span>GRAND TOTAL</span>
                 <strong>₹{money(publicBill.totals.grand_total)}</strong>
               </div>
 
-              <div className="payment-method-view">
-                <span>Payment Method:</span>
-                <strong>
-                  {publicBill.payment_method === "Split" 
-                    ? `Split (Cash: ₹${money(publicBill.split_cash)}, UPI: ₹${money(publicUpiAmountToPay)})` 
-                    : publicBill.payment_method}
-                </strong>
-              </div>
+              {/* ✅ PUBLIC VIEW: Display Advance & Balance for Bookings */}
+              {publicBill.tx_type && publicBill.tx_type !== "sale" && (
+                <>
+                  <div className="totals-row" style={{ marginTop: "10px", color: "#16a34a" }}>
+                    <span>ADVANCE RECEIVED</span>
+                    <strong>₹{money(publicBill.advance_amount)}</strong>
+                  </div>
+                  <div className="totals-row" style={{ color: "#dc2626" }}>
+                    <span>BALANCE DUE</span>
+                    <strong>₹{money(Math.max(0, publicBill.totals.grand_total - num(publicBill.advance_amount)))}</strong>
+                  </div>
+                </>
+              )}
 
               {showPublicUpi && (
                 <div className="payment-qr-box">
-                  <p className="scan-title" style={{ marginBottom: "15px" }}>Click Below to Pay</p>
-                  
+                  <p className="scan-title" style={{ marginBottom: "15px" }}>Click Below to Pay ₹{money(publicUpiAmt)}</p>
                   <a 
                     href={publicUpiUri} 
                     style={{
@@ -1131,7 +1217,7 @@ export default function App() {
                       boxShadow: "0 4px 6px rgba(0,0,0,0.1)"
                     }}
                   >
-                    📱 Pay ₹{money(publicUpiAmountToPay)} via UPI App
+                    📱 Pay ₹{money(publicUpiAmt)} via UPI App
                   </a>
                 </div>
               )}
@@ -1163,7 +1249,6 @@ export default function App() {
                           toast.info("Feedback link not set for this branch yet!");
                       }
                   }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
-                  <a href="https://linktr.ee/JalaramJewellers" target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "12px", backgroundColor: "#1e293b", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>ℹ️ About Us</a>
                 </div>
               </div>
             ) : (
@@ -1181,7 +1266,6 @@ export default function App() {
                           toast.info("Feedback link not set for this branch yet!");
                       }
                   }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
-                  <a href="https://linktr.ee/JalaramJewellers" target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "12px", backgroundColor: "#1e293b", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>ℹ️ About Us</a>
                 </div>
               </div>
             )}
@@ -1237,14 +1321,14 @@ export default function App() {
 
       <Toaster position="bottom-right" />
 
-      {/* INVISIBLE BULK PDF RENDERER - USED ONLY FOR GENERATING MULTI-PAGE PDFS */}
+      {/* INVISIBLE BULK PDF RENDERER - NO ABOUT QR */}
       <div style={{ position: "absolute", top: "-9999px", left: "-9999px", opacity: 0, pointerEvents: "none" }}>
         {filteredRecentBills.map(b => {
            const billBranch = settings.branches.find(br => br.id === b.branch_id) || settings.branches[0];
            const bulkUpiAmountToPay = b.payment_method === "Split" ? num(b.split_upi) : (b.totals?.grand_total || 0);
            return (
              <section key={b.id} id={`bulk-bill-${b.document_number}`} className="bill-sheet" style={{ width: "800px", maxWidth: "800px", margin: 0, "--print-scale-factor": 1 }}>
-                {b.is_payment_done && <div className="watermark-done">PAYMENT DONE</div>}
+                {(b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) && <div className="watermark-done">FULLY PAID</div>}
                 
                 <div className="bill-header">
                   <div className="logo-area">
@@ -1267,7 +1351,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="sheet-banner">{b.mode === "invoice" ? "TAX INVOICE" : "ESTIMATE"}</div>
+                <div className="sheet-banner">{b.tx_type === "booking" ? "BOOKING RECEIPT" : b.tx_type === "service" ? "SERVICE ORDER" : b.mode === "invoice" ? "TAX INVOICE" : "ESTIMATE"}</div>
 
                 <div className="meta-grid">
                   <p><strong>{b.mode === "invoice" ? "Invoice No" : "Estimate No"}:</strong> {b.document_number}</p>
@@ -1327,12 +1411,19 @@ export default function App() {
                       <span>GRAND TOTAL</span>
                       <strong>₹{money(b.totals?.grand_total)}</strong>
                     </div>
-                    <div className="payment-method-view">
-                      <span>Payment Method:</span>
-                      <strong>
-                        {b.payment_method === "Split" ? `Split (Cash: ₹${money(b.split_cash)}, UPI: ₹${money(bulkUpiAmountToPay)})` : b.payment_method}
-                      </strong>
-                    </div>
+
+                    {b.tx_type && b.tx_type !== "sale" && (
+                      <>
+                        <div className="totals-row" style={{ marginTop: "10px", color: "#16a34a" }}>
+                          <span>ADVANCE RECEIVED</span>
+                          <strong>₹{money(b.advance_amount)}</strong>
+                        </div>
+                        <div className="totals-row" style={{ color: "#dc2626" }}>
+                          <span>BALANCE DUE</span>
+                          <strong>₹{money(Math.max(0, num(b.totals?.grand_total) - num(b.advance_amount)))}</strong>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
                 <footer className="sheet-footer">
@@ -1343,7 +1434,6 @@ export default function App() {
         })}
       </div>
       {/* END OF BULK PDF RENDERER */}
-
 
       <header className="top-bar no-print">
         <div className="brand-block" style={{ display: "flex", alignItems: "center", gap: "15px" }}>
@@ -1383,9 +1473,9 @@ export default function App() {
         
         <section id="bill-print-root" className="bill-sheet" style={{ "--print-scale-factor": (printScale / 100).toFixed(3), position: 'relative', zIndex: 1 }}>
           
-          {isPaymentDone && (
+          {(txType === "sale" ? isPaymentDone : isBalancePaid) && (
             <div className="watermark-done">
-              PAYMENT DONE
+              FULLY PAID
             </div>
           )}
 
@@ -1439,7 +1529,7 @@ export default function App() {
           </div>
 
           <div className="sheet-banner">
-            {mode === "invoice" ? "TAX INVOICE" : "ESTIMATE"}
+            {txType === "booking" ? "BOOKING RECEIPT" : txType === "service" ? "SERVICE ORDER" : mode === "invoice" ? "TAX INVOICE" : "ESTIMATE"}
           </div>
 
           <div className="meta-grid">
@@ -1510,25 +1600,29 @@ export default function App() {
 
               <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(computed.mdr)}</strong></div>
               <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(computed.roundOff)}</strong></div>
+              
               <div className="totals-row total-highlight">
                 <span>GRAND TOTAL</span>
                 <strong>₹{money(computed.grandTotal)}</strong>
               </div>
 
-              <div className="payment-method-view">
-                <span>Payment Method:</span>
-                <strong>
-                  {!paymentMethod 
-                    ? "NOT SELECTED"
-                    : paymentMethod === "Split" 
-                    ? `Split (Cash: ₹${money(splitCash)}, UPI: ₹${money(upiAmountToPay)})` 
-                    : paymentMethod}
-                </strong>
-              </div>
+              {/* ✅ NEW: Display Advance & Balance Due */}
+              {txType !== "sale" && (
+                <>
+                  <div className="totals-row" style={{ marginTop: "10px", color: "#16a34a" }}>
+                    <span>ADVANCE RECEIVED</span>
+                    <strong>₹{money(advanceAmount)}</strong>
+                  </div>
+                  <div className="totals-row" style={{ color: "#dc2626" }}>
+                    <span>BALANCE DUE</span>
+                    <strong>₹{money(Math.max(0, computed.grandTotal - num(advanceAmount)))}</strong>
+                  </div>
+                </>
+              )}
 
-              {showDashboardUpi && paymentMethod && (
+              {showDashboardUpi && (
                 <div className="payment-qr-box">
-                  <p className="scan-title">Scan Here For Payment</p>
+                  <p className="scan-title">Scan Here For Payment (₹{money(upiAmountToPay)})</p>
                   <img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" crossOrigin="anonymous" />
                   <p className="upi-id">UPI: {upiId}</p>
                 </div>
@@ -1595,10 +1689,6 @@ export default function App() {
                 <select 
                     value={billBranchId} 
                     onChange={async (e) => { 
-                        if (isDirty && !paymentMethod) {
-                            toast.error("Please select payment method.");
-                            return;
-                        }
                         const nextBranch = e.target.value;
                         setBillBranchId(nextBranch); 
                         markDirty(); 
@@ -1683,40 +1773,108 @@ export default function App() {
             <Input value={discount} onChange={(e) => { setDiscount(e.target.value); markDirty(); }} placeholder="Discount" />
             <Input value={exchange} onChange={(e) => { setExchange(e.target.value); markDirty(); }} placeholder="Exchange" />
             <Input value={manualRoundOff} onChange={(e) => { setManualRoundOff(e.target.value); markDirty(); }} placeholder="Manual round off (optional)" />
+          </div>
 
-            <label htmlFor="payment-method-select" className="select-label">Payment Method</label>
-            <select id="payment-method-select" value={paymentMethod} onChange={(e) => { setPaymentMethod(e.target.value); markDirty(); }} className="native-select">
-              <option value="" disabled>Select Method</option>
-              <option value="Cash">Cash</option>
-              <option value="UPI">UPI</option>
-              {mode === "invoice" && <option value="Card">Card</option>}
-              <option value="Split">Split (Cash + UPI)</option>
-            </select>
+          {/* ✅ NEW: Smart Payment Section */}
+          <div className="control-card">
+            <h3>Payment Options</h3>
+            <label className="select-label">Transaction Type</label>
+            <div style={{ display: 'flex', gap: '5px', marginBottom: '15px' }}>
+              <Button variant={txType === "sale" ? "default" : "outline"} onClick={() => {setTxType("sale"); markDirty();}} style={{flex: 1, padding: "0 5px"}}>Sale</Button>
+              <Button variant={txType === "booking" ? "default" : "outline"} onClick={() => {setTxType("booking"); markDirty();}} style={{flex: 1, padding: "0 5px"}}>Booking</Button>
+              <Button variant={txType === "service" ? "default" : "outline"} onClick={() => {setTxType("service"); markDirty();}} style={{flex: 1, padding: "0 5px"}}>Service</Button>
+            </div>
 
-            {paymentMethod === "Split" && (
-              <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
-                <Input value={splitCash} onChange={(e) => { setSplitCash(e.target.value); markDirty(); }} placeholder="Cash Received ₹" />
-                <Input value={`UPI: ₹${money(Math.max(0, computed.grandTotal - num(splitCash)))}`} disabled style={{ backgroundColor: "#f1f5f9" }} />
+            {txType === "sale" && (
+              <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                <label className="select-label">Payment Method</label>
+                <select value={paymentMethod} onChange={(e) => { setPaymentMethod(e.target.value); markDirty(); }} className="native-select">
+                  <option value="" disabled>Select Method</option>
+                  <option value="Cash">Cash</option>
+                  <option value="UPI">UPI</option>
+                  {mode === "invoice" && <option value="Card">Card</option>}
+                  <option value="Split">Split (Cash + UPI)</option>
+                </select>
+
+                {paymentMethod === "Split" && (
+                  <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+                    <Input value={splitCash} onChange={(e) => { setSplitCash(e.target.value); markDirty(); }} placeholder="Cash Received ₹" />
+                    <Input value={`UPI: ₹${money(Math.max(0, computed.grandTotal - num(splitCash)))}`} disabled style={{ backgroundColor: "#f1f5f9" }} />
+                  </div>
+                )}
+
+                <div 
+                  style={{ marginTop: "15px", padding: "12px", backgroundColor: isPaymentDone ? "#dcfce7" : "#fef3c7", border: `1.5px solid ${isPaymentDone ? "#22c55e" : "#f59e0b"}`, borderRadius: "8px", display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} 
+                  onClick={() => { setIsPaymentDone(!isPaymentDone); markDirty(); }}
+                >
+                  <input type="checkbox" checked={isPaymentDone} onChange={(e) => { setIsPaymentDone(e.target.checked); markDirty(); }} onClick={(e) => e.stopPropagation()} style={{ width: "20px", height: "20px", cursor: "pointer" }} />
+                  <strong style={{ color: isPaymentDone ? "#166534" : "#b45309", fontSize: "1.1rem" }}>{isPaymentDone ? "✅ PAYMENT DONE" : "⏳ PAYMENT PENDING"}</strong>
+                </div>
               </div>
             )}
 
-            <div 
-              style={{ marginTop: "15px", padding: "12px", backgroundColor: isPaymentDone ? "#dcfce7" : "#fef3c7", border: `1.5px solid ${isPaymentDone ? "#22c55e" : "#f59e0b"}`, borderRadius: "8px", display: "flex", alignItems: "center", gap: "10px", cursor: "pointer", transition: "all 0.2s" }} 
-              onClick={() => { setIsPaymentDone(!isPaymentDone); markDirty(); }}
-            >
-              <input 
-                type="checkbox" 
-                checked={isPaymentDone} 
-                onChange={(e) => { setIsPaymentDone(e.target.checked); markDirty(); }} 
-                onClick={(e) => e.stopPropagation()} 
-                style={{ width: "20px", height: "20px", cursor: "pointer" }} 
-              />
-              <strong style={{ color: isPaymentDone ? "#166534" : "#b45309", fontSize: "1.1rem" }}>
-                {isPaymentDone ? "✅ PAYMENT DONE" : "⏳ PAYMENT PENDING"}
-              </strong>
-            </div>
+            {(txType === "booking" || txType === "service") && (
+              <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                <h4 style={{ margin: '0 0 10px 0', color: '#16a34a' }}>Advance Payment</h4>
+                <Input placeholder="Advance Received ₹" value={advanceAmount} onChange={e => {setAdvanceAmount(e.target.value); markDirty();}} style={{ marginBottom: '10px' }} />
+                
+                <select value={advanceMethod} onChange={(e) => { setAdvanceMethod(e.target.value); markDirty(); }} className="native-select">
+                  <option value="" disabled>Select Advance Method</option>
+                  <option value="Cash">Cash</option>
+                  <option value="UPI">UPI</option>
+                  {mode === "invoice" && <option value="Card">Card</option>}
+                  <option value="Split">Split (Cash + UPI)</option>
+                </select>
 
-            <textarea value={notes} onChange={(e) => { setNotes(e.target.value); markDirty(); }} placeholder="Notes" className="notes-box" style={{ marginTop: "15px" }} />
+                {advanceMethod === "Split" && (
+                  <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+                    <Input value={advanceSplitCash} onChange={(e) => { setAdvanceSplitCash(e.target.value); markDirty(); }} placeholder="Cash Portion ₹" />
+                    <Input value={`UPI: ₹${money(Math.max(0, num(advanceAmount) - num(advanceSplitCash)))}`} disabled style={{ backgroundColor: "#f1f5f9" }} />
+                  </div>
+                )}
+
+                <div 
+                  style={{ marginTop: "15px", padding: "10px", backgroundColor: isAdvancePaid ? "#dcfce7" : "#fef3c7", border: `1px solid ${isAdvancePaid ? "#22c55e" : "#f59e0b"}`, borderRadius: "8px", display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} 
+                  onClick={() => { setIsAdvancePaid(!isAdvancePaid); markDirty(); }}
+                >
+                  <input type="checkbox" checked={isAdvancePaid} onChange={(e) => { setIsAdvancePaid(e.target.checked); markDirty(); }} onClick={(e) => e.stopPropagation()} style={{ width: "16px", height: "16px" }} />
+                  <strong style={{ color: isAdvancePaid ? "#166534" : "#b45309" }}>{isAdvancePaid ? "✅ ADVANCE COLLECTED" : "⏳ ADVANCE PENDING"}</strong>
+                </div>
+
+                <div style={{ borderTop: '2px dashed #cbd5e1', margin: '20px 0' }}></div>
+                
+                <h4 style={{ margin: '0 0 10px 0', color: '#dc2626', display: 'flex', justifyContent: 'space-between' }}>
+                  Balance Payment
+                  <span>Due: ₹{money(Math.max(0, computed.grandTotal - num(advanceAmount)))}</span>
+                </h4>
+                
+                <select value={balanceMethod} onChange={(e) => { setBalanceMethod(e.target.value); markDirty(); }} className="native-select">
+                  <option value="" disabled>Select Balance Method</option>
+                  <option value="Cash">Cash</option>
+                  <option value="UPI">UPI</option>
+                  {mode === "invoice" && <option value="Card">Card</option>}
+                  <option value="Split">Split (Cash + UPI)</option>
+                </select>
+
+                {balanceMethod === "Split" && (
+                  <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+                    <Input value={balanceSplitCash} onChange={(e) => { setBalanceSplitCash(e.target.value); markDirty(); }} placeholder="Cash Portion ₹" />
+                    <Input value={`UPI: ₹${money(Math.max(0, (computed.grandTotal - num(advanceAmount)) - num(balanceSplitCash)))}`} disabled style={{ backgroundColor: "#f1f5f9" }} />
+                  </div>
+                )}
+
+                <div 
+                  style={{ marginTop: "15px", padding: "10px", backgroundColor: isBalancePaid ? "#dcfce7" : "#fef3c7", border: `1px solid ${isBalancePaid ? "#22c55e" : "#f59e0b"}`, borderRadius: "8px", display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} 
+                  onClick={() => { setIsBalancePaid(!isBalancePaid); markDirty(); }}
+                >
+                  <input type="checkbox" checked={isBalancePaid} onChange={(e) => { setIsBalancePaid(e.target.checked); markDirty(); }} onClick={(e) => e.stopPropagation()} style={{ width: "16px", height: "16px" }} />
+                  <strong style={{ color: isBalancePaid ? "#166534" : "#b45309" }}>{isBalancePaid ? "✅ BALANCE COLLECTED" : "⏳ BALANCE PENDING"}</strong>
+                </div>
+
+              </div>
+            )}
+
+            <textarea value={notes} onChange={(e) => { setNotes(e.target.value); markDirty(); }} placeholder="Notes / Descriptions" className="notes-box" style={{ marginTop: "15px" }} />
           </div>
 
           <div className="control-card action-grid">
@@ -2054,14 +2212,14 @@ export default function App() {
                       
                       <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
                         
-                        <label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85rem", cursor: "pointer", marginRight: "5px", padding: "4px 8px", backgroundColor: b.is_payment_done ? "#dcfce7" : "#fef3c7", color: b.is_payment_done ? "#166534" : "#b45309", borderRadius: "5px", fontWeight: "bold" }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85rem", cursor: "pointer", marginRight: "5px", padding: "4px 8px", backgroundColor: (b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "#dcfce7" : "#fef3c7", color: (b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "#166534" : "#b45309", borderRadius: "5px", fontWeight: "bold" }}>
                           <input 
                             type="checkbox" 
-                            checked={b.is_payment_done || false} 
+                            checked={(b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) || false} 
                             onChange={() => handleQuickPaymentToggle(b)} 
                             style={{ cursor: "pointer" }}
                           />
-                          {b.is_payment_done ? "Paid" : "Pending"}
+                          {(b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "Paid" : "Pending"}
                         </label>
 
                         <Button size="sm" variant="destructive" style={{ backgroundColor: "#ef4444", color: "white" }} onClick={() => handleDeleteBill(b)}>Delete</Button>
@@ -2194,6 +2352,7 @@ export default function App() {
             {settingsTab === "technical" && (
               <div className="settings-technical-tab" style={{ width: "100%" }}>
                 
+                {/* NEW CUSTOM FONT UPLOAD */}
                 <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f0fdf4", width: "100%", boxSizing: "border-box" }}>
                   <h4 style={{ margin: "0 0 10px 0", color: "#166534", display: "flex", alignItems: "center", gap: "8px" }}><Upload size={18} /> Upload Custom Font</h4>
                   <p style={{ fontSize: "0.75rem", color: "#666", marginBottom: "10px" }}>Upload a .ttf or .otf file to use it in your bill design.</p>
