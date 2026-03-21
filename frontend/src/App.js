@@ -18,6 +18,7 @@ const createItem = (defaultHsn = "") => ({
   hsn: defaultHsn,
   weight: "",
   quantity: "1",
+  extra_making_charge: "", // Premium brand extra making charge
   rate_override: "",
   amount_override: "",
 });
@@ -52,6 +53,12 @@ const defaultSettings = {
   making_charge_per_gram: 15,
   default_hsn: "7113",
   formula_note: "Line total = Weight x (Silver rate per gram + Making charge per gram)",
+  
+  // < 5g Auto-Rule Settings
+  apply_small_item_rule: true,
+  small_item_weight_limit: 5,
+  small_item_fixed_charge: 50,
+
   logo_data_url: "",
   about_qr_data_url: STATIC_ABOUT_QR_URL,
   custom_fonts: [],
@@ -495,17 +502,37 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [customer.phone, customer.name, token, isPublicView, authHeaders]);
 
+  // ✅ SMART ENGINE: Handles < 5g Rule and Premium Extra Making Charge
   const computed = useMemo(() => {
-    const baseRate = num(settings.silver_rate_per_gram) + num(settings.making_charge_per_gram);
+    const silverRate = num(settings.silver_rate_per_gram);
+    const stdMaking = num(settings.making_charge_per_gram);
+    
+    const applySmallRule = settings.apply_small_item_rule !== false;
+    const smallWeightLimit = num(settings.small_item_weight_limit || 5);
+    const smallFixedCharge = num(settings.small_item_fixed_charge || 50);
+
     const mapped = items.map((item, index) => {
-      const rate = item.rate_override !== "" ? num(item.rate_override) : baseRate;
       const weight = num(item.weight);
-      const quantity = Math.max(num(item.quantity), 1);
-      const formulaAmount = mode === "estimate" ? weight * rate * quantity : weight * rate;
-      const amount = item.amount_override !== "" ? num(item.amount_override) : formulaAmount;
-      const rupees = Math.floor(amount);
-      const paise = Math.round((amount - rupees) * 100).toString().padStart(2, "0");
-      return { ...item, slNo: index + 1, rate, quantity, amount, rupees, paise };
+      const quantity = Math.max(num(item.quantity || 1), 1);
+      const extraMaking = num(item.extra_making_charge);
+      
+      let appliedRate = silverRate + stdMaking + extraMaking;
+      let formulaAmount = 0;
+
+      if (applySmallRule && weight > 0 && weight < smallWeightLimit) {
+         // < 5g Rule: (Weight x (Silver Rate + Premium Making)) + ₹50 Total Charge
+         appliedRate = silverRate + extraMaking; 
+         const baseAmount = (weight * appliedRate) + smallFixedCharge;
+         formulaAmount = mode === "estimate" ? baseAmount * quantity : baseAmount;
+      } else {
+         formulaAmount = mode === "estimate" ? weight * appliedRate * quantity : weight * appliedRate;
+      }
+
+      const rate = (item.rate_override !== "" && item.rate_override !== null && item.rate_override !== undefined) ? num(item.rate_override) : appliedRate;
+      const amount = (item.amount_override !== "" && item.amount_override !== null && item.amount_override !== undefined) ? num(item.amount_override) : formulaAmount;
+      
+      const { rupees, paise } = splitAmount(amount);
+      return { ...item, slNo: index + 1, sl_no: item.sl_no || (index + 1), rate, quantity, amount, rupees, paise, weight };
     });
 
     const subtotal = mapped.reduce((sum, row) => sum + row.amount, 0);
@@ -520,7 +547,7 @@ export default function App() {
     const roundOff = manualRoundOff === "" ? autoRound : num(manualRoundOff);
     const grandTotal = baseTotal + roundOff;
 
-    return { items: mapped, baseRate, subtotal, taxable, cgst, sgst, igst, mdr, roundOff, grandTotal };
+    return { items: mapped, baseRate: silverRate + stdMaking, subtotal, taxable, cgst, sgst, igst, mdr, roundOff, grandTotal };
   }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff]);
 
   const getUpiAmount = () => {
@@ -566,7 +593,6 @@ export default function App() {
     setCustomer({ name: "", phone: "", address: "", email: "" });
     setSuggestions([]); setDiscount("0"); setExchange("0"); setManualRoundOff("");
     
-    // Reset transaction states
     setTxType("sale");
     setPaymentMethod(""); setSplitCash(""); setIsPaymentDone(false); 
     setAdvanceAmount(""); setAdvanceMethod(""); setAdvanceSplitCash(""); setIsAdvancePaid(false);
@@ -595,7 +621,6 @@ export default function App() {
     setDocumentNumber(bill.document_number);
     setBillDate(bill.date || today());
     
-    // Load Customer perfectly mapping flat fields
     setCustomer({ 
       name: bill.customer_name || bill.customer?.name || "", 
       phone: bill.customer_phone || bill.customer?.phone || "", 
@@ -623,8 +648,12 @@ export default function App() {
     setManualRoundOff(bill.totals?.round_off !== null && bill.totals?.round_off !== undefined ? String(bill.totals.round_off) : "");
 
     const loadedItems = (bill.items || []).map((item) => ({
-      id: `${Date.now()}-${Math.random()}`, description: item.description || "", hsn: item.hsn || "",
-      weight: item.weight ? String(item.weight) : "", quantity: item.quantity ? String(item.quantity) : "1",
+      id: `${Date.now()}-${Math.random()}`, 
+      description: item.description || "", 
+      hsn: item.hsn || "",
+      weight: item.weight ? String(item.weight) : "", 
+      quantity: item.quantity ? String(item.quantity) : "1",
+      extra_making_charge: item.extra_making_charge ? String(item.extra_making_charge) : "",
       rate_override: item.rate_override !== null && item.rate_override !== undefined ? String(item.rate_override) : "",
       amount_override: item.amount_override !== null && item.amount_override !== undefined ? String(item.amount_override) : "",
     }));
@@ -853,6 +882,7 @@ export default function App() {
           hsn: item.hsn, 
           weight: num(item.weight), 
           quantity: num(item.quantity), 
+          extra_making_charge: item.extra_making_charge === "" ? null : num(item.extra_making_charge),
           rate_override: item.rate_override === "" ? null : num(item.rate_override), 
           amount_override: item.amount_override === "" ? null : num(item.amount_override),
           rate: item.rate,
@@ -955,21 +985,40 @@ export default function App() {
   const todaysTotalEstBank = todayBills.filter(b => b.is_payment_done && b.mode === 'estimate').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? b.totals.grand_total : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
   const todaysTotalInvBank = todayBills.filter(b => b.is_payment_done && b.mode === 'invoice').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? b.totals.grand_total : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
 
+  // ✅ PUBLIC VIEW SMART CALCULATION ENGINE
   const publicComputedItems = useMemo(() => {
     if (!publicBill || !publicSettings) return [];
-    const baseRate = num(publicSettings.silver_rate_per_gram) + num(publicSettings.making_charge_per_gram);
+    
+    const silverRate = num(publicSettings.silver_rate_per_gram);
+    const stdMaking = num(publicSettings.making_charge_per_gram);
+    const applySmallRule = publicSettings.apply_small_item_rule !== false;
+    const smallWeightLimit = num(publicSettings.small_item_weight_limit || 5);
+    const smallFixedCharge = num(publicSettings.small_item_fixed_charge || 50);
+
     return publicBill.items.map((item, index) => {
-      const rate = (item.rate !== undefined && item.rate !== null) ? num(item.rate) : (item.rate_override ? num(item.rate_override) : baseRate);
       const weight = num(item.weight);
       const quantity = Math.max(num(item.quantity || 1), 1);
-      const formulaAmount = publicBill.mode === "estimate" ? weight * rate * quantity : weight * rate;
+      const extraMaking = num(item.extra_making_charge);
+      
+      let appliedRate = silverRate + stdMaking + extraMaking;
+      let formulaAmount = 0;
+
+      if (applySmallRule && weight > 0 && weight < smallWeightLimit) {
+         appliedRate = silverRate + extraMaking; 
+         const baseAmount = (weight * appliedRate) + smallFixedCharge;
+         formulaAmount = publicBill.mode === "estimate" ? baseAmount * quantity : baseAmount;
+      } else {
+         formulaAmount = publicBill.mode === "estimate" ? weight * appliedRate * quantity : weight * appliedRate;
+      }
+
+      const rate = (item.rate !== undefined && item.rate !== null) ? num(item.rate) : (item.rate_override ? num(item.rate_override) : appliedRate);
       const amount = (item.amount !== undefined && item.amount !== null) ? num(item.amount) : (item.amount_override ? num(item.amount_override) : formulaAmount);
+      
       const { rupees, paise } = splitAmount(amount);
       return { ...item, sl_no: item.sl_no || (index + 1), rate, amount, rupees, paise, weight, quantity };
     });
   }, [publicBill, publicSettings]);
 
-  // PUBLIC VIEW BLOCK
   if (isPublicView) {
     if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
     if (publicBill === "NOT_FOUND" || !publicBill) return <div className="loading-screen">Bill not found or has been deleted.</div>;
@@ -1103,12 +1152,12 @@ export default function App() {
             <p><strong>Phone:</strong> {publicBill.customer_phone || publicBill.customer?.phone || "-"}</p>
           </div>
 
-          <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
+          <table className="bill-table" style={{ width: "100%" }}>
             <thead>
               {publicBill.mode === "invoice" ? (
-                <tr><th>Sl. No.</th><th>DESCRIPTION</th><th>HSN</th><th>WEIGHT IN GRAMS</th><th>RATE PER GRAM Rs.</th><th>AMOUNT</th></tr>
+                <tr><th>Sl. No.</th><th>DESCRIPTION</th><th>HSN</th><th>WEIGHT IN GRAMS</th><th>RATE PER GRAM Rs.</th><th>AMOUNT Ps.</th></tr>
               ) : (
-                <tr><th>Sl. No.</th><th>Particulars</th><th>Weight</th><th>Qty x Rate</th><th>Rate</th><th>Amount</th></tr>
+                <tr><th>Sl. No.</th><th>Particulars</th><th>Weight</th><th>Qty x Rate</th><th>Amount Rs.</th><th>Ps.</th></tr>
               )}
             </thead>
             <tbody>
@@ -1130,8 +1179,8 @@ export default function App() {
                         <td>{item.description || "-"}</td>
                         <td>{money(item.weight)}</td>
                         <td>{money(item.quantity)} x {money(item.rate)}</td>
-                        <td>{money(item.rate)}</td>
-                        <td>{item.rupees}.{item.paise}</td>
+                        <td>{item.rupees}</td>
+                        <td>{item.paise}</td>
                       </>
                     )}
                   </tr>
@@ -1180,34 +1229,35 @@ export default function App() {
                   </div>
                 </>
               )}
+
+              {showPublicUpi && (
+                <div className="payment-qr-box">
+                  <p className="scan-title" style={{ marginBottom: "15px" }}>Click Below to Pay ₹{money(publicUpiAmt)}</p>
+                  
+                  <a 
+                    href={publicUpiUri} 
+                    style={{
+                      display: "block",
+                      padding: "12px 20px",
+                      backgroundColor: "#16a34a",
+                      color: "white",
+                      textDecoration: "none",
+                      fontWeight: "bold",
+                      borderRadius: "8px",
+                      textAlign: "center",
+                      boxShadow: "0 4px 6px rgba(0,0,0,0.1)"
+                    }}
+                  >
+                    📱 Pay ₹{money(publicUpiAmt)} via UPI App
+                  </a>
+                </div>
+              )}
             </div>
 
-            {showPublicUpi && (
-              <div className="payment-qr-box">
-                <p className="scan-title" style={{ marginBottom: "15px" }}>Click Below to Pay ₹{money(publicUpiAmt)}</p>
-                <a 
-                  href={publicUpiUri} 
-                  style={{ display: "block", padding: "12px 20px", backgroundColor: "#16a34a", color: "white", textDecoration: "none", fontWeight: "bold", borderRadius: "8px", textAlign: "center", boxShadow: "0 4px 6px rgba(0,0,0,0.1)" }}
-                >
-                  📱 Pay ₹{money(publicUpiAmt)} via Any UPI App
-                </a>
-                
-                <div style={{ marginTop: "20px" }}>
-                  <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>
-                    Or select your app directly:
-                  </p>
-                  <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
-                    <a href={publicUpiUri.replace("upi://pay", "phonepe://pay")} style={{ padding: "8px 16px", backgroundColor: "#5f259f", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>PhonePe</a>
-                    <a href={publicUpiUri.replace("upi://pay", "tez://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#1a73e8", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>G-Pay</a>
-                    <a href={publicUpiUri.replace("upi://pay", "paytmmp://pay")} style={{ padding: "8px 16px", backgroundColor: "#00baf2", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>Paytm</a>
-                    <a href={publicUpiUri.replace("upi://pay", "credpay://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#212121", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>CRED</a>
-                  </div>
-                </div>
-              </div>
-            )}
-
             <div style={{ marginTop: "25px", borderTop: "1px dashed #e2e8f0", paddingTop: "20px" }}>
-              <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Connect With Us:</p>
+              <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>
+                Connect With Us:
+              </p>
               <div style={{ display: 'flex', gap: '10px' }}>
                 <a href="https://chat.whatsapp.com/FHoih8XtTXGLtPvHWx7MO6?mode=gi_t" target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "12px", backgroundColor: "#25D366", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
                   <span style={{ fontSize: "1.2rem" }}>💬</span> WhatsApp Group
@@ -1339,7 +1389,7 @@ export default function App() {
                     {b.mode === "invoice" ? (
                       <tr><th>Sl. No.</th><th>DESCRIPTION</th><th>HSN</th><th>WEIGHT IN GRAMS</th><th>RATE PER GRAM Rs.</th><th>AMOUNT</th></tr>
                     ) : (
-                      <tr><th>Sl. No.</th><th>Particulars</th><th>Weight</th><th>Qty x Rate</th><th>Rate</th><th>Amount</th></tr>
+                      <tr><th>Sl. No.</th><th>Particulars</th><th>Weight</th><th>Qty x Rate</th><th>Amount Rs.</th><th>Ps.</th></tr>
                     )}
                   </thead>
                   <tbody>
@@ -1362,8 +1412,8 @@ export default function App() {
                               <td>{item.description || "-"}</td>
                               <td>{money(item.weight)}</td>
                               <td>{money(item.quantity)} x {money(item.rate)}</td>
-                              <td>{money(item.rate)}</td>
-                              <td>{rupees}.{paise}</td>
+                              <td>{rupees}</td>
+                              <td>{paise}</td>
                             </>
                           )}
                         </tr>
@@ -1394,7 +1444,6 @@ export default function App() {
                       <span>GRAND TOTAL</span>
                       <strong>₹{money(b.totals?.grand_total)}</strong>
                     </div>
-
                     {b.tx_type && b.tx_type !== "sale" && (
                       <>
                         <div className="totals-row" style={{ marginTop: "10px", color: "#16a34a" }}>
@@ -1416,6 +1465,7 @@ export default function App() {
            );
         })}
       </div>
+      {/* END OF BULK PDF RENDERER */}
 
       <header className="top-bar no-print">
         <div className="brand-block" style={{ display: "flex", alignItems: "center", gap: "15px" }}>
@@ -1525,12 +1575,12 @@ export default function App() {
             <p><strong>Phone:</strong> {customer.phone || "-"}</p>
           </div>
 
-          <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
+          <table className="bill-table" style={{ width: "100%" }}>
             <thead>
               {mode === "invoice" ? (
                 <tr><th>Sl. No.</th><th>DESCRIPTION</th><th>HSN</th><th>WEIGHT IN GRAMS</th><th>RATE PER GRAM Rs.</th><th>AMOUNT</th></tr>
               ) : (
-                <tr><th>Sl. No.</th><th>Particulars</th><th>Weight</th><th>Qty x Rate</th><th>Rate</th><th>Amount</th></tr>
+                <tr><th>Sl. No.</th><th>Particulars</th><th>Weight</th><th>Qty x Rate</th><th>Amount Rs.</th><th>Ps.</th></tr>
               )}
             </thead>
             <tbody>
@@ -1551,8 +1601,8 @@ export default function App() {
                       <td>{item.description || "-"}</td>
                       <td>{money(item.weight)}</td>
                       <td>{money(item.quantity)} x {money(item.rate)}</td>
-                      <td>{money(item.rate)}</td>
-                      <td>{item.rupees}.{item.paise}</td>
+                      <td>{item.rupees}</td>
+                      <td>{item.paise}</td>
                     </>
                   )}
                 </tr>
@@ -1588,6 +1638,7 @@ export default function App() {
                 <strong>₹{money(computed.grandTotal)}</strong>
               </div>
 
+              {/* ✅ NEW: Display Advance & Balance Due */}
               {txType !== "sale" && (
                 <>
                   <div className="totals-row" style={{ marginTop: "10px", color: "#16a34a" }}>
@@ -1622,8 +1673,11 @@ export default function App() {
                 </div>
                 <div className="no-print" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
                   <div onClick={() => {
-                      if(activeBillBranch.map_url && activeBillBranch.map_url !== "#") window.open(activeBillBranch.map_url, "_blank");
-                      else toast.info("Feedback link not set for this branch yet!");
+                      if(activeBillBranch.map_url && activeBillBranch.map_url !== "#") {
+                          window.open(activeBillBranch.map_url, "_blank");
+                      } else {
+                          toast.info("Feedback link not set for this branch yet!");
+                      }
                   }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
                 </div>
               </div>
@@ -1642,8 +1696,11 @@ export default function App() {
                 </div>
                 <div className="no-print" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
                   <div onClick={() => {
-                      if(activeBillBranch.map_url && activeBillBranch.map_url !== "#") window.open(activeBillBranch.map_url, "_blank");
-                      else toast.info("Feedback link not set for this branch yet!");
+                      if(activeBillBranch.map_url && activeBillBranch.map_url !== "#") {
+                          window.open(activeBillBranch.map_url, "_blank");
+                      } else {
+                          toast.info("Feedback link not set for this branch yet!");
+                      }
                   }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
                 </div>
               </div>
@@ -1671,7 +1728,9 @@ export default function App() {
                             const res = await axios.get(`${API}/bills/next-number?mode=${mode}&branch_id=${nextBranch}`, { headers: authHeaders });
                             setDocumentNumber(res.data.document_number);
                             toast.info(`Migrating to Branch: ${nextBranch}`);
-                          } catch (err) { toast.error("Failed to fetch new number for migration."); }
+                          } catch (err) {
+                            toast.error("Failed to fetch new number for migration.");
+                          }
                         } else {
                           await reserveNumber(mode, nextBranch); 
                         }
@@ -1725,6 +1784,10 @@ export default function App() {
                 <Input value={item.hsn} onChange={(e) => updateItem(item.id, "hsn", e.target.value)} placeholder="HSN" />
                 <Input value={item.weight} onChange={(e) => updateItem(item.id, "weight", e.target.value)} placeholder="Weight" />
                 <Input value={item.quantity} onChange={(e) => updateItem(item.id, "quantity", e.target.value)} placeholder="Qty" />
+                
+                {/* ✅ ADDED: Premium Extra Making Charge Box */}
+                <Input value={item.extra_making_charge} onChange={(e) => updateItem(item.id, "extra_making_charge", e.target.value)} placeholder="Premium Making /g" />
+                
                 <Input value={item.rate_override} onChange={(e) => updateItem(item.id, "rate_override", e.target.value)} placeholder="Rate override" />
                 <Input value={item.amount_override} onChange={(e) => updateItem(item.id, "amount_override", e.target.value)} placeholder="Amount override" />
                 <Button type="button" variant="outline" onClick={() => { setItems((prev) => prev.filter((row) => row.id !== item.id)); markDirty(); }} disabled={items.length === 1}>Remove</Button>
@@ -1834,6 +1897,7 @@ export default function App() {
                   <input type="checkbox" checked={isBalancePaid} onChange={(e) => { setIsBalancePaid(e.target.checked); markDirty(); }} onClick={(e) => e.stopPropagation()} style={{ width: "16px", height: "16px" }} />
                   <strong style={{ color: isBalancePaid ? "#166534" : "#b45309" }}>{isBalancePaid ? "✅ BALANCE COLLECTED" : "⏳ BALANCE PENDING"}</strong>
                 </div>
+
               </div>
             )}
 
@@ -1854,11 +1918,13 @@ export default function App() {
             <Button onClick={shareEmail}>Email Link</Button>
             
             <Button onClick={handleNewBillClick} variant="outline">New Bill</Button>
+            
             <Button onClick={() => setShowSettings(true)} variant="outline">Settings</Button>
           </div>
         </aside>
       </main>
 
+      {/* DAILY SALES, LEDGER & EXPENSE DRAWER */}
       {showLedger && (
         <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "650px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
           <div className="drawer-header" style={{ backgroundColor: "#f0fdf4", borderBottom: "2px solid #bbf7d0", padding: "20px", position: "sticky", top: 0, zIndex: 10 }}>
@@ -1869,6 +1935,7 @@ export default function App() {
           </div>
 
           <div style={{ padding: "20px" }}>
+            
             <div style={{ marginBottom: "25px" }}>
               <h4 style={{ margin: "0 0 15px 0", fontSize: "1.1rem", color: "#1e293b" }}>Live Vault Balances</h4>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
@@ -2070,6 +2137,7 @@ export default function App() {
         </section>
       )}
 
+      {/* RECENT BILLS DRAWER */}
       {showRecentBills && (
         <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "550px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
           <div className="drawer-header" style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10, paddingBottom: "15px", borderBottom: "1px solid #e2e8f0" }}>
@@ -2081,8 +2149,13 @@ export default function App() {
 
           <div style={{ padding: "15px" }}>
             
+            {/* BULK PDF EXPORT BUTTON */}
             <div style={{ marginBottom: "20px" }}>
-              <Button onClick={handleBulkDownload} disabled={isBulkDownloading || filteredRecentBills.length === 0} style={{ width: "100%", backgroundColor: "#0f172a", height: "auto", padding: "10px", display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", justifyContent: "center", fontSize: "1rem", boxSizing: "border-box" }}>
+              <Button
+                onClick={handleBulkDownload}
+                disabled={isBulkDownloading || filteredRecentBills.length === 0}
+                style={{ width: "100%", backgroundColor: "#0f172a", height: "auto", padding: "10px", display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", justifyContent: "center", fontSize: "1rem", boxSizing: "border-box" }}
+              >
                 {isBulkDownloading ? "Generating PDF... Please Wait" : <><Download size={18} /> Download {filteredRecentBills.length} Bills as Single PDF</>}
               </Button>
               <p style={{ fontSize: "0.75rem", color: "#64748b", textAlign: "center", marginTop: "5px" }}>
@@ -2188,6 +2261,7 @@ export default function App() {
         </section>
       )}
 
+      {/* SETTINGS DRAWER WITH BRANCHES */}
       {showSettings && (
         <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "500px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
           <div className="drawer-header">
@@ -2206,6 +2280,7 @@ export default function App() {
 
             {settingsTab === "design" && (
               <div className="settings-design-tab" style={{ width: "100%" }}>
+                {/* SHOP NAME SETTINGS */}
                 <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
                   <h4 style={{ margin: "0 0 10px 0" }}>Shop Name</h4>
                   <Input value={settings.shop_name} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name: e.target.value }))} placeholder="Shop name" style={{ marginBottom: "10px", width: "100%", boxSizing: "border-box" }} />
@@ -2223,6 +2298,7 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* TAGLINE SETTINGS */}
                 <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
                   <h4 style={{ margin: "0 0 10px 0" }}>Tagline</h4>
                   <Input value={settings.tagline} onChange={(e) => setSettings((prev) => ({ ...prev, tagline: e.target.value }))} placeholder="Tagline" style={{ marginBottom: "10px", width: "100%", boxSizing: "border-box" }} />
@@ -2240,8 +2316,9 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* ADDRESS DESIGN (Global) */}
                 <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
-                  <h4 style={{ margin: "0 0 10px 0" }}>Address Style</h4>
+                  <h4 style={{ margin: "0 0 10px 0" }}>Address Style (Content managed in Branches Tab)</h4>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", width: "100%" }}>
                     <input type="color" value={settings.address_color || "#475569"} onChange={(e) => setSettings((prev) => ({ ...prev, address_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px", flexShrink: 0 }} title="Color" />
                     <Input type="number" min="8" max="30" value={settings.address_size || 14} onChange={(e) => setSettings((prev) => ({ ...prev, address_size: Number(e.target.value) }))} style={{ width: "70px", padding: "0 5px", textAlign: "center", flexShrink: 0 }} title="Font Size (px)" />
@@ -2256,6 +2333,7 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* PHONE NUMBERS SETTINGS */}
                 <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
                   <h4 style={{ margin: "0 0 10px 0" }}>Phone Numbers</h4>
                   <Input value={settings.phone_numbers.join(", ")} onChange={(e) => setSettings((prev) => ({ ...prev, phone_numbers: e.target.value.split(",").map((item) => item.trim()).filter(Boolean) }))} placeholder="Phone numbers (comma separated)" style={{ marginBottom: "10px", width: "100%", boxSizing: "border-box" }} />
@@ -2273,6 +2351,7 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* EMAIL SETTINGS */}
                 <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
                   <h4 style={{ margin: "0 0 10px 0" }}>Email</h4>
                   <Input value={settings.email} onChange={(e) => setSettings((prev) => ({ ...prev, email: e.target.value }))} placeholder="Email" style={{ marginBottom: "10px", width: "100%", boxSizing: "border-box" }} />
@@ -2314,20 +2393,44 @@ export default function App() {
                   )}
                 </div>
 
+                {/* ✅ ADDED: SMART RULE SETTINGS FOR < 5g */}
                 <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
-                  <h4 style={{ margin: "0 0 10px 0" }}>Math & Formulas</h4>
+                  <h4 style={{ margin: "0 0 10px 0" }}>Math & Auto-Rules</h4>
                   
                   <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Silver Rate (per gram)</label>
-                  <Input value={settings.silver_rate_per_gram} onChange={(e) => setSettings((prev) => ({ ...prev, silver_rate_per_gram: num(e.target.value) }))} style={{ marginBottom: "2px" }} />
-                  <p style={{ fontSize: "0.75rem", color: "#666", marginBottom: "10px", marginTop: "0" }}>Example: 240</p>
+                  <Input value={settings.silver_rate_per_gram} onChange={(e) => setSettings((prev) => ({ ...prev, silver_rate_per_gram: num(e.target.value) }))} style={{ marginBottom: "10px" }} />
 
-                  <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Making Charge (per gram)</label>
-                  <Input value={settings.making_charge_per_gram} onChange={(e) => setSettings((prev) => ({ ...prev, making_charge_per_gram: num(e.target.value) }))} style={{ marginBottom: "2px" }} />
-                  <p style={{ fontSize: "0.75rem", color: "#666", marginBottom: "10px", marginTop: "0" }}>Example: 15</p>
+                  <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Standard Making Charge (per gram)</label>
+                  <Input value={settings.making_charge_per_gram} onChange={(e) => setSettings((prev) => ({ ...prev, making_charge_per_gram: num(e.target.value) }))} style={{ marginBottom: "15px" }} />
+                  
+                  <div style={{ borderTop: "1px dashed #cbd5e1", paddingTop: "15px", marginBottom: "10px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
+                      <input 
+                        type="checkbox" 
+                        checked={settings.apply_small_item_rule !== false} 
+                        onChange={(e) => setSettings(prev => ({...prev, apply_small_item_rule: e.target.checked}))}
+                        style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                      />
+                      <label style={{ fontSize: "0.8rem", fontWeight: "bold", color: "#1e293b", cursor: "pointer" }} onClick={() => setSettings(prev => ({...prev, apply_small_item_rule: prev.apply_small_item_rule === false}))}>
+                        Enable Under-Weight Auto Rule
+                      </label>
+                    </div>
+                    <p style={{ fontSize: "0.75rem", color: "#64748b", margin: "0 0 10px 0" }}>If enabled, items below a certain weight ignore standard making charges and use a flat fee: <em>(Weight × Silver Rate) + Fixed Charge</em></p>
+                    
+                    <div style={{ display: "flex", gap: "10px" }}>
+                       <div style={{ flex: 1 }}>
+                         <label style={{ fontSize: "0.75rem" }}>Under Weight (g)</label>
+                         <Input type="number" value={settings.small_item_weight_limit || 5} onChange={e => setSettings(prev => ({...prev, small_item_weight_limit: num(e.target.value)}))} />
+                       </div>
+                       <div style={{ flex: 1 }}>
+                         <label style={{ fontSize: "0.75rem" }}>Fixed Charge (₹)</label>
+                         <Input type="number" value={settings.small_item_fixed_charge || 50} onChange={e => setSettings(prev => ({...prev, small_item_fixed_charge: num(e.target.value)}))} />
+                       </div>
+                    </div>
+                  </div>
 
-                  <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Default HSN Code</label>
-                  <Input value={settings.default_hsn} onChange={(e) => setSettings((prev) => ({ ...prev, default_hsn: e.target.value }))} style={{ marginBottom: "2px" }} />
-                  <p style={{ fontSize: "0.75rem", color: "#666", marginBottom: "10px", marginTop: "0" }}>Example: 7113</p>
+                  <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold", marginTop: "15px" }}>Default HSN Code</label>
+                  <Input value={settings.default_hsn} onChange={(e) => setSettings((prev) => ({ ...prev, default_hsn: e.target.value }))} style={{ marginBottom: "10px" }} />
 
                   <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Formula Note (Prints on bill)</label>
                   <Input value={settings.formula_note} onChange={(e) => setSettings((prev) => ({ ...prev, formula_note: e.target.value }))} />
@@ -2355,132 +2458,4 @@ export default function App() {
                   </div>
 
                   <div style={{ width: "100%" }}>
-                    <label className="file-label" htmlFor="about-qr-upload-input" style={{ fontSize: "0.8rem" }}>Upload About Us QR</label>
-                    <input id="about-qr-upload-input" type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/*" onChange={handleAboutQrUpload} style={{ display: "block", marginBottom: "5px", maxWidth: "100%" }} />
-                    <span style={{ fontSize: "0.75rem", color: "#666", wordBreak: "break-all" }}>{aboutUploadName ? `Selected: ${aboutUploadName}` : "No QR selected"}</span>
-                    {(settings.about_qr_data_url || STATIC_ABOUT_QR_URL) && <img src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="QR preview" style={{ maxWidth: "80px", marginTop: "5px", display: "block" }} />}
-                  </div>
-                </div>
-
-                <Button onClick={saveSettings} style={{ width: "100%", marginBottom: "15px" }}>Save Technical Settings</Button>
-
-                <div style={{ marginTop: "20px", padding: "15px", border: "1px solid #ef4444", borderRadius: "8px", backgroundColor: "#fef2f2", width: "100%", boxSizing: "border-box" }}>
-                  <h4 style={{ margin: "0 0 10px 0", color: "#b91c1c" }}>Database & Backup</h4>
-                  <div style={{ marginBottom: "15px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginBottom: "5px", color: "#7f1d1d" }}>
-                      <span>Storage Used: {(storageStats.used_bytes / 1024).toFixed(2)} KB</span>
-                      <span>{storageStats.percentage}%</span>
-                    </div>
-                    <div style={{ width: "100%", backgroundColor: "#fca5a5", borderRadius: "4px", height: "10px", overflow: "hidden" }}>
-                      <div style={{ width: `${storageStats.percentage}%`, backgroundColor: "#dc2626", height: "100%", transition: "width 0.5s ease" }}></div>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                    <Button type="button" variant="outline" onClick={handleBackupBills}>⬇️ Download Backup (JSON)</Button>
-                    <Button type="button" variant="destructive" style={{ backgroundColor: "#ef4444", color: "white" }} onClick={handleDeleteAllBills}>⚠️ Wipe All Bills (Clear Storage)</Button>
-                  </div>
-                </div>
-
-              </div>
-            )}
-
-            {settingsTab === "branches" && (
-               <div className="settings-branches-tab" style={{ width: "100%" }}>
-                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px", flexWrap: "wrap", gap: "10px" }}>
-                       <p style={{ margin: 0, fontSize: "0.9rem", color: "#475569" }}>Manage isolated branch ledgers and addresses here.</p>
-                       <Button size="sm" onClick={() => {
-                           const newBranch = {
-                               id: `B${Date.now()}`,
-                               name: "New Branch",
-                               address: "",
-                               map_url: "#",
-                               invoice_upi_id: "",
-                               estimate_upi_id: "",
-                               cash_balance: 0,
-                               estimate_bank_balance: 0,
-                               invoice_bank_balance: 0
-                           };
-                           setSettings(prev => ({ ...prev, branches: [...prev.branches, newBranch] }));
-                       }}>+ Add Branch</Button>
-                   </div>
-
-                   {settings.branches.map((b, index) => (
-                       <div key={b.id} style={{ padding: "15px", border: "1px solid #cbd5e1", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
-                           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "10px" }}>
-                              <h4 style={{ margin: 0, color: "var(--brand)" }}>Branch: {b.name}</h4>
-                              {settings.branches.length > 1 && (
-                                  <Button size="sm" variant="outline" style={{ borderColor: "#ef4444", color: "#ef4444", padding: "0 8px", height: "24px" }} onClick={() => {
-                                      if(window.confirm(`Delete ${b.name}?`)) {
-                                          setSettings(prev => ({ ...prev, branches: prev.branches.filter(x => x.id !== b.id) }));
-                                      }
-                                  }}>Delete</Button>
-                              )}
-                           </div>
-
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Branch Name (Internal Use)</label>
-                           <Input value={b.name} onChange={(e) => {
-                               const newBranches = [...settings.branches];
-                               newBranches[index].name = e.target.value;
-                               setSettings(prev => ({ ...prev, branches: newBranches }));
-                           }} style={{ marginBottom: "8px", width: "100%" }} />
-
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Printed Bill Address</label>
-                           <Input value={b.address} onChange={(e) => {
-                               const newBranches = [...settings.branches];
-                               newBranches[index].address = e.target.value;
-                               setSettings(prev => ({ ...prev, branches: newBranches }));
-                           }} style={{ marginBottom: "8px", width: "100%" }} />
-
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Google Maps Review Link</label>
-                           <Input value={b.map_url} onChange={(e) => {
-                               const newBranches = [...settings.branches];
-                               newBranches[index].map_url = e.target.value;
-                               setSettings(prev => ({ ...prev, branches: newBranches }));
-                           }} style={{ marginBottom: "8px", width: "100%" }} />
-
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Invoice UPI ID</label>
-                           <Input value={b.invoice_upi_id} onChange={(e) => {
-                               const newBranches = [...settings.branches];
-                               newBranches[index].invoice_upi_id = e.target.value;
-                               setSettings(prev => ({ ...prev, branches: newBranches }));
-                           }} style={{ marginBottom: "8px", width: "100%" }} />
-
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Estimate UPI ID</label>
-                           <Input value={b.estimate_upi_id} onChange={(e) => {
-                               const newBranches = [...settings.branches];
-                               newBranches[index].estimate_upi_id = e.target.value;
-                               setSettings(prev => ({ ...prev, branches: newBranches }));
-                           }} style={{ marginBottom: "8px", width: "100%" }} />
-                       </div>
-                   ))}
-
-                   <Button onClick={saveSettings} style={{ width: "100%", marginBottom: "15px" }}>Save Branch Settings</Button>
-               </div>
-            )}
-          </div>
-        </section>
-      )}
-
-      {showAbout && (
-        <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "500px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
-          <div className="drawer-header">
-            <h3>About This App</h3>
-            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowAbout(false)}>
-              <ArrowLeft className="drawer-back-icon" /><span>Back</span>
-            </Button>
-          </div>
-          
-          <div className="cloud-note" style={{ marginTop: "15px", padding: "0 15px", boxSizing: "border-box" }}>
-            <h4>Cloud Database Setup</h4>
-            <ol>
-              <li>Create Supabase project and get project URL + service role key.</li>
-              <li>Add them in backend <code>SUPABASE_URL</code> and <code>SUPABASE_SERVICE_ROLE_KEY</code>.</li>
-              <li>Create <code>customers</code> and <code>number_counters</code> tables as in README.</li>
-            </ol>
-            <p className="cloud-status-text">Cloud status: {cloudStatus.enabled ? "Connected" : "Placeholder mode"} ({cloudStatus.mode})</p>
-          </div>
-        </section>
-      )}
-    </div>
-  );
-}
+                    <label className="file-label
