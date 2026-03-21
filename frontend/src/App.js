@@ -27,65 +27,37 @@ const defaultSettings = {
   tagline: "The Silver Specialist",
   phone_numbers: ["+91 9583221115", "+91 9776177296", "+91 7538977527"],
   email: "jalaramjewellers26@gmail.com",
-
   shop_name_color: "#000000",
   shop_name_size: 26,
   shop_name_font: "sans-serif",
   shop_name_align: "center",
-
   tagline_color: "#475569",
   tagline_size: 12,
   tagline_font: "sans-serif",
   tagline_align: "center",
-
   address_color: "#475569",
   address_size: 14,
   address_font: "sans-serif",
   address_align: "center",
-
   phone_color: "#475569",
   phone_size: 13,
   phone_font: "sans-serif",
   phone_align: "center",
-
   email_color: "#475569",
   email_size: 13,
   email_font: "sans-serif",
   email_align: "center",
-
   gstin: "21AAUFJ1925F1ZH",
   silver_rate_per_gram: 240,
   making_charge_per_gram: 15,
   default_hsn: "7113",
   formula_note: "Line total = Weight × (Silver rate per gram + Making charge per gram)",
-  
   logo_data_url: "",
   about_qr_data_url: STATIC_ABOUT_QR_URL,
   custom_fonts: [],
-  
   branches: [
-    {
-      id: "B1",
-      name: "Branch 1 (Old Town)",
-      address: "Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2",
-      map_url: "https://g.page/r/CVvnomQZn7zxEBE/review",
-      invoice_upi_id: "eazypay.0000048595@icici",
-      estimate_upi_id: "7538977527@ybl",
-      cash_balance: 0,
-      estimate_bank_balance: 0,
-      invoice_bank_balance: 0
-    },
-    {
-      id: "B2",
-      name: "Branch 2 (Unit-2)",
-      address: "Branch - 2 : Shop No.14, BMC Market Complex, Market Building, Near Petrol Pump, Unit-2, BBSR-9",
-      map_url: "#",
-      invoice_upi_id: "eazypay.0000048595@icici",
-      estimate_upi_id: "7538977527@ybl",
-      cash_balance: 0,
-      estimate_bank_balance: 0,
-      invoice_bank_balance: 0
-    }
+    { id: "B1", name: "Branch 1 (Old Town)", address: "Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2", map_url: "https://g.page/r/CVvnomQZn7zxEBE/review", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 },
+    { id: "B2", name: "Branch 2 (Unit-2)", address: "Branch - 2 : Shop No.14, BMC Market Complex, Market Building, Near Petrol Pump, Unit-2, BBSR-9", map_url: "#", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 }
   ]
 };
 
@@ -347,22 +319,18 @@ export default function App() {
     });
   }, [recentBillsList, recentModeFilter, recentDateFilter, customStartDate, customEndDate]);
 
-  // ✅ FULLY FIXED BULK PDF: Forces Desktop width safely
+  // ✅ PERFECT BULK DOWNLOAD: Forces Absolute Virtual Desktop Rendering
   const handleBulkDownload = async () => {
     if (filteredRecentBills.length === 0) { toast.error("No bills to download!"); return; }
     if (filteredRecentBills.length > 20) {
       if (!window.confirm(`Generate PDF with ${filteredRecentBills.length} pages? This might take a minute.`)) return;
     }
     setIsBulkDownloading(true);
-    toast.info(`Preparing ${filteredRecentBills.length} bills for PDF...`);
+    toast.info(`Generating PDF for ${filteredRecentBills.length} bills...`);
     
-    const wasCompact = isCompactView;
-    if (wasCompact) setIsCompactView(false);
-    
-    // Extra time for iPad to render desktop view
-    await new Promise(resolve => setTimeout(resolve, 800));
-
     try {
+      await new Promise(resolve => setTimeout(resolve, 800));
+
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const pageWidth = pdf.internal.pageSize.getWidth();
 
@@ -371,33 +339,31 @@ export default function App() {
         const node = document.getElementById(`bulk-bill-${bill.document_number}`);
         if (!node) continue;
         
-        node.style.display = "block";
-        node.style.width = "800px";
-        node.style.minWidth = "800px";
-        node.style.maxWidth = "800px";
-
         const canvas = await html2canvas(node, { 
           scale: 2, 
           useCORS: true, 
           allowTaint: true,
-          backgroundColor: "#ffffff", 
+          backgroundColor: "#ffffff",
+          windowWidth: 1024,
           onclone: (clonedDoc) => {
             const clonedNode = clonedDoc.getElementById(`bulk-bill-${bill.document_number}`);
             if (clonedNode) {
               clonedNode.style.width = "800px";
               clonedNode.style.minWidth = "800px";
               clonedNode.style.maxWidth = "800px";
+              clonedNode.style.position = "absolute";
+              clonedNode.style.top = "0";
+              clonedNode.style.left = "0";
               clonedNode.style.padding = "20px";
               
+              const tables = clonedNode.getElementsByTagName('table');
+              for (let t of tables) { t.style.tableLayout = "fixed"; t.style.width = "100%"; }
+
               const images = clonedNode.getElementsByTagName('img');
-              for (let img of images) {
-                 img.crossOrigin = "anonymous";
-              }
+              for (let img of images) img.crossOrigin = "anonymous";
             }
           }
         });
-
-        node.style.display = "none"; // Hide after rendering
 
         const imgData = canvas.toDataURL("image/png", 1.0);
         const pageHeight = (canvas.height * pageWidth) / canvas.width;
@@ -410,7 +376,6 @@ export default function App() {
       toast.error("Error generating bulk PDF.");
     } finally { 
       setIsBulkDownloading(false); 
-      if (wasCompact) setIsCompactView(true);
     }
   };
 
@@ -866,54 +831,36 @@ export default function App() {
     finally { setSavingBill(false); }
   };
 
-  // ✅ FULLY FIXED: Forces iPad into Desktop layout during capture
+  // ✅ PERFECT SINGLE PDF DOWNLOAD: Forces Absolute Virtual Desktop Rendering
   const downloadPdf = async (elementId, filename) => {
     toast.info("Preparing PDF...");
-    const wasCompact = isCompactView;
-    if (wasCompact) setIsCompactView(false);
-
-    // Wait extra long for iPad Safari to finish redrawing the Desktop DOM
-    await new Promise(resolve => setTimeout(resolve, 800));
-
     const node = document.getElementById(elementId); 
-    if (!node) {
-      if (wasCompact) setIsCompactView(true);
-      return;
-    }
-
-    const originalWidth = node.style.width;
-    const originalMaxWidth = node.style.maxWidth;
-    const originalMinWidth = node.style.minWidth;
-    const originalMargin = node.style.margin;
-
-    // Hard-lock the live node width so Safari doesn't compress the table
-    node.style.width = "800px";
-    node.style.maxWidth = "800px";
-    node.style.minWidth = "800px";
-    node.style.margin = "0";
+    if (!node) return;
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
       const canvas = await html2canvas(node, { 
         scale: 2, 
         useCORS: true, 
         allowTaint: true,
         backgroundColor: "#ffffff",
+        windowWidth: 1024,
         onclone: (clonedDoc) => {
           const clonedNode = clonedDoc.getElementById(elementId);
           if (clonedNode) {
              clonedNode.style.width = "800px";
              clonedNode.style.maxWidth = "800px";
              clonedNode.style.minWidth = "800px";
+             clonedNode.style.position = "absolute";
+             clonedNode.style.top = "0";
+             clonedNode.style.left = "0";
              clonedNode.style.margin = "0";
              clonedNode.style.padding = "20px";
              
-             // Ensure images load properly in the clone
+             const tables = clonedNode.getElementsByTagName('table');
+             for (let t of tables) { t.style.tableLayout = "fixed"; t.style.width = "100%"; }
+             
              const images = clonedNode.getElementsByTagName('img');
-             for (let img of images) {
-                img.crossOrigin = "anonymous";
-             }
+             for (let img of images) img.crossOrigin = "anonymous";
           }
         }
       });
@@ -926,12 +873,6 @@ export default function App() {
       toast.success("PDF Downloaded Successfully");
     } catch (error) {
       toast.error("Failed to download PDF.");
-    } finally {
-      node.style.width = originalWidth;
-      node.style.maxWidth = originalMaxWidth;
-      node.style.minWidth = originalMinWidth;
-      node.style.margin = originalMargin;
-      if (wasCompact) setIsCompactView(true);
     }
   };
 
@@ -1099,7 +1040,7 @@ export default function App() {
             <p><strong>Phone:</strong> {publicBill.customer?.phone || "-"}</p>
           </div>
 
-          <table className="bill-table" style={{ width: "100%" }}>
+          <table className="bill-table" style={{ width: "100%", tableLayout: isCompactView ? "auto" : "fixed", wordWrap: "break-word" }}>
             <thead>
               {isCompactView ? (
                 <tr><th>#</th><th>Item</th><th>Wt / Rate</th><th>Amount</th></tr>
@@ -1210,7 +1151,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* ✅ FIX: About QR completely removed from Public View */}
             {publicBill.mode === "invoice" ? (
               <div className="declaration" style={{ marginTop: "20px" }}>
                 <p className="section-title">DECLARATION</p>
@@ -1297,7 +1237,7 @@ export default function App() {
 
       <Toaster position="bottom-right" />
 
-      {/* INVISIBLE BULK PDF RENDERER */}
+      {/* INVISIBLE BULK PDF RENDERER - USED ONLY FOR GENERATING MULTI-PAGE PDFS */}
       <div style={{ position: "absolute", top: "-9999px", left: "-9999px", opacity: 0, pointerEvents: "none" }}>
         {filteredRecentBills.map(b => {
            const billBranch = settings.branches.find(br => br.id === b.branch_id) || settings.branches[0];
@@ -1340,7 +1280,7 @@ export default function App() {
                   <p><strong>Phone:</strong> {b.customer?.phone || "-"}</p>
                 </div>
 
-                <table className="bill-table" style={{ width: "100%" }}>
+                <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
                   <thead>
                     {b.mode === "invoice" ? (
                       <tr><th>Sl. No.</th><th>DESCRIPTION</th><th>HSN</th><th>WEIGHT IN GRAMS</th><th>RATE PER GRAM Rs.</th><th>AMOUNT Ps.</th></tr>
@@ -1402,6 +1342,8 @@ export default function App() {
            );
         })}
       </div>
+      {/* END OF BULK PDF RENDERER */}
+
 
       <header className="top-bar no-print">
         <div className="brand-block" style={{ display: "flex", alignItems: "center", gap: "15px" }}>
@@ -1511,8 +1453,7 @@ export default function App() {
             <p><strong>Phone:</strong> {customer.phone || "-"}</p>
           </div>
 
-          {/* ✅ FIX: Removed fixed table layout so it flexes naturally on iPad */}
-          <table className="bill-table" style={{ width: "100%" }}>
+          <table className="bill-table" style={{ width: "100%", tableLayout: isCompactView ? "auto" : "fixed", wordWrap: "break-word" }}>
             <thead>
               {isCompactView ? (
                 <tr><th>#</th><th>Item</th><th>Wt / Rate</th><th>Amount</th></tr>
@@ -2253,7 +2194,6 @@ export default function App() {
             {settingsTab === "technical" && (
               <div className="settings-technical-tab" style={{ width: "100%" }}>
                 
-                {/* NEW CUSTOM FONT UPLOAD */}
                 <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f0fdf4", width: "100%", boxSizing: "border-box" }}>
                   <h4 style={{ margin: "0 0 10px 0", color: "#166534", display: "flex", alignItems: "center", gap: "8px" }}><Upload size={18} /> Upload Custom Font</h4>
                   <p style={{ fontSize: "0.75rem", color: "#666", marginBottom: "10px" }}>Upload a .ttf or .otf file to use it in your bill design.</p>
@@ -2366,7 +2306,7 @@ export default function App() {
                    {settings.branches.map((b, index) => (
                        <div key={b.id} style={{ padding: "15px", border: "1px solid #cbd5e1", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "10px" }}>
-                              <h4 style={{ margin: "0, color: "var(--brand)" }}>Branch: {b.name}</h4>
+                              <h4 style={{ margin: 0, color: "var(--brand)" }}>Branch: {b.name}</h4>
                               {settings.branches.length > 1 && (
                                   <Button size="sm" variant="outline" style={{ borderColor: "#ef4444", color: "#ef4444", padding: "0 8px", height: "24px" }} onClick={() => {
                                       if(window.confirm(`Delete ${b.name}?`)) {
