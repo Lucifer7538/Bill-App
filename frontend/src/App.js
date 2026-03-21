@@ -39,6 +39,7 @@ const getInitialPrintScale = () => { const saved = Number(localStorage.getItem("
 const splitAmount = (amt) => { const validAmt = Number.isFinite(amt) ? amt : 0; const rupees = Math.floor(validAmt); const paise = Math.round((validAmt - rupees) * 100).toString().padStart(2, "0"); return { rupees, paise }; };
 const registerFont = (name, dataUrl) => { const styleId = `custom-font-${name.replace(/\s+/g, '-').toLowerCase()}`; if (document.getElementById(styleId)) return; const style = document.createElement('style'); style.id = styleId; style.innerHTML = `@font-face { font-family: '${name}'; src: url('${dataUrl}'); }`; document.head.appendChild(style); };
 
+// ✅ PROPERLY DEFINED UI COMPONENTS (Prevents ReferenceError Crashes)
 const FontSelectOptions = ({ customFonts }) => (
   <><option value="sans-serif">Sans-serif</option><option value="Arial, Helvetica, sans-serif">Arial</option><option value="'Times New Roman', Times, serif">Times New Roman</option><option value="'Courier New', Courier, monospace">Courier New</option><option value="Georgia, serif">Georgia</option><option value="'Trebuchet MS', sans-serif">Trebuchet MS</option><option value="'Brush Script MT', cursive">Brush Script MT (Cursive)</option>{customFonts?.map(f => (<option key={f.name} value={`'${f.name}'`}>{f.name} (Custom)</option>))}</>
 );
@@ -65,26 +66,42 @@ const UpiAppsRow = ({ upiUri }) => (
   </div>
 );
 
-const TableHeaders = ({ mode }) => (
-  mode === "invoice" ? (
-    <tr>
-      <th style={{ width: "8%" }}>Sl. No.</th>
-      <th style={{ width: "38%" }}>DESCRIPTION</th>
-      <th style={{ width: "10%" }}>HSN</th>
-      <th style={{ width: "14%", whiteSpace: "nowrap" }}>WEIGHT (g)</th>
-      <th style={{ width: "15%", whiteSpace: "nowrap" }}>RATE Rs.</th>
-      <th style={{ width: "15%", whiteSpace: "nowrap" }}>AMOUNT</th>
-    </tr>
-  ) : (
-    <tr>
-      <th style={{ width: "8%" }}>Sl. No.</th>
-      <th style={{ width: "40%" }}>Particulars</th>
-      <th style={{ width: "14%", whiteSpace: "nowrap" }}>Weight</th>
-      <th style={{ width: "18%", whiteSpace: "nowrap" }}>Qty x Rate</th>
-      <th style={{ width: "12%", whiteSpace: "nowrap" }}>Rs.</th>
-      <th style={{ width: "8%", whiteSpace: "nowrap" }}>Ps.</th>
-    </tr>
-  )
+// ✅ BULLETPROOF BILL TABLE COMPONENT (This replaces the missing component)
+const BillTable = ({ mode, items }) => (
+  <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
+    <thead>
+      {mode === "invoice" ? (
+        <tr>
+          <th style={{ width: "8%" }}>Sl. No.</th>
+          <th style={{ width: "38%" }}>DESCRIPTION</th>
+          <th style={{ width: "10%" }}>HSN</th>
+          <th style={{ width: "14%", whiteSpace: "nowrap" }}>WEIGHT (g)</th>
+          <th style={{ width: "15%", whiteSpace: "nowrap" }}>RATE Rs.</th>
+          <th style={{ width: "15%", whiteSpace: "nowrap" }}>AMOUNT</th>
+        </tr>
+      ) : (
+        <tr>
+          <th style={{ width: "8%" }}>Sl. No.</th>
+          <th style={{ width: "40%" }}>Particulars</th>
+          <th style={{ width: "14%", whiteSpace: "nowrap" }}>Weight</th>
+          <th style={{ width: "18%", whiteSpace: "nowrap" }}>Qty x Rate</th>
+          <th style={{ width: "12%", whiteSpace: "nowrap" }}>Rs.</th>
+          <th style={{ width: "8%", whiteSpace: "nowrap" }}>Ps.</th>
+        </tr>
+      )}
+    </thead>
+    <tbody>
+      {items.map((item, idx) => (
+        <tr key={idx}>
+          {mode === "invoice" ? (
+            <><td>{item.sl_no || item.slNo}</td><td>{item.description || "-"}</td><td>{item.hsn || "-"}</td><td>{money(item.weight)}</td><td>{money(item.rate)}</td><td>{item.rupees}.{item.paise}</td></>
+          ) : (
+            <><td>{item.sl_no || item.slNo}</td><td>{item.description || "-"}</td><td>{money(item.weight)}</td><td>{money(item.quantity)} x {money(item.rate)}</td><td>{item.rupees}</td><td>{item.paise}</td></>
+          )}
+        </tr>
+      ))}
+    </tbody>
+  </table>
 );
 
 const DesignSettingRow = ({ title, fieldPrefix, settings, setSettings }) => (
@@ -102,6 +119,7 @@ const DesignSettingRow = ({ title, fieldPrefix, settings, setSettings }) => (
   </div>
 );
 
+// --- MAIN APP ---
 export default function App() {
   const [isCompactView, setIsCompactView] = useState(window.innerWidth <= 520);
   const [isDirty, setIsDirty] = useState(false);
@@ -573,12 +591,12 @@ export default function App() {
   const goToBillTop = () => { document.getElementById("bill-print-root")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
   const handleWifiClick = () => { navigator.clipboard.writeText("12345678").then(() => { toast.success("✅ Password '12345678' Copied! Go to settings and connect to 'JalaramJewellers Unlimited'.", { duration: 6000 }); }).catch(() => { toast.info("Wi-Fi: JalaramJewellers Unlimited | Pass: 12345678", { duration: 6000 }); }); };
 
-  // ✅ SAFELY ADDING `?.` TO PREVENT "Cannot read properties of undefined" ON OLD BILLS
+  // ✅ SAFE FALLBACKS FOR OLDER BILLS
   const todaysTotalCash = (todayBills || []).filter(b => b.is_payment_done).reduce((sum, b) => sum + (b.payment_method === 'Cash' ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_cash) : 0), 0);
   const todaysTotalEstBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'estimate').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
   const todaysTotalInvBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'invoice').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
 
-  // ✅ BULLETPROOF PUBLIC COMPUTED FOR MISSING DATABASE TOTALS
+  // ✅ SAFELY RE-COMPUTE OLD PUBLIC BILLS THAT ARE MISSING 'TOTALS'
   const publicComputed = useMemo(() => {
     if (!publicBill || !publicSettings) return { items: [], taxable: 0, cgst: 0, sgst: 0, igst: 0, mdr: 0, roundOff: 0, grandTotal: 0, discount: 0, exchange: 0 };
     const baseSilverRate = num(publicSettings.silver_rate_per_gram); const baseMCPerGram = num(publicSettings.making_charge_per_gram); const flatMCBelow5g = num(publicSettings.flat_mc_below_5g);
@@ -635,10 +653,15 @@ export default function App() {
     let publicUpiAmt = 0;
     const isSale = publicBill.tx_type === "sale" || !publicBill.tx_type;
     
-    if (isSale) { publicUpiAmt = publicBill.payment_method === "Split" ? num(publicBill.split_upi) : publicComputed.grandTotal; } 
-    else {
-        if (!publicBill.is_advance_paid && (publicBill.advance_method === "UPI" || publicBill.advance_method === "Split")) { publicUpiAmt = publicBill.advance_method === "Split" ? Math.max(0, num(publicBill.advance_amount) - num(publicBill.advance_split_cash)) : num(publicBill.advance_amount); } 
-        else if (publicBill.is_advance_paid && !publicBill.is_balance_paid && (publicBill.balance_method === "UPI" || publicBill.balance_method === "Split")) { const bal = Math.max(0, publicComputed.grandTotal - num(publicBill.advance_amount)); publicUpiAmt = publicBill.balance_method === "Split" ? Math.max(0, bal - num(publicBill.balance_split_cash)) : bal; }
+    if (isSale) { 
+        publicUpiAmt = publicBill.payment_method === "Split" ? num(publicBill.split_upi) : publicComputed.grandTotal; 
+    } else {
+        if (!publicBill.is_advance_paid && (publicBill.advance_method === "UPI" || publicBill.advance_method === "Split")) { 
+            publicUpiAmt = publicBill.advance_method === "Split" ? Math.max(0, num(publicBill.advance_amount) - num(publicBill.advance_split_cash)) : num(publicBill.advance_amount); 
+        } else if (publicBill.is_advance_paid && !publicBill.is_balance_paid && (publicBill.balance_method === "UPI" || publicBill.balance_method === "Split")) { 
+            const bal = Math.max(0, publicComputed.grandTotal - num(publicBill.advance_amount)); 
+            publicUpiAmt = publicBill.balance_method === "Split" ? Math.max(0, bal - num(publicBill.balance_split_cash)) : bal; 
+        }
     }
     
     const showPublicUpi = publicUpiAmt > 0 && !(isSale ? publicBill.is_payment_done : publicBill.is_balance_paid);
