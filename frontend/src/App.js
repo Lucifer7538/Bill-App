@@ -9,7 +9,8 @@ import { Toaster, toast } from "sonner";
 import "@/App.css";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
+// Fix 1: Removed trailing slashes from the API URL to prevent "Not Found" Network errors
+const API = `${BACKEND_URL ? BACKEND_URL.replace(/\/$/, '') : ""}/api`;
 const STATIC_ABOUT_QR_URL = process.env.REACT_APP_ABOUT_QR_URL;
 
 const createItem = (defaultHsn = "") => ({
@@ -302,7 +303,7 @@ export default function App() {
       finally { clearTimeout(slowServerTimeout); setCheckingSession(false); setIsWakingUp(false); }
     };
     verify();
-  }, [token, isPublicView]);
+  }, [token, isPublicView, authHeaders]);
 
   useEffect(() => {
     if (showRecentBills && token && !isPublicView) {
@@ -318,7 +319,7 @@ export default function App() {
       const timer = setTimeout(fetchRecent, 300);
       return () => clearTimeout(timer);
     }
-  }, [showRecentBills, token, isPublicView, billSearchQuery, recentBranchFilter, recentDateFilter]); 
+  }, [showRecentBills, token, isPublicView, billSearchQuery, recentBranchFilter, recentDateFilter, authHeaders]); 
 
   const filteredRecentBills = useMemo(() => {
     return recentBillsList.filter(bill => {
@@ -343,7 +344,7 @@ export default function App() {
     });
   }, [recentBillsList, recentModeFilter, recentDateFilter, customStartDate, customEndDate]);
 
-  // 🚨 FIX: Force Desktop Mode during Bulk PDF generation
+  // 🚨 FIX 2: Added exact dimension locks for HTML2Canvas to fix PDF right-side cropping
   const handleBulkDownload = async () => {
     if (filteredRecentBills.length === 0) { toast.error("No bills to download!"); return; }
     if (filteredRecentBills.length > 20) {
@@ -366,6 +367,9 @@ export default function App() {
         const bill = filteredRecentBills[i];
         const node = document.getElementById(`bulk-bill-${bill.document_number}`);
         if (!node) continue;
+        
+        node.setAttribute('style', `width: 800px !important; min-width: 800px !important; max-width: 800px !important; margin: 0 !important; padding: 20px !important; box-sizing: border-box !important; position: relative !important; transform: none !important;`);
+
         const canvas = await html2canvas(node, { scale: 2, useCORS: true, backgroundColor: "#ffffff", windowWidth: 800 });
         const imgData = canvas.toDataURL("image/png", 1.0);
         const pageHeight = (canvas.height * pageWidth) / canvas.width;
@@ -403,7 +407,7 @@ export default function App() {
       };
       fetchLedger();
     }
-  }, [showLedger, token, isPublicView, globalBranchId]);
+  }, [showLedger, token, isPublicView, globalBranchId, authHeaders]);
 
   useEffect(() => {
     if (showSettings && token && !isPublicView) {
@@ -415,7 +419,7 @@ export default function App() {
       };
       fetchStorageStats();
     }
-  }, [showSettings, token, isPublicView]);
+  }, [showSettings, token, isPublicView, authHeaders]);
 
   const loadSettings = async () => {
     const response = await axios.get(`${API}/settings`, { headers: authHeaders });
@@ -473,13 +477,13 @@ export default function App() {
       catch { toast.error("Could not load billing settings."); }
     };
     bootstrap();
-  }, [token, isPublicView]);
+  }, [token, isPublicView]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!token || isPublicView) return;
     const interval = setInterval(() => { fetchCloudStatus(); }, 30000);
     return () => clearInterval(interval);
-  }, [token, isPublicView]);
+  }, [token, isPublicView]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!token || isPublicView) return;
@@ -492,7 +496,7 @@ export default function App() {
       } catch { setSuggestions([]); }
     }, 250);
     return () => clearTimeout(timer);
-  }, [customer.phone, customer.name, token, isPublicView]);
+  }, [customer.phone, customer.name, token, isPublicView, authHeaders]);
 
   const computed = useMemo(() => {
     const baseRate = num(settings.silver_rate_per_gram) + num(settings.making_charge_per_gram);
@@ -758,7 +762,7 @@ export default function App() {
       await loadSettings(); 
       await fetchLedgerHistory();
     } catch (error) { 
-      toast.error("Ledger update failed");
+      toast.error("Ledger update failed.");
     } 
     finally { setSubmittingLog(false); }
   };
@@ -784,7 +788,6 @@ export default function App() {
     }
   };
 
-  // 🚨 FIX: Save rate, amount, and sl_no explicitly to prevent NaN in Public View
   const saveBill = async () => {
     if (!paymentMethod) {
         toast.error("Please select payment method.");
@@ -835,7 +838,7 @@ export default function App() {
     finally { setSavingBill(false); }
   };
 
-  // 🚨 FIX: Force Desktop Mode during PDF generation on mobile
+  // 🚨 FIX 3: Robust PDF width lock (forces table layout)
   const downloadPdf = async (elementId, filename) => {
     const wasCompact = isCompactView;
     if (wasCompact) {
@@ -849,17 +852,36 @@ export default function App() {
       return;
     }
 
-    const originalWidth = node.style.width;
-    const originalMaxWidth = node.style.maxWidth;
-    const originalMargin = node.style.margin;
+    const originalStyle = node.getAttribute('style');
 
-    node.style.width = "800px";
-    node.style.maxWidth = "800px";
-    node.style.margin = "0";
+    // Force the element to strictly stay within 800px width before rendering
+    node.setAttribute('style', `
+      width: 800px !important;
+      max-width: 800px !important;
+      min-width: 800px !important;
+      margin: 0 !important;
+      padding: 20px !important;
+      box-sizing: border-box !important;
+      position: relative !important;
+      transform: none !important;
+    `);
 
     try {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      const canvas = await html2canvas(node, { scale: 2, useCORS: true, backgroundColor: "#ffffff", windowWidth: 800 });
+      await new Promise(resolve => setTimeout(resolve, 200));
+      const canvas = await html2canvas(node, { 
+        scale: 2, 
+        useCORS: true, 
+        backgroundColor: "#ffffff", 
+        windowWidth: 800,
+        onclone: (clonedDoc) => {
+          const clonedNode = clonedDoc.getElementById(elementId);
+          if (clonedNode) {
+             clonedNode.style.width = "800px";
+             clonedNode.style.maxWidth = "800px";
+             clonedNode.style.minWidth = "800px";
+          }
+        }
+      });
       const imageData = canvas.toDataURL("image/png", 1.0);
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const pageWidth = pdf.internal.pageSize.getWidth(); 
@@ -869,9 +891,11 @@ export default function App() {
     } catch (error) {
       toast.error("Failed to download PDF.");
     } finally {
-      node.style.width = originalWidth;
-      node.style.maxWidth = originalMaxWidth;
-      node.style.margin = originalMargin;
+      if (originalStyle) {
+        node.setAttribute('style', originalStyle);
+      } else {
+        node.removeAttribute('style');
+      }
       if (wasCompact) setIsCompactView(true);
     }
   };
@@ -904,7 +928,6 @@ export default function App() {
   const todaysTotalEstBank = todayBills.filter(b => b.is_payment_done && b.mode === 'estimate').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? b.totals.grand_total : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
   const todaysTotalInvBank = todayBills.filter(b => b.is_payment_done && b.mode === 'invoice').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? b.totals.grand_total : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
 
-  // 🚨 FIX: Safety Net for missing 'amount' in Public View
   const publicComputedItems = useMemo(() => {
     if (!publicBill || !publicSettings) return [];
     const baseRate = num(publicSettings.silver_rate_per_gram) + num(publicSettings.making_charge_per_gram);
@@ -1041,7 +1064,8 @@ export default function App() {
             <p><strong>Phone:</strong> {publicBill.customer?.phone || "-"}</p>
           </div>
 
-          <table className="bill-table">
+          {/* 🚨 FIX: Forced table layout to prevent columns from pushing out of the PDF */}
+          <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
             <thead>
               {isCompactView ? (
                 <tr><th>#</th><th>Item</th><th>Wt / Rate</th><th>Amount</th></tr>
@@ -1134,18 +1158,6 @@ export default function App() {
                   >
                     📱 Pay ₹{money(publicUpiAmountToPay)} via UPI App
                   </a>
-
-                  <div style={{ marginTop: "20px" }}>
-                    <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "10px", fontWeight: "bold" }}>
-                      Or select your app directly:
-                    </p>
-                    <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
-                      <a href={publicUpiUri.replace("upi://pay", "phonepe://pay")} style={{ padding: "8px 16px", backgroundColor: "#5f259f", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>PhonePe</a>
-                      <a href={publicUpiUri.replace("upi://pay", "tez://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#1a73e8", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>G-Pay</a>
-                      <a href={publicUpiUri.replace("upi://pay", "paytmmp://pay")} style={{ padding: "8px 16px", backgroundColor: "#00baf2", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>Paytm</a>
-                      <a href={publicUpiUri.replace("upi://pay", "credpay://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#212121", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>CRED</a>
-                    </div>
-                  </div>
                 </div>
               )}
             </div>
@@ -1213,20 +1225,6 @@ export default function App() {
     return (
       <div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#0f172a' }}>Loading billing dashboard...</div>
-        {isWakingUp && (
-          <div style={{ marginTop: '20px', textAlign: 'center', padding: '15px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', maxWidth: '320px' }}>
-            <p style={{ margin: '0 0 15px 0', fontSize: '0.9rem', color: '#64748b' }}>
-              The database server is currently waking up from sleep mode. This usually takes about <strong>30 to 60 seconds</strong>.
-            </p>
-            <Button 
-              variant="outline" 
-              onClick={() => { localStorage.clear(); window.location.reload(); }} 
-              style={{ width: '100%', borderColor: '#ef4444', color: '#ef4444' }}
-            >
-              Force Quit & Clear Session
-            </Button>
-          </div>
-        )}
       </div>
     );
   }
@@ -1239,9 +1237,7 @@ export default function App() {
           <h1 className="login-title">Jalaram Jewellers</h1>
           <p className="login-subtitle">Enter passcode to access billing panel</p>
           <Input type="password" value={passcode} onChange={(e) => setPasscode(e.target.value)} placeholder="Enter passcode" />
-          <Button type="submit" disabled={loggingIn}>
-            {loggingIn ? "Checking..." : "Login"}
-          </Button>
+          <Button type="submit" disabled={loggingIn}>{loggingIn ? "Checking..." : "Login"}</Button>
         </form>
       </div>
     );
@@ -1249,10 +1245,9 @@ export default function App() {
 
   return (
     <div className="billing-app">
-
       <Toaster position="bottom-right" />
 
-      {/* INVISIBLE BULK PDF RENDERER - USED ONLY FOR GENERATING MULTI-PAGE PDFS */}
+      {/* INVISIBLE BULK PDF RENDERER */}
       <div style={{ position: "absolute", top: "-9999px", left: "-9999px", opacity: 0, pointerEvents: "none" }}>
         {filteredRecentBills.map(b => {
            const billBranch = settings.branches.find(br => br.id === b.branch_id) || settings.branches[0];
@@ -1295,7 +1290,8 @@ export default function App() {
                   <p><strong>Phone:</strong> {b.customer?.phone || "-"}</p>
                 </div>
 
-                <table className="bill-table">
+                {/* 🚨 FIX: Forced table layout to prevent columns from pushing out of the PDF */}
+                <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
                   <thead>
                     {b.mode === "invoice" ? (
                       <tr><th>Sl. No.</th><th>DESCRIPTION</th><th>HSN</th><th>WEIGHT IN GRAMS</th><th>RATE PER GRAM Rs.</th><th>AMOUNT Ps.</th></tr>
@@ -1357,8 +1353,6 @@ export default function App() {
            );
         })}
       </div>
-      {/* END OF BULK PDF RENDERER */}
-
 
       <header className="top-bar no-print">
         <div className="brand-block" style={{ display: "flex", alignItems: "center", gap: "15px" }}>
@@ -1468,7 +1462,8 @@ export default function App() {
             <p><strong>Phone:</strong> {customer.phone || "-"}</p>
           </div>
 
-          <table className="bill-table">
+          {/* 🚨 FIX: Forced table layout to prevent columns from pushing out of the PDF */}
+          <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
             <thead>
               {isCompactView ? (
                 <tr><th>#</th><th>Item</th><th>Wt / Rate</th><th>Amount</th></tr>
@@ -2046,6 +2041,7 @@ export default function App() {
                </div>
             </div>
 
+            {/* 🚨 RESTORED RESET COUNTER BUTTONS */}
             <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "15px", paddingBottom: "15px", borderBottom: "1px dashed #cbd5e1" }}>
               <Button size="sm" variant="outline" onClick={() => handleResetCounter("invoice")} style={{ flex: "1 1 100%", borderColor: "#dc2626", color: "#dc2626" }}>Reset Invoice No.</Button>
               <Button size="sm" variant="outline" onClick={() => handleResetCounter("estimate")} style={{ flex: "1 1 100%", borderColor: "#2563eb", color: "#2563eb" }}>Reset Estimate No.</Button>
