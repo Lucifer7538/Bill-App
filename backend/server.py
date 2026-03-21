@@ -104,7 +104,7 @@ def require_auth(authorization: str = Header(None)):
 
 @app.get("/")
 async def root():
-    return {"status": "online", "server": "Jalaram-Master-V5", "msg": "Backend is awake"}
+    return {"status": "online", "server": "Jalaram-Master-V6", "msg": "Backend is awake"}
 
 @api_router.post("/auth/login")
 async def login(payload: dict):
@@ -148,26 +148,27 @@ async def set_balances(payload: dict, _=Depends(require_auth)):
 
 @api_router.post("/settings/ledger/adjust")
 async def adjust(payload: dict, _=Depends(require_auth)):
-    branch_id = payload.get("branch_id")
-    await settings_collection.update_one(
-        {"key": "app_settings", "branches.id": branch_id},
-        {"$inc": {
-            "branches.$.cash_balance": payload.get("cash_change", 0),
-            "branches.$.estimate_bank_balance": payload.get("estimate_bank_change", 0),
-            "branches.$.invoice_bank_balance": payload.get("invoice_bank_change", 0)
-        }}
-    )
-    await ledger_logs_collection.insert_one({**payload, "id": str(uuid.uuid4()), "date": now_iso()})
-    return {"status": "success"}
+    try:
+        branch_id = payload.get("branch_id")
+        await settings_collection.update_one(
+            {"key": "app_settings", "branches.id": branch_id},
+            {"$inc": {
+                "branches.$.cash_balance": payload.get("cash_change", 0),
+                "branches.$.estimate_bank_balance": payload.get("estimate_bank_change", 0),
+                "branches.$.invoice_bank_balance": payload.get("invoice_bank_change", 0)
+            }}
+        )
+        await ledger_logs_collection.insert_one({**payload, "id": str(uuid.uuid4()), "date": now_iso()})
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(500, detail=str(e))
 
 @api_router.get("/settings/ledger/logs")
 async def get_logs(branch_id: str = Query(...), _=Depends(require_auth)):
     return await ledger_logs_collection.find({"branch_id": branch_id}, {"_id": 0}).sort("date", -1).to_list(50)
 
-
 # --- Billing Logic ---
 
-# ✅ FIX 1: Preview the next number safely (DOES NOT increment the database)
 @api_router.get("/bills/next-number")
 async def next_num(mode: str, branch_id: str, _=Depends(require_auth)):
     doc = await counters_collection.find_one({"mode": mode, "branch_id": branch_id})
@@ -175,7 +176,21 @@ async def next_num(mode: str, branch_id: str, _=Depends(require_auth)):
     prefix = "INV" if mode == "invoice" else "EST"
     return {"document_number": f"{branch_id}-{prefix}-{val:04d}"}
 
-# ✅ FIX 2: Permanently claim the number ONLY when you click Save
+# ✅ FIX 1: Restored the completely missing Reset Counter Route!
+@api_router.post("/bills/reset-counter")
+async def reset_counter(payload: dict, _=Depends(require_auth)):
+    try:
+        mode = payload.get("mode")
+        branch_id = payload.get("branch_id")
+        await counters_collection.update_one(
+            {"mode": mode, "branch_id": branch_id}, 
+            {"$set": {"value": 0}}, 
+            upsert=True
+        )
+        return {"message": "Counter reset successfully"}
+    except Exception as e:
+        raise HTTPException(500, detail=str(e))
+
 @api_router.post("/bills/save")
 async def save_bill(payload: dict, _=Depends(require_auth)):
     bill_id = str(uuid.uuid4())
@@ -183,7 +198,6 @@ async def save_bill(payload: dict, _=Depends(require_auth)):
     mode = payload.get("mode")
     branch_id = payload.get("branch_id")
 
-    # Smart Scanner: Extracts the number (e.g., 50 from INV-0050) and updates DB
     match = re.search(r'\d+$', doc_num)
     if match:
         new_val = int(match.group())
@@ -206,7 +220,6 @@ async def update_bill_by_id(bill_id: str, payload: dict, _=Depends(require_auth)
     existing = await bills_collection.find_one({"id": bill_id})
     if not existing: raise HTTPException(404, "Bill ID not found")
 
-    # Update the counter if the document number was manually changed during edit
     doc_num = payload.get("document_number", "")
     match = re.search(r'\d+$', doc_num)
     if match:
@@ -227,21 +240,23 @@ async def update_bill_by_id(bill_id: str, payload: dict, _=Depends(require_auth)
 
     return {"message": "Migration Successful"}
 
-# ✅ FIX 3: Restored the Missing Toggle Route!
 @api_router.put("/bills/{document_number}/toggle-payment")
 async def toggle_pay(document_number: str, payload: dict, _=Depends(require_auth)):
-    bill = await bills_collection.find_one({"document_number": document_number})
-    if not bill: raise HTTPException(404, "Bill not found")
-    
-    new_status = payload.get("is_payment_done")
-    
-    if new_status and not bill.get("is_payment_done"): 
-        await update_ledger(bill)
-    elif not new_status and bill.get("is_payment_done"): 
-        await update_ledger(bill, reverse=True)
+    try:
+        bill = await bills_collection.find_one({"document_number": document_number})
+        if not bill: raise HTTPException(404, "Bill not found")
         
-    await bills_collection.update_one({"document_number": document_number}, {"$set": {"is_payment_done": new_status}})
-    return {"message": "Payment Status Toggled"}
+        new_status = payload.get("is_payment_done")
+        
+        if new_status and not bill.get("is_payment_done"): 
+            await update_ledger(bill)
+        elif not new_status and bill.get("is_payment_done"): 
+            await update_ledger(bill, reverse=True)
+            
+        await bills_collection.update_one({"document_number": document_number}, {"$set": {"is_payment_done": new_status}})
+        return {"message": "Payment Status Toggled"}
+    except Exception as e:
+        raise HTTPException(500, detail=str(e))
 
 @api_router.delete("/bills/{document_number}")
 async def delete_bill(document_number: str, _=Depends(require_auth)):
