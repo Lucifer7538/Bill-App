@@ -52,7 +52,7 @@ SUPABASE_ENABLED = bool(SUPABASE_URL and SUPABASE_KEY and "YOUR_" not in SUPABAS
 def now_iso():
     return datetime.now(timezone.utc).isoformat()
 
-# ✅ SMART LEDGER ENGINE
+# --- SMART LEDGER ENGINE ---
 def get_bill_ledger_values(bill: dict):
     c, eb, ib = 0.0, 0.0, 0.0
     mode = bill.get("mode")
@@ -75,12 +75,13 @@ def get_bill_ledger_values(bill: dict):
             total = float(bill.get("totals", {}).get("grand_total", 0))
             add_vals(bill.get("payment_method"), total, float(bill.get("split_cash", 0)))
     else:
+        # Booking or Service (Handles Advance and Balance Separately)
         if bill.get("is_advance_paid"):
             add_vals(bill.get("advance_method"), float(bill.get("advance_amount", 0)), float(bill.get("advance_split_cash", 0)))
         if bill.get("is_balance_paid"):
             total = float(bill.get("totals", {}).get("grand_total", 0))
             adv = float(bill.get("advance_amount", 0))
-            bal = max(0.0, total - adv)
+            bal = max(0.0, total - adv) # The actual balance due
             add_vals(bill.get("balance_method"), bal, float(bill.get("balance_split_cash", 0)))
 
     return c, eb, ib
