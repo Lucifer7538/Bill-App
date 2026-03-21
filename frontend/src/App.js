@@ -505,7 +505,7 @@ export default function App() {
       const amount = item.amount_override !== "" ? num(item.amount_override) : formulaAmount;
       const rupees = Math.floor(amount);
       const paise = Math.round((amount - rupees) * 100).toString().padStart(2, "0");
-      return { ...item, sl_no: index + 1, rate, quantity, amount, rupees, paise };
+      return { ...item, slNo: index + 1, rate, quantity, amount, rupees, paise };
     });
 
     const subtotal = mapped.reduce((sum, row) => sum + row.amount, 0);
@@ -523,8 +523,22 @@ export default function App() {
     return { items: mapped, baseRate, subtotal, taxable, cgst, sgst, igst, mdr, roundOff, grandTotal };
   }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff]);
 
-  const upiAmountToPay = paymentMethod === "Split" ? Math.max(0, computed.grandTotal - num(splitCash)) : computed.grandTotal;
-  const showDashboardUpi = !isPaymentDone && (paymentMethod === "UPI" || (paymentMethod === "Split" && upiAmountToPay > 0));
+  const getUpiAmount = () => {
+      if (txType === "sale") {
+          return paymentMethod === "Split" ? Math.max(0, computed.grandTotal - num(splitCash)) : computed.grandTotal;
+      }
+      if (!isAdvancePaid && (advanceMethod === "UPI" || advanceMethod === "Split")) {
+          return advanceMethod === "Split" ? Math.max(0, num(advanceAmount) - num(advanceSplitCash)) : num(advanceAmount);
+      }
+      if (isAdvancePaid && !isBalancePaid && (balanceMethod === "UPI" || balanceMethod === "Split")) {
+          const bal = Math.max(0, computed.grandTotal - num(advanceAmount));
+          return balanceMethod === "Split" ? Math.max(0, bal - num(balanceSplitCash)) : bal;
+      }
+      return 0;
+  };
+  
+  const upiAmountToPay = getUpiAmount();
+  const showDashboardUpi = upiAmountToPay > 0;
   
   const upiId = mode === "invoice" ? activeBillBranch.invoice_upi_id : activeBillBranch.estimate_upi_id;
   const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
@@ -552,6 +566,7 @@ export default function App() {
     setCustomer({ name: "", phone: "", address: "", email: "" });
     setSuggestions([]); setDiscount("0"); setExchange("0"); setManualRoundOff("");
     
+    // Reset transaction states
     setTxType("sale");
     setPaymentMethod(""); setSplitCash(""); setIsPaymentDone(false); 
     setAdvanceAmount(""); setAdvanceMethod(""); setAdvanceSplitCash(""); setIsAdvancePaid(false);
@@ -607,12 +622,9 @@ export default function App() {
     setExchange(bill.totals?.exchange ? String(bill.totals.exchange) : "0");
     setManualRoundOff(bill.totals?.round_off !== null && bill.totals?.round_off !== undefined ? String(bill.totals.round_off) : "");
 
-    const loadedItems = (bill.items || []).map((item, idx) => ({
-      id: `${Date.now()}-${Math.random()}`, 
-      description: item.description || "", 
-      hsn: item.hsn || "",
-      weight: item.weight ? String(item.weight) : "", 
-      quantity: item.quantity ? String(item.quantity) : "1",
+    const loadedItems = (bill.items || []).map((item) => ({
+      id: `${Date.now()}-${Math.random()}`, description: item.description || "", hsn: item.hsn || "",
+      weight: item.weight ? String(item.weight) : "", quantity: item.quantity ? String(item.quantity) : "1",
       rate_override: item.rate_override !== null && item.rate_override !== undefined ? String(item.rate_override) : "",
       amount_override: item.amount_override !== null && item.amount_override !== undefined ? String(item.amount_override) : "",
     }));
@@ -829,13 +841,37 @@ export default function App() {
     setSavingBill(true);
     try {
       const payload = {
-        mode, branch_id: billBranchId, document_number: documentNumber, date: billDate,
-        customer_name: customer.name, customer_phone: customer.phone, customer_address: customer.address, customer_email: customer.email,
+        mode, 
+        branch_id: billBranchId, 
+        document_number: documentNumber, 
+        date: billDate,
+        customer_name: customer.name, 
+        customer_phone: customer.phone, 
+        customer_address: customer.address, 
+        customer_email: customer.email,
+        
         tx_type: txType,
-        payment_method: paymentMethod, is_payment_done: isPaymentDone, split_cash: num(splitCash), split_upi: Math.max(0, computed.grandTotal - num(splitCash)),
-        advance_amount: num(advanceAmount), advance_method: advanceMethod, advance_split_cash: num(advanceSplitCash), is_advance_paid: isAdvancePaid,
-        balance_method: balanceMethod, balance_split_cash: num(balanceSplitCash), is_balance_paid: isBalancePaid,
-        discount: num(discount), exchange: num(exchange), round_off: manualRoundOff === "" ? null : num(manualRoundOff), notes,
+        
+        // Sale fields
+        payment_method: paymentMethod, 
+        is_payment_done: isPaymentDone, 
+        split_cash: num(splitCash), 
+        
+        // Booking / Service fields
+        advance_amount: num(advanceAmount),
+        advance_method: advanceMethod,
+        advance_split_cash: num(advanceSplitCash),
+        is_advance_paid: isAdvancePaid,
+        
+        balance_method: balanceMethod,
+        balance_split_cash: num(balanceSplitCash),
+        is_balance_paid: isBalancePaid,
+
+        discount: num(discount), 
+        exchange: num(exchange), 
+        round_off: manualRoundOff === "" ? null : num(manualRoundOff), 
+        notes,
+        
         items: computed.items.map((item) => ({ 
           description: item.description, 
           hsn: item.hsn, 
@@ -852,16 +888,15 @@ export default function App() {
 
       if (currentBillId) {
         await axios.put(`${API}/bills/update-by-id/${currentBillId}`, payload, { headers: authHeaders });
-        toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} updated & migrated successfully.`);
+        toast.success(`Bill updated & ledger synced securely.`);
         setIsDirty(false);
-        setEditingDocNumber(documentNumber);
       } else {
         const res = await axios.post(`${API}/bills/save`, payload, { headers: authHeaders });
-        toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} saved successfully.`);
+        toast.success(`Bill saved securely.`);
         setIsDirty(false);
         setCurrentBillId(res.data.id);
-        setEditingDocNumber(res.data.document_number);
         setDocumentNumber(res.data.document_number);
+        setEditingDocNumber(res.data.document_number);
       }
       
       await loadSettings(); 
@@ -956,27 +991,6 @@ export default function App() {
       return { ...item, sl_no: item.sl_no || (index + 1), rate, amount, rupees, paise, weight, quantity };
     });
   }, [publicBill, publicSettings]);
-
-  const getUpiAmount = () => {
-      if (txType === "sale") {
-          return paymentMethod === "Split" ? Math.max(0, computed.grandTotal - num(splitCash)) : computed.grandTotal;
-      }
-      if (!isAdvancePaid && (advanceMethod === "UPI" || advanceMethod === "Split")) {
-          return advanceMethod === "Split" ? Math.max(0, num(advanceAmount) - num(advanceSplitCash)) : num(advanceAmount);
-      }
-      if (isAdvancePaid && !isBalancePaid && (balanceMethod === "UPI" || balanceMethod === "Split")) {
-          const bal = Math.max(0, computed.grandTotal - num(advanceAmount));
-          return balanceMethod === "Split" ? Math.max(0, bal - num(balanceSplitCash)) : bal;
-      }
-      return 0;
-  };
-  
-  const upiAmountToPay = getUpiAmount();
-  const showDashboardUpi = upiAmountToPay > 0;
-  
-  const upiId = mode === "invoice" ? activeBillBranch.invoice_upi_id : activeBillBranch.estimate_upi_id;
-  const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
-  const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
 
   if (isPublicView) {
     if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
@@ -1105,22 +1119,20 @@ export default function App() {
             <p><strong>Date:</strong> {publicBill.date}</p>
           </div>
 
-          {/* ✅ FIXED: Correctly pulls flat customer_name data so it doesn't disappear */}
           <div className="customer-box">
             <p><strong>Name:</strong> {publicBill.customer_name || publicBill.customer?.name || "-"}</p>
             <p><strong>Address:</strong> {publicBill.customer_address || publicBill.customer?.address || "-"}</p>
             <p><strong>Phone:</strong> {publicBill.customer_phone || publicBill.customer?.phone || "-"}</p>
           </div>
 
-          {/* ✅ FIXED: Aligns Rupees to Rate column, and Full Amount to Amount column */}
-          <table className="bill-table" style={{ width: "100%" }}>
+          <table className="bill-table" style={{ width: "100%", tableLayout: isCompactView ? "auto" : "fixed", wordWrap: "break-word" }}>
             <thead>
               {isCompactView ? (
                 <tr><th>#</th><th>Item</th><th>Wt / Rate</th><th>Amount</th></tr>
               ) : publicBill.mode === "invoice" ? (
                 <tr><th>Sl. No.</th><th>DESCRIPTION</th><th>HSN</th><th>WEIGHT IN GRAMS</th><th>RATE PER GRAM Rs.</th><th>AMOUNT Ps.</th></tr>
               ) : (
-                <tr><th>Sl. No.</th><th>Particulars</th><th>Weight</th><th>Qty x Rate</th><th>Rate</th><th>Amount</th></tr>
+                <tr><th>Sl. No.</th><th>Particulars</th><th>Weight</th><th>Qty x Rate</th><th>Amount Rs.</th><th>Ps.</th></tr>
               )}
             </thead>
             <tbody>
@@ -1149,8 +1161,8 @@ export default function App() {
                         <td>{item.description || "-"}</td>
                         <td>{money(item.weight)}</td>
                         <td>{money(item.quantity)} x {money(item.rate)}</td>
-                        <td>{money(item.rate)}</td>
-                        <td>{item.rupees}.{item.paise}</td>
+                        <td>{item.rupees}</td>
+                        <td>{item.paise}</td>
                       </>
                     )}
                   </tr>
@@ -1203,7 +1215,6 @@ export default function App() {
               {showPublicUpi && (
                 <div className="payment-qr-box">
                   <p className="scan-title" style={{ marginBottom: "15px" }}>Click Below to Pay ₹{money(publicUpiAmt)}</p>
-                  
                   <a 
                     href={publicUpiUri} 
                     style={{
@@ -1365,12 +1376,12 @@ export default function App() {
                   <p><strong>Phone:</strong> {b.customer_phone || b.customer?.phone || "-"}</p>
                 </div>
 
-                <table className="bill-table" style={{ width: "100%" }}>
+                <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
                   <thead>
                     {b.mode === "invoice" ? (
                       <tr><th>Sl. No.</th><th>DESCRIPTION</th><th>HSN</th><th>WEIGHT IN GRAMS</th><th>RATE PER GRAM Rs.</th><th>AMOUNT Ps.</th></tr>
                     ) : (
-                      <tr><th>Sl. No.</th><th>Particulars</th><th>Weight</th><th>Qty x Rate</th><th>Rate</th><th>Amount</th></tr>
+                      <tr><th>Sl. No.</th><th>Particulars</th><th>Weight</th><th>Qty x Rate</th><th>Amount Rs.</th><th>Ps.</th></tr>
                     )}
                   </thead>
                   <tbody>
@@ -1393,8 +1404,8 @@ export default function App() {
                               <td>{item.description || "-"}</td>
                               <td>{money(item.weight)}</td>
                               <td>{money(item.quantity)} x {money(item.rate)}</td>
-                              <td>{money(item.rate)}</td>
-                              <td>{rupees}.{paise}</td>
+                              <td>{rupees}</td>
+                              <td>{paise}</td>
                             </>
                           )}
                         </tr>
@@ -1557,14 +1568,14 @@ export default function App() {
             <p><strong>Phone:</strong> {customer.phone || "-"}</p>
           </div>
 
-          <table className="bill-table" style={{ width: "100%" }}>
+          <table className="bill-table" style={{ width: "100%", tableLayout: isCompactView ? "auto" : "fixed", wordWrap: "break-word" }}>
             <thead>
               {isCompactView ? (
                 <tr><th>#</th><th>Item</th><th>Wt / Rate</th><th>Amount</th></tr>
               ) : mode === "invoice" ? (
                 <tr><th>Sl. No.</th><th>DESCRIPTION</th><th>HSN</th><th>WEIGHT IN GRAMS</th><th>RATE PER GRAM Rs.</th><th>AMOUNT Ps.</th></tr>
               ) : (
-                <tr><th>Sl. No.</th><th>Particulars</th><th>Weight</th><th>Qty x Rate</th><th>Rate</th><th>Amount</th></tr>
+                <tr><th>Sl. No.</th><th>Particulars</th><th>Weight</th><th>Qty x Rate</th><th>Amount Rs.</th><th>Ps.</th></tr>
               )}
             </thead>
             <tbody>
@@ -1592,8 +1603,8 @@ export default function App() {
                       <td>{item.description || "-"}</td>
                       <td>{money(item.weight)}</td>
                       <td>{money(item.quantity)} x {money(item.rate)}</td>
-                      <td>{money(item.rate)}</td>
-                      <td>{item.rupees}.{item.paise}</td>
+                      <td>{item.rupees}</td>
+                      <td>{item.paise}</td>
                     </>
                   )}
                 </tr>
@@ -2144,6 +2155,7 @@ export default function App() {
 
           <div style={{ padding: "15px" }}>
             
+            {/* BULK PDF EXPORT BUTTON */}
             <div style={{ marginBottom: "20px" }}>
               <Button
                 onClick={handleBulkDownload}
@@ -2482,7 +2494,7 @@ export default function App() {
                    {settings.branches.map((b, index) => (
                        <div key={b.id} style={{ padding: "15px", border: "1px solid #cbd5e1", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "10px" }}>
-                              <h4 style={{ margin: 0, color: "var(--brand)" }}>Branch: {b.name}</h4>
+                              <h4 style={{ margin: "0", color: "var(--brand)" }}>Branch: {b.name}</h4>
                               {settings.branches.length > 1 && (
                                   <Button size="sm" variant="outline" style={{ borderColor: "#ef4444", color: "#ef4444", padding: "0 8px", height: "24px" }} onClick={() => {
                                       if(window.confirm(`Delete ${b.name}?`)) {
