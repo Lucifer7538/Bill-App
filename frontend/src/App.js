@@ -12,8 +12,16 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL ? BACKEND_URL.replace(/\/$/, '') : ""}/api`;
 const STATIC_ABOUT_QR_URL = process.env.REACT_APP_ABOUT_QR_URL;
 
+// Added mc_override to tracking
 const createItem = (defaultHsn = "") => ({
-  id: `${Date.now()}-${Math.random()}`, description: "", hsn: defaultHsn, weight: "", quantity: "1", rate_override: "", amount_override: "",
+  id: `${Date.now()}-${Math.random()}`,
+  description: "",
+  hsn: defaultHsn,
+  weight: "",
+  quantity: "1",
+  mc_override: "", 
+  rate_override: "",
+  amount_override: "",
 });
 
 const defaultSettings = {
@@ -23,7 +31,7 @@ const defaultSettings = {
   address_color: "#475569", address_size: 14, address_font: "sans-serif", address_align: "center",
   phone_color: "#475569", phone_size: 13, phone_font: "sans-serif", phone_align: "center",
   email_color: "#475569", email_size: 13, email_font: "sans-serif", email_align: "center",
-  gstin: "21AAUFJ1925F1ZH", silver_rate_per_gram: 240, making_charge_per_gram: 15, default_hsn: "7113",
+  gstin: "21AAUFJ1925F1ZH", silver_rate_per_gram: 240, making_charge_per_gram: 15, flat_mc_below_5g: 150, default_hsn: "7113",
   formula_note: "Line total = Weight x (Silver rate per gram + Making charge per gram)", logo_data_url: "", about_qr_data_url: STATIC_ABOUT_QR_URL, custom_fonts: [],
   branches: [
     { id: "B1", name: "Branch 1 (Old Town)", address: "Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2", map_url: "https://g.page/r/CVvnomQZn7zxEBE/review", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 },
@@ -39,7 +47,6 @@ const getInitialPrintScale = () => { const saved = Number(localStorage.getItem("
 const splitAmount = (amt) => { const validAmt = Number.isFinite(amt) ? amt : 0; const rupees = Math.floor(validAmt); const paise = Math.round((validAmt - rupees) * 100).toString().padStart(2, "0"); return { rupees, paise }; };
 const registerFont = (name, dataUrl) => { const styleId = `custom-font-${name.replace(/\s+/g, '-').toLowerCase()}`; if (document.getElementById(styleId)) return; const style = document.createElement('style'); style.id = styleId; style.innerHTML = `@font-face { font-family: '${name}'; src: url('${dataUrl}'); }`; document.head.appendChild(style); };
 
-// --- Reusable UI Components to prevent code truncation ---
 const FontSelectOptions = ({ customFonts }) => (
   <>
     <option value="sans-serif">Sans-serif</option><option value="Arial, Helvetica, sans-serif">Arial</option><option value="'Times New Roman', Times, serif">Times New Roman</option><option value="'Courier New', Courier, monospace">Courier New</option><option value="Georgia, serif">Georgia</option><option value="'Trebuchet MS', sans-serif">Trebuchet MS</option><option value="'Brush Script MT', cursive">Brush Script MT (Cursive)</option>
@@ -84,7 +91,6 @@ const DesignSettingRow = ({ title, fieldPrefix, settings, setSettings }) => (
   </div>
 );
 
-// --- MAIN APP ---
 export default function App() {
   const [isCompactView, setIsCompactView] = useState(window.innerWidth <= 520);
   const [isDirty, setIsDirty] = useState(false);
@@ -187,13 +193,11 @@ export default function App() {
     try {
       const reader = new FileReader();
       reader.onload = async (e) => {
-        const dataUrl = e.target.result;
-        const newFont = { name: fontName, dataUrl };
+        const dataUrl = e.target.result; const newFont = { name: fontName, dataUrl };
         const updatedFonts = [...(settings.custom_fonts || []), newFont];
         setSettings(prev => ({ ...prev, custom_fonts: updatedFonts }));
         localStorage.setItem("jj_custom_fonts", JSON.stringify(updatedFonts));
-        registerFont(fontName, dataUrl);
-        toast.success(`Font "${fontName}" uploaded!`);
+        registerFont(fontName, dataUrl); toast.success(`Font "${fontName}" uploaded!`);
       };
       reader.readAsDataURL(file);
     } catch { toast.error("Font upload failed."); }
@@ -220,8 +224,7 @@ export default function App() {
 
   useEffect(() => {
     const handleResize = () => setIsCompactView(window.innerWidth <= 520);
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    window.addEventListener("resize", handleResize); return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   useEffect(() => {
@@ -229,8 +232,7 @@ export default function App() {
       if (event.key !== "Escape") return;
       setShowSettings(false); setShowAbout(false); setShowRecentBills(false); setShowLedger(false); setShowFeedbackModal(false);
     };
-    window.addEventListener("keydown", handleEsc);
-    return () => window.removeEventListener("keydown", handleEsc);
+    window.addEventListener("keydown", handleEsc); return () => window.removeEventListener("keydown", handleEsc);
   }, [showSettings, showAbout, showRecentBills, showLedger, showFeedbackModal]);
 
   useEffect(() => { localStorage.setItem("jj_print_scale", String(clampPrintScale(printScale))); }, [printScale]);
@@ -258,8 +260,7 @@ export default function App() {
         } catch { toast.error("Failed to load recent bills."); } 
         finally { setLoadingRecent(false); }
       };
-      const timer = setTimeout(fetchRecent, 300);
-      return () => clearTimeout(timer);
+      const timer = setTimeout(fetchRecent, 300); return () => clearTimeout(timer);
     }
   }, [showRecentBills, token, isPublicView, billSearchQuery, recentBranchFilter, recentDateFilter, authHeaders]); 
 
@@ -383,17 +384,34 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [customer.phone, customer.name, token, isPublicView, authHeaders]);
 
+  // ✅ SMART MATH INCORPORATING "BELOW 5G RULE" AND "CUSTOM MC BOX"
   const computed = useMemo(() => {
-    const baseRate = num(settings.silver_rate_per_gram) + num(settings.making_charge_per_gram);
+    const baseSilverRate = num(settings.silver_rate_per_gram);
+    const baseMCPerGram = num(settings.making_charge_per_gram);
+    const flatMCBelow5g = num(settings.flat_mc_below_5g);
+
     const mapped = items.map((item, index) => {
-      const rate = item.rate_override !== "" ? num(item.rate_override) : baseRate;
       const weight = num(item.weight);
-      const quantity = Math.max(num(item.quantity), 1);
-      const formulaAmount = mode === "estimate" ? weight * rate * quantity : weight * rate;
+      const quantity = Math.max(num(item.quantity || 1), 1);
+      const silverRate = item.rate_override !== "" ? num(item.rate_override) : baseSilverRate;
+
+      let mcAmount = 0;
+      if (item.mc_override !== "") {
+         mcAmount = weight * num(item.mc_override);
+      } else if (flatMCBelow5g > 0 && weight > 0 && weight < 5) {
+         mcAmount = flatMCBelow5g;
+      } else {
+         mcAmount = weight * baseMCPerGram;
+      }
+
+      const totalItemCost = (weight * silverRate) + mcAmount;
+      const formulaAmount = mode === "estimate" ? totalItemCost * quantity : totalItemCost;
+      
       const amount = item.amount_override !== "" ? num(item.amount_override) : formulaAmount;
-      const rupees = Math.floor(amount);
-      const paise = Math.round((amount - rupees) * 100).toString().padStart(2, "0");
-      return { ...item, slNo: index + 1, rate, quantity, amount, rupees, paise };
+      const rateForPrint = weight > 0 ? (amount / (mode === "estimate" ? quantity : 1)) / weight : 0;
+      
+      const { rupees, paise } = splitAmount(amount);
+      return { ...item, slNo: index + 1, rate: rateForPrint, quantity, amount, rupees, paise, weight };
     });
 
     const subtotal = mapped.reduce((sum, row) => sum + row.amount, 0);
@@ -407,7 +425,7 @@ export default function App() {
     const autoRound = Math.round(baseTotal) - baseTotal;
     const roundOff = manualRoundOff === "" ? autoRound : num(manualRoundOff);
     const grandTotal = baseTotal + roundOff;
-    return { items: mapped, baseRate, subtotal, taxable, cgst, sgst, igst, mdr, roundOff, grandTotal };
+    return { items: mapped, baseSilverRate, subtotal, taxable, cgst, sgst, igst, mdr, roundOff, grandTotal };
   }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff]);
 
   const updateItem = (id, key, value) => { markDirty(); setItems((prev) => prev.map((item) => (item.id === id ? { ...item, [key]: value } : item))); };
@@ -433,7 +451,7 @@ export default function App() {
     setAdvanceAmount(bill.advance_amount ? String(bill.advance_amount) : ""); setAdvanceMethod(bill.advance_method || ""); setAdvanceSplitCash(bill.advance_split_cash ? String(bill.advance_split_cash) : ""); setIsAdvancePaid(bill.is_advance_paid || false);
     setBalanceMethod(bill.balance_method || ""); setBalanceSplitCash(bill.balance_split_cash ? String(bill.balance_split_cash) : ""); setIsBalancePaid(bill.is_balance_paid || false);
     setNotes(bill.notes || ""); setDiscount(bill.totals?.discount ? String(bill.totals.discount) : "0"); setExchange(bill.totals?.exchange ? String(bill.totals.exchange) : "0"); setManualRoundOff(bill.totals?.round_off !== null && bill.totals?.round_off !== undefined ? String(bill.totals.round_off) : "");
-    const loadedItems = (bill.items || []).map((item) => ({ id: `${Date.now()}-${Math.random()}`, description: item.description || "", hsn: item.hsn || "", weight: item.weight ? String(item.weight) : "", quantity: item.quantity ? String(item.quantity) : "1", rate_override: item.rate_override !== null && item.rate_override !== undefined ? String(item.rate_override) : "", amount_override: item.amount_override !== null && item.amount_override !== undefined ? String(item.amount_override) : "", }));
+    const loadedItems = (bill.items || []).map((item) => ({ id: `${Date.now()}-${Math.random()}`, description: item.description || "", hsn: item.hsn || "", weight: item.weight ? String(item.weight) : "", quantity: item.quantity ? String(item.quantity) : "1", mc_override: item.mc_override !== null && item.mc_override !== undefined ? String(item.mc_override) : "", rate_override: item.rate_override !== null && item.rate_override !== undefined ? String(item.rate_override) : "", amount_override: item.amount_override !== null && item.amount_override !== undefined ? String(item.amount_override) : "", }));
     setItems(loadedItems.length > 0 ? loadedItems : [createItem(settings.default_hsn)]); setIsDirty(false); setShowRecentBills(false); setShowLedger(false); toast.success(`Loaded ${bill.document_number} for editing`); goToBillTop();
   };
 
@@ -518,7 +536,7 @@ export default function App() {
         advance_amount: num(advanceAmount), advance_method: advanceMethod, advance_split_cash: num(advanceSplitCash), is_advance_paid: isAdvancePaid,
         balance_method: balanceMethod, balance_split_cash: num(balanceSplitCash), is_balance_paid: isBalancePaid,
         discount: num(discount), exchange: num(exchange), round_off: manualRoundOff === "" ? null : num(manualRoundOff), notes,
-        items: computed.items.map((item) => ({ description: item.description, hsn: item.hsn, weight: num(item.weight), quantity: num(item.quantity), rate_override: item.rate_override === "" ? null : num(item.rate_override), amount_override: item.amount_override === "" ? null : num(item.amount_override), rate: item.rate, amount: item.amount, sl_no: item.slNo })),
+        items: computed.items.map((item) => ({ description: item.description, hsn: item.hsn, weight: num(item.weight), quantity: num(item.quantity), mc_override: item.mc_override === "" ? null : num(item.mc_override), rate_override: item.rate_override === "" ? null : num(item.rate_override), amount_override: item.amount_override === "" ? null : num(item.amount_override), rate: item.rate, amount: item.amount, sl_no: item.slNo })),
         totals: { grand_total: computed.grandTotal, subtotal: computed.subtotal }
       };
 
@@ -553,14 +571,28 @@ export default function App() {
 
   const publicComputedItems = useMemo(() => {
     if (!publicBill || !publicSettings) return [];
-    const baseRate = num(publicSettings.silver_rate_per_gram) + num(publicSettings.making_charge_per_gram);
+    const baseSilverRate = num(publicSettings.silver_rate_per_gram);
+    const baseMCPerGram = num(publicSettings.making_charge_per_gram);
+    const flatMCBelow5g = num(publicSettings.flat_mc_below_5g);
+
     return publicBill.items.map((item, index) => {
-      const rate = (item.rate !== undefined && item.rate !== null) ? num(item.rate) : (item.rate_override ? num(item.rate_override) : baseRate);
-      const weight = num(item.weight); const quantity = Math.max(num(item.quantity || 1), 1);
-      const formulaAmount = publicBill.mode === "estimate" ? weight * rate * quantity : weight * rate;
+      const weight = num(item.weight);
+      const quantity = Math.max(num(item.quantity || 1), 1);
+      const silverRate = (item.rate_override !== undefined && item.rate_override !== null) ? num(item.rate_override) : baseSilverRate;
+
+      let mcAmount = 0;
+      if (item.mc_override !== undefined && item.mc_override !== null) mcAmount = weight * num(item.mc_override);
+      else if (flatMCBelow5g > 0 && weight > 0 && weight < 5) mcAmount = flatMCBelow5g;
+      else mcAmount = weight * baseMCPerGram;
+
+      const totalItemCost = (weight * silverRate) + mcAmount;
+      const formulaAmount = publicBill.mode === "estimate" ? totalItemCost * quantity : totalItemCost;
+      
       const amount = (item.amount !== undefined && item.amount !== null) ? num(item.amount) : (item.amount_override ? num(item.amount_override) : formulaAmount);
       const { rupees, paise } = splitAmount(amount);
-      return { ...item, sl_no: item.sl_no || (index + 1), rate, amount, rupees, paise, weight, quantity };
+      const rateForPrint = weight > 0 ? (amount / (publicBill.mode === "estimate" ? quantity : 1)) / weight : 0;
+      
+      return { ...item, sl_no: item.sl_no || (index + 1), rate: rateForPrint, amount, rupees, paise, weight, quantity };
     });
   }, [publicBill, publicSettings]);
 
@@ -643,9 +675,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="sheet-banner">
-            {publicBill.tx_type === "booking" ? "BOOKING RECEIPT" : publicBill.tx_type === "service" ? "SERVICE ORDER" : publicBill.mode === "invoice" ? "TAX INVOICE" : "ESTIMATE"}
-          </div>
+          <div className="sheet-banner">{publicBill.tx_type === "booking" ? "BOOKING RECEIPT" : publicBill.tx_type === "service" ? "SERVICE ORDER" : publicBill.mode === "invoice" ? "TAX INVOICE" : "ESTIMATE"}</div>
 
           <div className="meta-grid">
             <p><strong>{publicBill.mode === "invoice" ? "Invoice No" : "Estimate No"}:</strong> {publicBill.document_number}</p>
@@ -670,13 +700,9 @@ export default function App() {
               {publicComputedItems.map((item, idx) => (
                 <tr key={idx}>
                   {publicBill.mode === "invoice" ? (
-                    <>
-                      <td>{item.sl_no}</td><td>{item.description || "-"}</td><td>{item.hsn || "-"}</td><td>{money(item.weight)}</td><td>{money(item.rate)}</td><td>{item.rupees}.{item.paise}</td>
-                    </>
+                    <><td>{item.sl_no}</td><td>{item.description || "-"}</td><td>{item.hsn || "-"}</td><td>{money(item.weight)}</td><td>{money(item.rate)}</td><td>{item.rupees}.{item.paise}</td></>
                   ) : (
-                    <>
-                      <td>{item.sl_no}</td><td>{item.description || "-"}</td><td>{money(item.weight)}</td><td>{money(item.quantity)} x {money(item.rate)}</td><td>{item.rupees}</td><td>{item.paise}</td>
-                    </>
+                    <><td>{item.sl_no}</td><td>{item.description || "-"}</td><td>{money(item.weight)}</td><td>{money(item.quantity)} x {money(item.rate)}</td><td>{item.rupees}</td><td>{item.paise}</td></>
                   )}
                 </tr>
               ))}
@@ -688,15 +714,10 @@ export default function App() {
               <div className="totals-row"><span>{publicBill.mode === "invoice" ? "Taxable Amt." : "TOTAL"}</span><strong>₹{money(publicBill.totals.taxable_amount || publicBill.totals.subtotal)}</strong></div>
               {publicBill.mode === "invoice" ? (
                 <>
-                  <div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(publicBill.totals.cgst)}</strong></div>
-                  <div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(publicBill.totals.sgst)}</strong></div>
-                  <div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(publicBill.totals.igst)}</strong></div>
+                  <div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(publicBill.totals.cgst)}</strong></div><div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(publicBill.totals.sgst)}</strong></div><div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(publicBill.totals.igst)}</strong></div>
                 </>
               ) : (
-                <>
-                  <div className="totals-row"><span>DISCOUNT</span><strong>₹{money(publicBill.totals.discount)}</strong></div>
-                  <div className="totals-row"><span>EXCHANGE</span><strong>₹{money(publicBill.totals.exchange)}</strong></div>
-                </>
+                <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(publicBill.totals.discount)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(publicBill.totals.exchange)}</strong></div></>
               )}
               <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(publicBill.totals.mdr)}</strong></div>
               <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(publicBill.totals.round_off)}</strong></div>
@@ -722,8 +743,7 @@ export default function App() {
 
             {publicBill.mode === "invoice" ? (
               <div className="declaration" style={{ marginTop: "20px" }}>
-                <p className="section-title">DECLARATION</p>
-                <p>We declare that this bill shows the actual price of items and all details are correct.</p>
+                <p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p>
                 <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
                   <div onClick={() => { if(pbBranch.map_url && pbBranch.map_url !== "#") window.open(pbBranch.map_url, "_blank"); else toast.info("Feedback link not set for this branch yet!"); }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
                 </div>
@@ -731,10 +751,7 @@ export default function App() {
             ) : (
               <div className="policies" style={{ marginTop: "20px" }}>
                 <p className="section-title">POLICIES, T&C</p>
-                <ul className="policies-list">
-                  <li>6 Months of repair and polishing warranty only on silver ornaments.</li>
-                  <li>You can replace purchased items within 7 days for manufacturing defects.</li>
-                </ul>
+                <ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul>
                 <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
                   <div onClick={() => { if(pbBranch.map_url && pbBranch.map_url !== "#") window.open(pbBranch.map_url, "_blank"); else toast.info("Feedback link not set for this branch yet!"); }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
                 </div>
@@ -784,6 +801,7 @@ export default function App() {
       <div style={{ position: "absolute", top: "-9999px", left: "-9999px", opacity: 0, pointerEvents: "none" }}>
         {filteredRecentBills.map(b => {
            const billBranch = settings.branches.find(br => br.id === b.branch_id) || settings.branches[0];
+           const bulkUpiAmountToPay = b.payment_method === "Split" ? num(b.split_upi) : (b.totals?.grand_total || 0);
            return (
              <section key={b.id} id={`bulk-bill-${b.document_number}`} className="bill-sheet" style={{ width: "800px", maxWidth: "800px", margin: 0, "--print-scale-factor": 1 }}>
                 {(b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) && <div className="watermark-done">FULLY PAID</div>}
@@ -929,7 +947,7 @@ export default function App() {
             <p><strong>Phone:</strong> {customer.phone || "-"}</p>
           </div>
 
-          <table className="bill-table" style={{ width: "100%" }}>
+          <table className="bill-table" style={{ width: "100%", tableLayout: isCompactView ? "auto" : "fixed", wordWrap: "break-word" }}>
             <thead>
               {mode === "invoice" ? (
                 <tr><th>Sl. No.</th><th>DESCRIPTION</th><th>HSN</th><th>WEIGHT IN GRAMS</th><th>RATE PER GRAM Rs.</th><th>AMOUNT Ps.</th></tr>
@@ -1048,10 +1066,11 @@ export default function App() {
               <div key={item.id} className="item-row-editor">
                 <Input value={item.description} onChange={(e) => updateItem(item.id, "description", e.target.value)} placeholder="Description" />
                 <Input value={item.hsn} onChange={(e) => updateItem(item.id, "hsn", e.target.value)} placeholder="HSN" />
-                <Input value={item.weight} onChange={(e) => updateItem(item.id, "weight", e.target.value)} placeholder="Weight" />
+                <Input value={item.weight} onChange={(e) => updateItem(item.id, "weight", e.target.value)} placeholder="Weight (g)" />
                 <Input value={item.quantity} onChange={(e) => updateItem(item.id, "quantity", e.target.value)} placeholder="Qty" />
-                <Input value={item.rate_override} onChange={(e) => updateItem(item.id, "rate_override", e.target.value)} placeholder="Rate override" />
-                <Input value={item.amount_override} onChange={(e) => updateItem(item.id, "amount_override", e.target.value)} placeholder="Amount override" />
+                <Input value={item.mc_override} onChange={(e) => updateItem(item.id, "mc_override", e.target.value)} placeholder="Custom MC ₹/g" />
+                <Input value={item.rate_override} onChange={(e) => updateItem(item.id, "rate_override", e.target.value)} placeholder="Custom Silver Rate" />
+                <Input value={item.amount_override} onChange={(e) => updateItem(item.id, "amount_override", e.target.value)} placeholder="Fixed Amount ₹" />
                 <Button type="button" variant="outline" onClick={() => { setItems((prev) => prev.filter((row) => row.id !== item.id)); markDirty(); }} disabled={items.length === 1}>Remove</Button>
               </div>
             ))}
@@ -1371,6 +1390,12 @@ export default function App() {
                   <h4 style={{ margin: "0 0 10px 0" }}>Math & Formulas</h4>
                   <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Silver Rate (per gram)</label><Input value={settings.silver_rate_per_gram} onChange={(e) => setSettings((prev) => ({ ...prev, silver_rate_per_gram: num(e.target.value) }))} style={{ marginBottom: "10px" }} />
                   <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Making Charge (per gram)</label><Input value={settings.making_charge_per_gram} onChange={(e) => setSettings((prev) => ({ ...prev, making_charge_per_gram: num(e.target.value) }))} style={{ marginBottom: "10px" }} />
+                  
+                  {/* ✅ NEW: BELOW 5G FLAT MAKING CHARGE SETTING */}
+                  <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Below 5g Rule: Flat Making Charge (₹)</label>
+                  <Input value={settings.flat_mc_below_5g} onChange={(e) => setSettings((prev) => ({ ...prev, flat_mc_below_5g: num(e.target.value) }))} style={{ marginBottom: "2px" }} />
+                  <p style={{ fontSize: "0.75rem", color: "#666", marginBottom: "10px", marginTop: "0" }}>Example: 150 (If weight is under 5g, applies this flat fee instead of per-gram MC. Set to 0 to disable).</p>
+
                   <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Default HSN Code</label><Input value={settings.default_hsn} onChange={(e) => setSettings((prev) => ({ ...prev, default_hsn: e.target.value }))} style={{ marginBottom: "10px" }} />
                   <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Formula Note (Prints on bill)</label><Input value={settings.formula_note} onChange={(e) => setSettings((prev) => ({ ...prev, formula_note: e.target.value }))} />
                 </div>
