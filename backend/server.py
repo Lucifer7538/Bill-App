@@ -9,7 +9,6 @@ import uuid
 from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query
 from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel, Field
 from pymongo import ReturnDocument
 import requests
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,8 +31,7 @@ ledger_logs_collection = db.ledger_logs
 
 app = FastAPI()
 
-# --- 🚨 MASTER FIX: CORS SECURITY 🚨 ---
-# This allows any Vercel URL to save and update bills on your iPad.
+# --- Security ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -46,30 +44,26 @@ api_router = APIRouter(prefix="/api")
 ACTIVE_TOKENS: Dict[str, str] = {}
 AUTH_PASSCODE = os.environ.get("AUTH_PASSCODE", "1234")
 
-# Supabase Check (For Cloud Fallback Badge)
+# Supabase Check
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip()
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
 SUPABASE_ENABLED = bool(SUPABASE_URL and SUPABASE_KEY and "YOUR_" not in SUPABASE_URL)
 
-# --- Helper Functions ---
-
 def now_iso():
     return datetime.now(timezone.utc).isoformat()
 
-# ✅ THE LEDGER ENGINE: Automatically moves money and creates history logs
+# --- The Ledger Engine ---
 async def update_ledger(bill: dict, reverse: bool = False):
     m = -1 if reverse else 1
     method = bill.get("payment_method")
     mode = bill.get("mode")
     branch_id = bill.get("branch_id")
     
-    # Handle both frontend formats for grand total
     totals = bill.get("totals", {})
     total = float(totals.get("grand_total") or totals.get("grandTotal") or 0)
     
     c, eb, ib = 0.0, 0.0, 0.0
-    if method == "Cash":
-        c = total
+    if method == "Cash": c = total
     elif method in ["UPI", "Card"]:
         if mode == "estimate": eb = total
         else: ib = total
@@ -80,7 +74,6 @@ async def update_ledger(bill: dict, reverse: bool = False):
 
     if c == 0 and eb == 0 and ib == 0: return
 
-    # Update Vault Balances
     await settings_collection.update_one(
         {"key": "app_settings", "branches.id": branch_id},
         {"$inc": {
@@ -90,8 +83,7 @@ async def update_ledger(bill: dict, reverse: bool = False):
         }}
     )
 
-    # Create Ledger History Log
-    log_reason = f"{'MIGRATION/REFUND' if reverse else 'MIGRATION/SALE'}: {bill.get('document_number')}"
+    log_reason = f"{'MIGRATION/REFUND' if reverse else 'SALE/PAYMENT'}: {bill.get('document_number')}"
     await ledger_logs_collection.insert_one({
         "id": str(uuid.uuid4()),
         "branch_id": branch_id,
@@ -110,10 +102,9 @@ def require_auth(authorization: str = Header(None)):
 
 # --- API Routes ---
 
-# ✅ ROOT PATH: Fixes 404/422 errors on Cron-job.org to keep server awake
 @app.get("/")
 async def root():
-    return {"status": "online", "server": "Jalaram-Master-V4", "msg": "Backend is awake"}
+    return {"status": "online", "server": "Jalaram-Master-V5", "msg": "Backend is awake"}
 
 @api_router.post("/auth/login")
 async def login(payload: dict):
@@ -130,8 +121,7 @@ async def verify(_=Depends(require_auth)):
 async def cloud_status(_=Depends(require_auth)):
     return {"provider": "supabase", "enabled": SUPABASE_ENABLED, "mode": "live" if SUPABASE_ENABLED else "fallback"}
 
-# --- Settings & Ledger ---
-
+# --- Settings ---
 @api_router.get("/settings")
 async def get_settings(_=Depends(require_auth)):
     doc = await settings_collection.find_one({"key": "app_settings"}, {"_id": 0})
@@ -174,47 +164,92 @@ async def adjust(payload: dict, _=Depends(require_auth)):
 async def get_logs(branch_id: str = Query(...), _=Depends(require_auth)):
     return await ledger_logs_collection.find({"branch_id": branch_id}, {"_id": 0}).sort("date", -1).to_list(50)
 
+
 # --- Billing Logic ---
 
+# ✅ FIX 1: Preview the next number safely (DOES NOT increment the database)
 @api_router.get("/bills/next-number")
 async def next_num(mode: str, branch_id: str, _=Depends(require_auth)):
-    doc = await counters_collection.find_one_and_update(
-        {"mode": mode, "branch_id": branch_id}, 
-        {"$inc": {"value": 1}}, 
-        upsert=True, 
-        return_document=ReturnDocument.AFTER
-    )
-    val = doc.get("value", 1)
+    doc = await counters_collection.find_one({"mode": mode, "branch_id": branch_id})
+    val = (doc.get("value", 0) if doc else 0) + 1
     prefix = "INV" if mode == "invoice" else "EST"
     return {"document_number": f"{branch_id}-{prefix}-{val:04d}"}
 
+# ✅ FIX 2: Permanently claim the number ONLY when you click Save
 @api_router.post("/bills/save")
 async def save_bill(payload: dict, _=Depends(require_auth)):
     bill_id = str(uuid.uuid4())
+    doc_num = payload.get("document_number", "")
+    mode = payload.get("mode")
+    branch_id = payload.get("branch_id")
+
+    # Smart Scanner: Extracts the number (e.g., 50 from INV-0050) and updates DB
+    match = re.search(r'\d+$', doc_num)
+    if match:
+        new_val = int(match.group())
+        await counters_collection.update_one(
+            {"mode": mode, "branch_id": branch_id}, 
+            {"$set": {"value": new_val}}, 
+            upsert=True
+        )
+
     doc = {**payload, "id": bill_id, "created_at": now_iso()}
     await bills_collection.insert_one(doc)
+    
     if payload.get("is_payment_done"):
         await update_ledger(doc)
-    return {"id": bill_id, "document_number": payload.get("document_number")}
+    
+    return {"id": bill_id, "document_number": doc_num}
 
-# ✅ THE MIGRATION HUB: Updates branch/mode and moves the money correctly
 @api_router.put("/bills/update-by-id/{bill_id}")
 async def update_bill_by_id(bill_id: str, payload: dict, _=Depends(require_auth)):
     existing = await bills_collection.find_one({"id": bill_id})
     if not existing: raise HTTPException(404, "Bill ID not found")
 
-    # If it was already paid, reverse the money from the OLD branch/mode
+    # Update the counter if the document number was manually changed during edit
+    doc_num = payload.get("document_number", "")
+    match = re.search(r'\d+$', doc_num)
+    if match:
+        new_val = int(match.group())
+        await counters_collection.update_one(
+            {"mode": payload.get("mode"), "branch_id": payload.get("branch_id")}, 
+            {"$set": {"value": new_val}}, 
+            upsert=True
+        )
+
     if existing.get("is_payment_done"):
         await update_ledger(existing, reverse=True)
 
-    # Save the new details
     await bills_collection.update_one({"id": bill_id}, {"$set": {**payload, "updated_at": now_iso()}})
 
-    # If new version is paid, apply money to the NEW branch/mode
     if payload.get("is_payment_done"):
         await update_ledger(payload)
 
     return {"message": "Migration Successful"}
+
+# ✅ FIX 3: Restored the Missing Toggle Route!
+@api_router.put("/bills/{document_number}/toggle-payment")
+async def toggle_pay(document_number: str, payload: dict, _=Depends(require_auth)):
+    bill = await bills_collection.find_one({"document_number": document_number})
+    if not bill: raise HTTPException(404, "Bill not found")
+    
+    new_status = payload.get("is_payment_done")
+    
+    if new_status and not bill.get("is_payment_done"): 
+        await update_ledger(bill)
+    elif not new_status and bill.get("is_payment_done"): 
+        await update_ledger(bill, reverse=True)
+        
+    await bills_collection.update_one({"document_number": document_number}, {"$set": {"is_payment_done": new_status}})
+    return {"message": "Payment Status Toggled"}
+
+@api_router.delete("/bills/{document_number}")
+async def delete_bill(document_number: str, _=Depends(require_auth)):
+    bill = await bills_collection.find_one({"document_number": document_number})
+    if bill and bill.get("is_payment_done"):
+        await update_ledger(bill, reverse=True)
+    await bills_collection.delete_one({"document_number": document_number})
+    return {"message": "Deleted"}
 
 @api_router.get("/bills/recent")
 async def recent(limit: int = 20, branch_filter: str = "ALL", _=Depends(require_auth)):
@@ -224,14 +259,6 @@ async def recent(limit: int = 20, branch_filter: str = "ALL", _=Depends(require_
 @api_router.get("/bills/today")
 async def today(date: str, branch_id: str, _=Depends(require_auth)):
     return await bills_collection.find({"date": date, "branch_id": branch_id}, {"_id": 0}).to_list(100)
-
-@api_router.delete("/bills/{document_number}")
-async def delete_bill(document_number: str, _=Depends(require_auth)):
-    bill = await bills_collection.find_one({"document_number": document_number})
-    if bill and bill.get("is_payment_done"):
-        await update_ledger(bill, reverse=True)
-    await bills_collection.delete_one({"document_number": document_number})
-    return {"message": "Deleted"}
 
 @api_router.get("/customers/suggest")
 async def suggest(query: str = Query(...), _=Depends(require_auth)):
