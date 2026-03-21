@@ -27,43 +27,70 @@ const defaultSettings = {
   tagline: "The Silver Specialist",
   phone_numbers: ["+91 9583221115", "+91 9776177296", "+91 7538977527"],
   email: "jalaramjewellers26@gmail.com",
+
   shop_name_color: "#000000",
   shop_name_size: 26,
   shop_name_font: "sans-serif",
   shop_name_align: "center",
+
   tagline_color: "#475569",
   tagline_size: 12,
   tagline_font: "sans-serif",
   tagline_align: "center",
+
   address_color: "#475569",
   address_size: 14,
   address_font: "sans-serif",
   address_align: "center",
+
   phone_color: "#475569",
   phone_size: 13,
   phone_font: "sans-serif",
   phone_align: "center",
+
   email_color: "#475569",
   email_size: 13,
   email_font: "sans-serif",
   email_align: "center",
+
   gstin: "21AAUFJ1925F1ZH",
   silver_rate_per_gram: 240,
   making_charge_per_gram: 15,
   default_hsn: "7113",
   formula_note: "Line total = Weight × (Silver rate per gram + Making charge per gram)",
+  
   logo_data_url: "",
   about_qr_data_url: STATIC_ABOUT_QR_URL,
   custom_fonts: [],
+  
   branches: [
-    { id: "B1", name: "Branch 1 (Old Town)", address: "Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2", map_url: "https://g.page/r/CVvnomQZn7zxEBE/review", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 },
-    { id: "B2", name: "Branch 2 (Unit-2)", address: "Branch - 2 : Shop No.14, BMC Market Complex, Market Building, Near Petrol Pump, Unit-2, BBSR-9", map_url: "#", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 }
+    {
+      id: "B1",
+      name: "Branch 1 (Old Town)",
+      address: "Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2",
+      map_url: "https://g.page/r/CVvnomQZn7zxEBE/review",
+      invoice_upi_id: "eazypay.0000048595@icici",
+      estimate_upi_id: "7538977527@ybl",
+      cash_balance: 0,
+      estimate_bank_balance: 0,
+      invoice_bank_balance: 0
+    },
+    {
+      id: "B2",
+      name: "Branch 2 (Unit-2)",
+      address: "Branch - 2 : Shop No.14, BMC Market Complex, Market Building, Near Petrol Pump, Unit-2, BBSR-9",
+      map_url: "#",
+      invoice_upi_id: "eazypay.0000048595@icici",
+      estimate_upi_id: "7538977527@ybl",
+      cash_balance: 0,
+      estimate_bank_balance: 0,
+      invoice_bank_balance: 0
+    }
   ]
 };
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-// ✅ BULLETPROOF MATH TO PREVENT NaN.NaN
 const num = (val) => {
   if (val === null || val === undefined || val === "") return 0;
   const parsed = Number.parseFloat(val);
@@ -79,7 +106,6 @@ const getInitialPrintScale = () => {
   return clampPrintScale(saved);
 };
 
-// ✅ BULLETPROOF SPLIT FOR RUPEES AND PAISE
 const splitAmount = (amt) => {
   const validAmt = Number.isFinite(amt) ? amt : 0;
   const rupees = Math.floor(validAmt);
@@ -321,7 +347,7 @@ export default function App() {
     });
   }, [recentBillsList, recentModeFilter, recentDateFilter, customStartDate, customEndDate]);
 
-  // ✅ FIX: Force strict 800px Layout and CORS rendering for BULK PDF Export
+  // ✅ FULLY FIXED BULK PDF: Forces Desktop width safely
   const handleBulkDownload = async () => {
     if (filteredRecentBills.length === 0) { toast.error("No bills to download!"); return; }
     if (filteredRecentBills.length > 20) {
@@ -332,7 +358,9 @@ export default function App() {
     
     const wasCompact = isCompactView;
     if (wasCompact) setIsCompactView(false);
-    await new Promise(resolve => setTimeout(resolve, 500)); // Wait for React DOM & Images to mount
+    
+    // Extra time for iPad to render desktop view
+    await new Promise(resolve => setTimeout(resolve, 800));
 
     try {
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
@@ -343,12 +371,16 @@ export default function App() {
         const node = document.getElementById(`bulk-bill-${bill.document_number}`);
         if (!node) continue;
         
+        node.style.display = "block";
+        node.style.width = "800px";
+        node.style.minWidth = "800px";
+        node.style.maxWidth = "800px";
+
         const canvas = await html2canvas(node, { 
           scale: 2, 
           useCORS: true, 
           allowTaint: true,
           backgroundColor: "#ffffff", 
-          windowWidth: 1200, // Forces Desktop view in CSS
           onclone: (clonedDoc) => {
             const clonedNode = clonedDoc.getElementById(`bulk-bill-${bill.document_number}`);
             if (clonedNode) {
@@ -357,12 +389,15 @@ export default function App() {
               clonedNode.style.maxWidth = "800px";
               clonedNode.style.padding = "20px";
               
-              // Force Images to render properly
               const images = clonedNode.getElementsByTagName('img');
-              for (let img of images) img.crossOrigin = "anonymous";
+              for (let img of images) {
+                 img.crossOrigin = "anonymous";
+              }
             }
           }
         });
+
+        node.style.display = "none"; // Hide after rendering
 
         const imgData = canvas.toDataURL("image/png", 1.0);
         const pageHeight = (canvas.height * pageWidth) / canvas.width;
@@ -831,14 +866,14 @@ export default function App() {
     finally { setSavingBill(false); }
   };
 
-  // ✅ FIX: Force strict 800px Desktop Layout & Allow CORS Images for PDF capture
+  // ✅ FULLY FIXED: Forces iPad into Desktop layout during capture
   const downloadPdf = async (elementId, filename) => {
     toast.info("Preparing PDF...");
     const wasCompact = isCompactView;
     if (wasCompact) setIsCompactView(false);
 
-    // Wait for React to completely update the DOM before capturing
-    await new Promise(resolve => setTimeout(resolve, 500));
+    // Wait extra long for iPad Safari to finish redrawing the Desktop DOM
+    await new Promise(resolve => setTimeout(resolve, 800));
 
     const node = document.getElementById(elementId); 
     if (!node) {
@@ -846,13 +881,25 @@ export default function App() {
       return;
     }
 
+    const originalWidth = node.style.width;
+    const originalMaxWidth = node.style.maxWidth;
+    const originalMinWidth = node.style.minWidth;
+    const originalMargin = node.style.margin;
+
+    // Hard-lock the live node width so Safari doesn't compress the table
+    node.style.width = "800px";
+    node.style.maxWidth = "800px";
+    node.style.minWidth = "800px";
+    node.style.margin = "0";
+
     try {
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
       const canvas = await html2canvas(node, { 
         scale: 2, 
         useCORS: true, 
         allowTaint: true,
         backgroundColor: "#ffffff",
-        windowWidth: 1200, // Tricks CSS into thinking it is a Desktop screen
         onclone: (clonedDoc) => {
           const clonedNode = clonedDoc.getElementById(elementId);
           if (clonedNode) {
@@ -861,10 +908,8 @@ export default function App() {
              clonedNode.style.minWidth = "800px";
              clonedNode.style.margin = "0";
              clonedNode.style.padding = "20px";
-             clonedNode.style.transform = "none";
-             clonedNode.style.overflow = "visible";
              
-             // Ensure images are fully visible in the cloned DOM
+             // Ensure images load properly in the clone
              const images = clonedNode.getElementsByTagName('img');
              for (let img of images) {
                 img.crossOrigin = "anonymous";
@@ -882,6 +927,10 @@ export default function App() {
     } catch (error) {
       toast.error("Failed to download PDF.");
     } finally {
+      node.style.width = originalWidth;
+      node.style.maxWidth = originalMaxWidth;
+      node.style.minWidth = originalMinWidth;
+      node.style.margin = originalMargin;
       if (wasCompact) setIsCompactView(true);
     }
   };
@@ -914,7 +963,6 @@ export default function App() {
   const todaysTotalEstBank = todayBills.filter(b => b.is_payment_done && b.mode === 'estimate').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? b.totals.grand_total : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
   const todaysTotalInvBank = todayBills.filter(b => b.is_payment_done && b.mode === 'invoice').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? b.totals.grand_total : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
 
-  // ✅ FIX: Bulletproof calculation fallback for older bills missing data
   const publicComputedItems = useMemo(() => {
     if (!publicBill || !publicSettings) return [];
     const baseRate = num(publicSettings.silver_rate_per_gram) + num(publicSettings.making_charge_per_gram);
@@ -1051,7 +1099,7 @@ export default function App() {
             <p><strong>Phone:</strong> {publicBill.customer?.phone || "-"}</p>
           </div>
 
-          <table className="bill-table">
+          <table className="bill-table" style={{ width: "100%" }}>
             <thead>
               {isCompactView ? (
                 <tr><th>#</th><th>Item</th><th>Wt / Rate</th><th>Amount</th></tr>
@@ -1127,7 +1175,7 @@ export default function App() {
               {showPublicUpi && (
                 <div className="payment-qr-box">
                   <p className="scan-title" style={{ marginBottom: "15px" }}>Click Below to Pay</p>
-                  <img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" crossOrigin="anonymous" />
+                  
                   <a 
                     href={publicUpiUri} 
                     style={{
@@ -1139,8 +1187,7 @@ export default function App() {
                       fontWeight: "bold",
                       borderRadius: "8px",
                       textAlign: "center",
-                      boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
-                      marginTop: "10px"
+                      boxShadow: "0 4px 6px rgba(0,0,0,0.1)"
                     }}
                   >
                     📱 Pay ₹{money(publicUpiAmountToPay)} via UPI App
@@ -1163,16 +1210,11 @@ export default function App() {
               </div>
             </div>
 
+            {/* ✅ FIX: About QR completely removed from Public View */}
             {publicBill.mode === "invoice" ? (
               <div className="declaration" style={{ marginTop: "20px" }}>
                 <p className="section-title">DECLARATION</p>
                 <p>We declare that this bill shows the actual price of items and all details are correct.</p>
-                <div className="about-qr">
-                  <p className="section-title">About Us QR</p>
-                  {(publicSettings.about_qr_data_url || STATIC_ABOUT_QR_URL) && (
-                    <img src={publicSettings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="About us QR" className="about-qr-image" crossOrigin="anonymous" />
-                  )}
-                </div>
                 <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
                   <div onClick={() => {
                       if(pbBranch.map_url && pbBranch.map_url !== "#") {
@@ -1191,12 +1233,6 @@ export default function App() {
                   <li>6 Months of repair and polishing warranty only on silver ornaments.</li>
                   <li>You can replace purchased items within 7 days for manufacturing defects.</li>
                 </ul>
-                <div className="about-qr">
-                  <p className="section-title">About Us QR</p>
-                  {(publicSettings.about_qr_data_url || STATIC_ABOUT_QR_URL) && (
-                    <img src={publicSettings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="About us QR" className="about-qr-image" crossOrigin="anonymous" />
-                  )}
-                </div>
                 <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
                   <div onClick={() => {
                       if(pbBranch.map_url && pbBranch.map_url !== "#") {
@@ -1304,7 +1340,7 @@ export default function App() {
                   <p><strong>Phone:</strong> {b.customer?.phone || "-"}</p>
                 </div>
 
-                <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
+                <table className="bill-table" style={{ width: "100%" }}>
                   <thead>
                     {b.mode === "invoice" ? (
                       <tr><th>Sl. No.</th><th>DESCRIPTION</th><th>HSN</th><th>WEIGHT IN GRAMS</th><th>RATE PER GRAM Rs.</th><th>AMOUNT Ps.</th></tr>
@@ -1475,7 +1511,8 @@ export default function App() {
             <p><strong>Phone:</strong> {customer.phone || "-"}</p>
           </div>
 
-          <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
+          {/* ✅ FIX: Removed fixed table layout so it flexes naturally on iPad */}
+          <table className="bill-table" style={{ width: "100%" }}>
             <thead>
               {isCompactView ? (
                 <tr><th>#</th><th>Item</th><th>Wt / Rate</th><th>Amount</th></tr>
@@ -2329,7 +2366,7 @@ export default function App() {
                    {settings.branches.map((b, index) => (
                        <div key={b.id} style={{ padding: "15px", border: "1px solid #cbd5e1", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "10px" }}>
-                              <h4 style={{ margin: 0, color: "var(--brand)" }}>Branch: {b.name}</h4>
+                              <h4 style={{ margin: "0, color: "var(--brand)" }}>Branch: {b.name}</h4>
                               {settings.branches.length > 1 && (
                                   <Button size="sm" variant="outline" style={{ borderColor: "#ef4444", color: "#ef4444", padding: "0 8px", height: "24px" }} onClick={() => {
                                       if(window.confirm(`Delete ${b.name}?`)) {
