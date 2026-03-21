@@ -18,7 +18,6 @@ const createItem = (defaultHsn = "") => ({
   hsn: defaultHsn,
   weight: "",
   quantity: "1",
-  custom_making_charge: "",
   rate_override: "",
   amount_override: "",
 });
@@ -496,37 +495,16 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [customer.phone, customer.name, token, isPublicView, authHeaders]);
 
-  // ✅ SMART CALCULATION ENGINE (Handles Custom Making Charge and < 5g Logic)
   const computed = useMemo(() => {
-    const baseSilverRate = num(settings.silver_rate_per_gram);
-    const defaultMakingCharge = num(settings.making_charge_per_gram);
-    
+    const baseRate = num(settings.silver_rate_per_gram) + num(settings.making_charge_per_gram);
     const mapped = items.map((item, index) => {
-      // Feature 1: Custom Making Charge Override
-      const hasCustomMc = item.custom_making_charge !== "" && item.custom_making_charge !== null && item.custom_making_charge !== undefined;
-      const customMc = hasCustomMc ? num(item.custom_making_charge) : defaultMakingCharge;
-      
+      const rate = item.rate_override !== "" ? num(item.rate_override) : baseRate;
       const weight = num(item.weight);
       const quantity = Math.max(num(item.quantity), 1);
-      
-      let calculatedRate = baseSilverRate + customMc;
-      let formulaAmount = 0;
-
-      // Feature 2: If weight < 5g AND no custom making charge is specified, flat 50 Rs applies
-      if (weight > 0 && weight < 5 && !hasCustomMc) {
-          // Adjust the displayed rate so Weight * Rate mathematically matches the Flat Amount
-          calculatedRate = baseSilverRate + (50 / weight);
-          let perItemAmt = (weight * baseSilverRate) + 50;
-          formulaAmount = mode === "estimate" ? perItemAmt * quantity : perItemAmt;
-      } else {
-          formulaAmount = mode === "estimate" ? weight * calculatedRate * quantity : weight * calculatedRate;
-      }
-
-      // Check for Manual Rate or Amount Overrides
-      const rate = item.rate_override !== "" ? num(item.rate_override) : calculatedRate;
+      const formulaAmount = mode === "estimate" ? weight * rate * quantity : weight * rate;
       const amount = item.amount_override !== "" ? num(item.amount_override) : formulaAmount;
-      
-      const { rupees, paise } = splitAmount(amount);
+      const rupees = Math.floor(amount);
+      const paise = Math.round((amount - rupees) * 100).toString().padStart(2, "0");
       return { ...item, slNo: index + 1, rate, quantity, amount, rupees, paise };
     });
 
@@ -542,7 +520,7 @@ export default function App() {
     const roundOff = manualRoundOff === "" ? autoRound : num(manualRoundOff);
     const grandTotal = baseTotal + roundOff;
 
-    return { items: mapped, baseRate: baseSilverRate, subtotal, taxable, cgst, sgst, igst, mdr, roundOff, grandTotal };
+    return { items: mapped, baseRate, subtotal, taxable, cgst, sgst, igst, mdr, roundOff, grandTotal };
   }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff]);
 
   const getUpiAmount = () => {
@@ -588,6 +566,7 @@ export default function App() {
     setCustomer({ name: "", phone: "", address: "", email: "" });
     setSuggestions([]); setDiscount("0"); setExchange("0"); setManualRoundOff("");
     
+    // Reset transaction states
     setTxType("sale");
     setPaymentMethod(""); setSplitCash(""); setIsPaymentDone(false); 
     setAdvanceAmount(""); setAdvanceMethod(""); setAdvanceSplitCash(""); setIsAdvancePaid(false);
@@ -616,6 +595,7 @@ export default function App() {
     setDocumentNumber(bill.document_number);
     setBillDate(bill.date || today());
     
+    // Load Customer perfectly mapping flat fields
     setCustomer({ 
       name: bill.customer_name || bill.customer?.name || "", 
       phone: bill.customer_phone || bill.customer?.phone || "", 
@@ -645,7 +625,6 @@ export default function App() {
     const loadedItems = (bill.items || []).map((item) => ({
       id: `${Date.now()}-${Math.random()}`, description: item.description || "", hsn: item.hsn || "",
       weight: item.weight ? String(item.weight) : "", quantity: item.quantity ? String(item.quantity) : "1",
-      custom_making_charge: item.custom_making_charge !== null && item.custom_making_charge !== undefined ? String(item.custom_making_charge) : "",
       rate_override: item.rate_override !== null && item.rate_override !== undefined ? String(item.rate_override) : "",
       amount_override: item.amount_override !== null && item.amount_override !== undefined ? String(item.amount_override) : "",
     }));
@@ -874,7 +853,6 @@ export default function App() {
           hsn: item.hsn, 
           weight: num(item.weight), 
           quantity: num(item.quantity), 
-          custom_making_charge: item.custom_making_charge === "" ? null : num(item.custom_making_charge),
           rate_override: item.rate_override === "" ? null : num(item.rate_override), 
           amount_override: item.amount_override === "" ? null : num(item.amount_override),
           rate: item.rate,
@@ -886,11 +864,12 @@ export default function App() {
 
       if (currentBillId) {
         await axios.put(`${API}/bills/update-by-id/${currentBillId}`, payload, { headers: authHeaders });
-        toast.success(`Bill updated & ledger synced securely.`);
+        toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} updated & migrated successfully.`);
         setIsDirty(false);
+        setEditingDocNumber(documentNumber);
       } else {
         const res = await axios.post(`${API}/bills/save`, payload, { headers: authHeaders });
-        toast.success(`Bill saved securely.`);
+        toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} saved successfully.`);
         setIsDirty(false);
         setCurrentBillId(res.data.id);
         setEditingDocNumber(res.data.document_number);
@@ -976,38 +955,21 @@ export default function App() {
   const todaysTotalEstBank = todayBills.filter(b => b.is_payment_done && b.mode === 'estimate').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? b.totals.grand_total : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
   const todaysTotalInvBank = todayBills.filter(b => b.is_payment_done && b.mode === 'invoice').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? b.totals.grand_total : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
 
-  // ✅ PUBLIC VIEW SMART CALCULATOR 
   const publicComputedItems = useMemo(() => {
     if (!publicBill || !publicSettings) return [];
-    const baseSilverRate = num(publicSettings.silver_rate_per_gram);
-    const defaultMakingCharge = num(publicSettings.making_charge_per_gram);
-    
+    const baseRate = num(publicSettings.silver_rate_per_gram) + num(publicSettings.making_charge_per_gram);
     return publicBill.items.map((item, index) => {
-      const hasCustomMc = item.custom_making_charge !== undefined && item.custom_making_charge !== null && item.custom_making_charge !== "";
-      const customMc = hasCustomMc ? num(item.custom_making_charge) : defaultMakingCharge;
-      
+      const rate = (item.rate !== undefined && item.rate !== null) ? num(item.rate) : (item.rate_override ? num(item.rate_override) : baseRate);
       const weight = num(item.weight);
       const quantity = Math.max(num(item.quantity || 1), 1);
-      
-      let calculatedRate = baseSilverRate + customMc;
-      let formulaAmount = 0;
-
-      if (weight > 0 && weight < 5 && !hasCustomMc) {
-          calculatedRate = baseSilverRate + (50 / weight);
-          let perItemAmt = (weight * baseSilverRate) + 50;
-          formulaAmount = publicBill.mode === "estimate" ? perItemAmt * quantity : perItemAmt;
-      } else {
-          formulaAmount = publicBill.mode === "estimate" ? weight * calculatedRate * quantity : weight * calculatedRate;
-      }
-      
-      const rate = (item.rate !== undefined && item.rate !== null) ? num(item.rate) : (item.rate_override ? num(item.rate_override) : calculatedRate);
+      const formulaAmount = publicBill.mode === "estimate" ? weight * rate * quantity : weight * rate;
       const amount = (item.amount !== undefined && item.amount !== null) ? num(item.amount) : (item.amount_override ? num(item.amount_override) : formulaAmount);
       const { rupees, paise } = splitAmount(amount);
-      
       return { ...item, sl_no: item.sl_no || (index + 1), rate, amount, rupees, paise, weight, quantity };
     });
   }, [publicBill, publicSettings]);
 
+  // PUBLIC VIEW BLOCK
   if (isPublicView) {
     if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
     if (publicBill === "NOT_FOUND" || !publicBill) return <div className="loading-screen">Bill not found or has been deleted.</div>;
@@ -1141,28 +1103,19 @@ export default function App() {
             <p><strong>Phone:</strong> {publicBill.customer_phone || publicBill.customer?.phone || "-"}</p>
           </div>
 
-          <table className="bill-table" style={{ width: "100%", tableLayout: "auto", wordWrap: "break-word" }}>
+          <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
             <thead>
-              {isCompactView ? (
-                <tr><th>#</th><th>Item</th><th>Wt / Rate</th><th>Amount</th></tr>
-              ) : publicBill.mode === "invoice" ? (
-                <tr><th>Sl. No.</th><th>DESCRIPTION</th><th>HSN</th><th>WEIGHT IN GRAMS</th><th>RATE PER GRAM Rs.</th><th>AMOUNT Ps.</th></tr>
+              {publicBill.mode === "invoice" ? (
+                <tr><th>Sl. No.</th><th>DESCRIPTION</th><th>HSN</th><th>WEIGHT IN GRAMS</th><th>RATE PER GRAM Rs.</th><th>AMOUNT</th></tr>
               ) : (
-                <tr><th>Sl. No.</th><th>Particulars</th><th>Weight</th><th>Qty x Rate</th><th>Amount Rs.</th><th>Ps.</th></tr>
+                <tr><th>Sl. No.</th><th>Particulars</th><th>Weight</th><th>Qty x Rate</th><th>Rate</th><th>Amount</th></tr>
               )}
             </thead>
             <tbody>
               {publicComputedItems.map((item, idx) => {
                 return (
                   <tr key={idx}>
-                    {isCompactView ? (
-                      <>
-                        <td>{item.sl_no}</td>
-                        <td><strong>{item.description || "-"}</strong>{publicBill.mode === "invoice" && <div>HSN: {item.hsn || "-"}</div>}</td>
-                        <td>{money(item.weight)}g x ₹{money(item.rate)}</td>
-                        <td>{item.rupees}.{item.paise}</td>
-                      </>
-                    ) : publicBill.mode === "invoice" ? (
+                    {publicBill.mode === "invoice" ? (
                       <>
                         <td>{item.sl_no}</td>
                         <td>{item.description || "-"}</td>
@@ -1177,8 +1130,8 @@ export default function App() {
                         <td>{item.description || "-"}</td>
                         <td>{money(item.weight)}</td>
                         <td>{money(item.quantity)} x {money(item.rate)}</td>
-                        <td>{item.rupees}</td>
-                        <td>{item.paise}</td>
+                        <td>{money(item.rate)}</td>
+                        <td>{item.rupees}.{item.paise}</td>
                       </>
                     )}
                   </tr>
@@ -1227,35 +1180,34 @@ export default function App() {
                   </div>
                 </>
               )}
-
-              {showPublicUpi && (
-                <div className="payment-qr-box">
-                  <p className="scan-title" style={{ marginBottom: "15px" }}>Click Below to Pay ₹{money(publicUpiAmt)}</p>
-                  
-                  <a 
-                    href={publicUpiUri} 
-                    style={{
-                      display: "block",
-                      padding: "12px 20px",
-                      backgroundColor: "#16a34a",
-                      color: "white",
-                      textDecoration: "none",
-                      fontWeight: "bold",
-                      borderRadius: "8px",
-                      textAlign: "center",
-                      boxShadow: "0 4px 6px rgba(0,0,0,0.1)"
-                    }}
-                  >
-                    📱 Pay ₹{money(publicUpiAmt)} via Any UPI App
-                  </a>
-                </div>
-              )}
             </div>
 
+            {showPublicUpi && (
+              <div className="payment-qr-box">
+                <p className="scan-title" style={{ marginBottom: "15px" }}>Click Below to Pay ₹{money(publicUpiAmt)}</p>
+                <a 
+                  href={publicUpiUri} 
+                  style={{ display: "block", padding: "12px 20px", backgroundColor: "#16a34a", color: "white", textDecoration: "none", fontWeight: "bold", borderRadius: "8px", textAlign: "center", boxShadow: "0 4px 6px rgba(0,0,0,0.1)" }}
+                >
+                  📱 Pay ₹{money(publicUpiAmt)} via Any UPI App
+                </a>
+                
+                <div style={{ marginTop: "20px" }}>
+                  <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>
+                    Or select your app directly:
+                  </p>
+                  <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
+                    <a href={publicUpiUri.replace("upi://pay", "phonepe://pay")} style={{ padding: "8px 16px", backgroundColor: "#5f259f", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>PhonePe</a>
+                    <a href={publicUpiUri.replace("upi://pay", "tez://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#1a73e8", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>G-Pay</a>
+                    <a href={publicUpiUri.replace("upi://pay", "paytmmp://pay")} style={{ padding: "8px 16px", backgroundColor: "#00baf2", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>Paytm</a>
+                    <a href={publicUpiUri.replace("upi://pay", "credpay://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#212121", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>CRED</a>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div style={{ marginTop: "25px", borderTop: "1px dashed #e2e8f0", paddingTop: "20px" }}>
-              <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>
-                Connect With Us:
-              </p>
+              <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Connect With Us:</p>
               <div style={{ display: 'flex', gap: '10px' }}>
                 <a href="https://chat.whatsapp.com/FHoih8XtTXGLtPvHWx7MO6?mode=gi_t" target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "12px", backgroundColor: "#25D366", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
                   <span style={{ fontSize: "1.2rem" }}>💬</span> WhatsApp Group
@@ -1272,11 +1224,8 @@ export default function App() {
                 <p>We declare that this bill shows the actual price of items and all details are correct.</p>
                 <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
                   <div onClick={() => {
-                      if(pbBranch.map_url && pbBranch.map_url !== "#") {
-                          window.open(pbBranch.map_url, "_blank");
-                      } else {
-                          toast.info("Feedback link not set for this branch yet!");
-                      }
+                      if(pbBranch.map_url && pbBranch.map_url !== "#") window.open(pbBranch.map_url, "_blank");
+                      else toast.info("Feedback link not set for this branch yet!");
                   }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
                 </div>
               </div>
@@ -1289,17 +1238,13 @@ export default function App() {
                 </ul>
                 <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
                   <div onClick={() => {
-                      if(pbBranch.map_url && pbBranch.map_url !== "#") {
-                          window.open(pbBranch.map_url, "_blank");
-                      } else {
-                          toast.info("Feedback link not set for this branch yet!");
-                      }
+                      if(pbBranch.map_url && pbBranch.map_url !== "#") window.open(pbBranch.map_url, "_blank");
+                      else toast.info("Feedback link not set for this branch yet!");
                   }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
                 </div>
               </div>
             )}
           </div>
-
           <footer className="sheet-footer">
             <p>Authorised Signature</p>
             <p>Thanking you.</p>
@@ -1309,6 +1254,7 @@ export default function App() {
     );
   }
 
+  // MAIN DASHBOARD BLOCKS
   if (checkingSession) {
     return (
       <div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
@@ -1318,11 +1264,7 @@ export default function App() {
             <p style={{ margin: '0 0 15px 0', fontSize: '0.9rem', color: '#64748b' }}>
               The database server is currently waking up from sleep mode. This usually takes about <strong>30 to 60 seconds</strong>.
             </p>
-            <Button 
-              variant="outline" 
-              onClick={() => { localStorage.clear(); window.location.reload(); }} 
-              style={{ width: '100%', borderColor: '#ef4444', color: '#ef4444' }}
-            >
+            <Button variant="outline" onClick={() => { localStorage.clear(); window.location.reload(); }} style={{ width: '100%', borderColor: '#ef4444', color: '#ef4444' }}>
               Force Quit & Clear Session
             </Button>
           </div>
@@ -1347,10 +1289,9 @@ export default function App() {
 
   return (
     <div className="billing-app">
-
       <Toaster position="bottom-right" />
 
-      {/* INVISIBLE BULK PDF RENDERER - NO ABOUT QR */}
+      {/* INVISIBLE BULK PDF RENDERER */}
       <div style={{ position: "absolute", top: "-9999px", left: "-9999px", opacity: 0, pointerEvents: "none" }}>
         {filteredRecentBills.map(b => {
            const billBranch = settings.branches.find(br => br.id === b.branch_id) || settings.branches[0];
@@ -1396,9 +1337,9 @@ export default function App() {
                 <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
                   <thead>
                     {b.mode === "invoice" ? (
-                      <tr><th>Sl. No.</th><th>DESCRIPTION</th><th>HSN</th><th>WEIGHT IN GRAMS</th><th>RATE PER GRAM Rs.</th><th>AMOUNT Ps.</th></tr>
+                      <tr><th>Sl. No.</th><th>DESCRIPTION</th><th>HSN</th><th>WEIGHT IN GRAMS</th><th>RATE PER GRAM Rs.</th><th>AMOUNT</th></tr>
                     ) : (
-                      <tr><th>Sl. No.</th><th>Particulars</th><th>Weight</th><th>Qty x Rate</th><th>Amount Rs.</th><th>Ps.</th></tr>
+                      <tr><th>Sl. No.</th><th>Particulars</th><th>Weight</th><th>Qty x Rate</th><th>Rate</th><th>Amount</th></tr>
                     )}
                   </thead>
                   <tbody>
@@ -1421,8 +1362,8 @@ export default function App() {
                               <td>{item.description || "-"}</td>
                               <td>{money(item.weight)}</td>
                               <td>{money(item.quantity)} x {money(item.rate)}</td>
-                              <td>{rupees}</td>
-                              <td>{paise}</td>
+                              <td>{money(item.rate)}</td>
+                              <td>{rupees}.{paise}</td>
                             </>
                           )}
                         </tr>
@@ -1475,7 +1416,6 @@ export default function App() {
            );
         })}
       </div>
-      {/* END OF BULK PDF RENDERER */}
 
       <header className="top-bar no-print">
         <div className="brand-block" style={{ display: "flex", alignItems: "center", gap: "15px" }}>
@@ -1585,27 +1525,18 @@ export default function App() {
             <p><strong>Phone:</strong> {customer.phone || "-"}</p>
           </div>
 
-          <table className="bill-table" style={{ width: "100%", tableLayout: isCompactView ? "auto" : "fixed", wordWrap: "break-word" }}>
+          <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
             <thead>
-              {isCompactView ? (
-                <tr><th>#</th><th>Item</th><th>Wt / Rate</th><th>Amount</th></tr>
-              ) : mode === "invoice" ? (
-                <tr><th>Sl. No.</th><th>DESCRIPTION</th><th>HSN</th><th>WEIGHT IN GRAMS</th><th>RATE PER GRAM Rs.</th><th>AMOUNT Ps.</th></tr>
+              {mode === "invoice" ? (
+                <tr><th>Sl. No.</th><th>DESCRIPTION</th><th>HSN</th><th>WEIGHT IN GRAMS</th><th>RATE PER GRAM Rs.</th><th>AMOUNT</th></tr>
               ) : (
-                <tr><th>Sl. No.</th><th>Particulars</th><th>Weight</th><th>Qty x Rate</th><th>Amount Rs.</th><th>Ps.</th></tr>
+                <tr><th>Sl. No.</th><th>Particulars</th><th>Weight</th><th>Qty x Rate</th><th>Rate</th><th>Amount</th></tr>
               )}
             </thead>
             <tbody>
               {computed.items.map((item) => (
                 <tr key={item.id}>
-                  {isCompactView ? (
-                    <>
-                      <td>{item.slNo}</td>
-                      <td><strong>{item.description || "-"}</strong>{mode === "invoice" && <div>HSN: {item.hsn || "-"}</div>}</td>
-                      <td>{money(item.weight)}g x ₹{money(item.rate)}</td>
-                      <td>{item.rupees}.{item.paise}</td>
-                    </>
-                  ) : mode === "invoice" ? (
+                  {mode === "invoice" ? (
                     <>
                       <td>{item.slNo}</td>
                       <td>{item.description || "-"}</td>
@@ -1620,8 +1551,8 @@ export default function App() {
                       <td>{item.description || "-"}</td>
                       <td>{money(item.weight)}</td>
                       <td>{money(item.quantity)} x {money(item.rate)}</td>
-                      <td>{item.rupees}</td>
-                      <td>{item.paise}</td>
+                      <td>{money(item.rate)}</td>
+                      <td>{item.rupees}.{item.paise}</td>
                     </>
                   )}
                 </tr>
@@ -1657,7 +1588,6 @@ export default function App() {
                 <strong>₹{money(computed.grandTotal)}</strong>
               </div>
 
-              {/* ✅ NEW: Display Advance & Balance Due */}
               {txType !== "sale" && (
                 <>
                   <div className="totals-row" style={{ marginTop: "10px", color: "#16a34a" }}>
@@ -1692,11 +1622,8 @@ export default function App() {
                 </div>
                 <div className="no-print" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
                   <div onClick={() => {
-                      if(activeBillBranch.map_url && activeBillBranch.map_url !== "#") {
-                          window.open(activeBillBranch.map_url, "_blank");
-                      } else {
-                          toast.info("Feedback link not set for this branch yet!");
-                      }
+                      if(activeBillBranch.map_url && activeBillBranch.map_url !== "#") window.open(activeBillBranch.map_url, "_blank");
+                      else toast.info("Feedback link not set for this branch yet!");
                   }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
                 </div>
               </div>
@@ -1715,11 +1642,8 @@ export default function App() {
                 </div>
                 <div className="no-print" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
                   <div onClick={() => {
-                      if(activeBillBranch.map_url && activeBillBranch.map_url !== "#") {
-                          window.open(activeBillBranch.map_url, "_blank");
-                      } else {
-                          toast.info("Feedback link not set for this branch yet!");
-                      }
+                      if(activeBillBranch.map_url && activeBillBranch.map_url !== "#") window.open(activeBillBranch.map_url, "_blank");
+                      else toast.info("Feedback link not set for this branch yet!");
                   }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
                 </div>
               </div>
@@ -1734,7 +1658,6 @@ export default function App() {
 
         <aside className="controls no-print">
           <div className="control-card">
-            
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
                 <h3 style={{ margin: 0 }}>Bill Details</h3>
                 <select 
@@ -1748,9 +1671,7 @@ export default function App() {
                             const res = await axios.get(`${API}/bills/next-number?mode=${mode}&branch_id=${nextBranch}`, { headers: authHeaders });
                             setDocumentNumber(res.data.document_number);
                             toast.info(`Migrating to Branch: ${nextBranch}`);
-                          } catch (err) {
-                            toast.error("Failed to fetch new number for migration.");
-                          }
+                          } catch (err) { toast.error("Failed to fetch new number for migration."); }
                         } else {
                           await reserveNumber(mode, nextBranch); 
                         }
@@ -1762,9 +1683,7 @@ export default function App() {
             </div>
 
             <div style={{ marginBottom: "15px", paddingBottom: "15px", borderBottom: "1px dashed var(--border)" }}>
-              <label className="select-label" style={{ fontSize: "0.8rem", marginBottom: "4px", display: "block" }}>
-                Bill Number (Editable)
-              </label>
+              <label className="select-label" style={{ fontSize: "0.8rem", marginBottom: "4px", display: "block" }}>Bill Number (Editable)</label>
               <Input 
                 value={documentNumber} 
                 onChange={(e) => { setDocumentNumber(e.target.value); markDirty(); }} 
@@ -1786,16 +1705,11 @@ export default function App() {
             {suggestions.length > 0 && (
               <div className="suggestions">
                 {suggestions.map((entry) => (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    className="suggestion-item"
-                    onClick={() => {
+                  <button key={entry.id} type="button" className="suggestion-item" onClick={() => {
                       setCustomer({ name: entry.name, phone: entry.phone, address: entry.address, email: entry.email });
                       setSuggestions([]);
                       markDirty();
-                    }}
-                  >
+                  }}>
                     {entry.name} · {entry.phone}
                   </button>
                 ))}
@@ -1811,7 +1725,6 @@ export default function App() {
                 <Input value={item.hsn} onChange={(e) => updateItem(item.id, "hsn", e.target.value)} placeholder="HSN" />
                 <Input value={item.weight} onChange={(e) => updateItem(item.id, "weight", e.target.value)} placeholder="Weight" />
                 <Input value={item.quantity} onChange={(e) => updateItem(item.id, "quantity", e.target.value)} placeholder="Qty" />
-                <Input value={item.custom_making_charge || ""} onChange={(e) => updateItem(item.id, "custom_making_charge", e.target.value)} placeholder="Making Chg ₹/g" />
                 <Input value={item.rate_override} onChange={(e) => updateItem(item.id, "rate_override", e.target.value)} placeholder="Rate override" />
                 <Input value={item.amount_override} onChange={(e) => updateItem(item.id, "amount_override", e.target.value)} placeholder="Amount override" />
                 <Button type="button" variant="outline" onClick={() => { setItems((prev) => prev.filter((row) => row.id !== item.id)); markDirty(); }} disabled={items.length === 1}>Remove</Button>
@@ -1921,7 +1834,6 @@ export default function App() {
                   <input type="checkbox" checked={isBalancePaid} onChange={(e) => { setIsBalancePaid(e.target.checked); markDirty(); }} onClick={(e) => e.stopPropagation()} style={{ width: "16px", height: "16px" }} />
                   <strong style={{ color: isBalancePaid ? "#166534" : "#b45309" }}>{isBalancePaid ? "✅ BALANCE COLLECTED" : "⏳ BALANCE PENDING"}</strong>
                 </div>
-
               </div>
             )}
 
@@ -1942,13 +1854,11 @@ export default function App() {
             <Button onClick={shareEmail}>Email Link</Button>
             
             <Button onClick={handleNewBillClick} variant="outline">New Bill</Button>
-            
             <Button onClick={() => setShowSettings(true)} variant="outline">Settings</Button>
           </div>
         </aside>
       </main>
 
-      {/* DAILY SALES, LEDGER & EXPENSE DRAWER */}
       {showLedger && (
         <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "650px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
           <div className="drawer-header" style={{ backgroundColor: "#f0fdf4", borderBottom: "2px solid #bbf7d0", padding: "20px", position: "sticky", top: 0, zIndex: 10 }}>
@@ -1959,7 +1869,6 @@ export default function App() {
           </div>
 
           <div style={{ padding: "20px" }}>
-            
             <div style={{ marginBottom: "25px" }}>
               <h4 style={{ margin: "0 0 15px 0", fontSize: "1.1rem", color: "#1e293b" }}>Live Vault Balances</h4>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
@@ -2161,7 +2070,6 @@ export default function App() {
         </section>
       )}
 
-      {/* RECENT BILLS DRAWER */}
       {showRecentBills && (
         <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "550px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
           <div className="drawer-header" style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10, paddingBottom: "15px", borderBottom: "1px solid #e2e8f0" }}>
@@ -2173,13 +2081,8 @@ export default function App() {
 
           <div style={{ padding: "15px" }}>
             
-            {/* BULK PDF EXPORT BUTTON */}
             <div style={{ marginBottom: "20px" }}>
-              <Button
-                onClick={handleBulkDownload}
-                disabled={isBulkDownloading || filteredRecentBills.length === 0}
-                style={{ width: "100%", backgroundColor: "#0f172a", height: "auto", padding: "10px", display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", justifyContent: "center", fontSize: "1rem", boxSizing: "border-box" }}
-              >
+              <Button onClick={handleBulkDownload} disabled={isBulkDownloading || filteredRecentBills.length === 0} style={{ width: "100%", backgroundColor: "#0f172a", height: "auto", padding: "10px", display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", justifyContent: "center", fontSize: "1rem", boxSizing: "border-box" }}>
                 {isBulkDownloading ? "Generating PDF... Please Wait" : <><Download size={18} /> Download {filteredRecentBills.length} Bills as Single PDF</>}
               </Button>
               <p style={{ fontSize: "0.75rem", color: "#64748b", textAlign: "center", marginTop: "5px" }}>
@@ -2237,4 +2140,347 @@ export default function App() {
                </div>
             </div>
 
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "15px", paddingBottom: "
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "15px", paddingBottom: "15px", borderBottom: "1px dashed #cbd5e1" }}>
+              <Button size="sm" variant="outline" onClick={() => handleResetCounter("invoice")} style={{ flex: "1 1 100%", borderColor: "#dc2626", color: "#dc2626" }}>Reset Invoice No.</Button>
+              <Button size="sm" variant="outline" onClick={() => handleResetCounter("estimate")} style={{ flex: "1 1 100%", borderColor: "#2563eb", color: "#2563eb" }}>Reset Estimate No.</Button>
+            </div>
+
+            {loadingRecent ? (
+              <p style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>Loading bills from database...</p>
+            ) : filteredRecentBills.length === 0 ? (
+              <p style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>No bills found matching these filters.</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {filteredRecentBills.map((b) => (
+                  <div key={b.id} style={{ border: "1px solid var(--border)", padding: "12px", borderRadius: "8px", backgroundColor: "white" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", marginBottom: "8px" }}>
+                      <strong style={{ color: b.mode === "invoice" ? "#dc2626" : "#2563eb" }}>{b.document_number}</strong>
+                      <span style={{ fontSize: "0.85rem", color: "#666" }}>{b.date}</span>
+                    </div>
+                    <div style={{ marginBottom: "8px", fontWeight: "500" }}>{b.customer_name || b.customer?.name || "Unknown Customer"}</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+                      <strong>₹{b.totals?.grand_total}</strong>
+                      
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                        
+                        <label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85rem", cursor: "pointer", marginRight: "5px", padding: "4px 8px", backgroundColor: (b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "#dcfce7" : "#fef3c7", color: (b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "#166534" : "#b45309", borderRadius: "5px", fontWeight: "bold" }}>
+                          <input 
+                            type="checkbox" 
+                            checked={(b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) || false} 
+                            onChange={() => handleQuickPaymentToggle(b)} 
+                            style={{ cursor: "pointer" }}
+                          />
+                          {(b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "Paid" : "Pending"}
+                        </label>
+
+                        <Button size="sm" variant="destructive" style={{ backgroundColor: "#ef4444", color: "white" }} onClick={() => handleDeleteBill(b)}>Delete</Button>
+                        <Button size="sm" onClick={() => {
+                          if (isDirty && !window.confirm("⚠️ You have unsaved changes. Discard them and load this old bill?")) return;
+                          loadBillForEditing(b);
+                        }}>Edit</Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {showSettings && (
+        <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "500px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
+          <div className="drawer-header">
+            <h3>Settings</h3>
+            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowSettings(false)}>
+              <ArrowLeft className="drawer-back-icon" /><span>Back</span>
+            </Button>
+          </div>
+
+          <div style={{ padding: "0 15px 15px 15px", boxSizing: "border-box", width: "100%" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "20px" }}>
+              <Button variant={settingsTab === "design" ? "default" : "outline"} onClick={() => setSettingsTab("design")} style={{ flex: "1 1 100px" }}>🎨 Design</Button>
+              <Button variant={settingsTab === "technical" ? "default" : "outline"} onClick={() => setSettingsTab("technical")} style={{ flex: "1 1 100px" }}>⚙️ Tech</Button>
+              <Button variant={settingsTab === "branches" ? "default" : "outline"} onClick={() => setSettingsTab("branches")} style={{ flex: "1 1 100px" }}><Store size={16} style={{marginRight:"4px"}}/> Branches</Button>
+            </div>
+
+            {settingsTab === "design" && (
+              <div className="settings-design-tab" style={{ width: "100%" }}>
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
+                  <h4 style={{ margin: "0 0 10px 0" }}>Shop Name</h4>
+                  <Input value={settings.shop_name} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name: e.target.value }))} placeholder="Shop name" style={{ marginBottom: "10px", width: "100%", boxSizing: "border-box" }} />
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", width: "100%" }}>
+                    <input type="color" value={settings.shop_name_color || "#000000"} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px", flexShrink: 0 }} title="Color" />
+                    <Input type="number" min="16" max="60" value={settings.shop_name_size || 26} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_size: Number(e.target.value) }))} style={{ width: "70px", padding: "0 5px", textAlign: "center", flexShrink: 0 }} title="Font Size (px)" />
+                    <select value={settings.shop_name_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_font: e.target.value }))} style={{ flex: "1 1 120px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "120px" }} title="Font Style">
+                      <FontSelectOptions />
+                    </select>
+                    <select value={settings.shop_name_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, shop_name_align: e.target.value }))} style={{ flex: "1 1 80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "80px" }} title="Alignment">
+                      <option value="left">Left</option>
+                      <option value="center">Center</option>
+                      <option value="right">Right</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
+                  <h4 style={{ margin: "0 0 10px 0" }}>Tagline</h4>
+                  <Input value={settings.tagline} onChange={(e) => setSettings((prev) => ({ ...prev, tagline: e.target.value }))} placeholder="Tagline" style={{ marginBottom: "10px", width: "100%", boxSizing: "border-box" }} />
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", width: "100%" }}>
+                    <input type="color" value={settings.tagline_color || "#475569"} onChange={(e) => setSettings((prev) => ({ ...prev, tagline_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px", flexShrink: 0 }} title="Color" />
+                    <Input type="number" min="8" max="40" value={settings.tagline_size || 12} onChange={(e) => setSettings((prev) => ({ ...prev, tagline_size: Number(e.target.value) }))} style={{ width: "70px", padding: "0 5px", textAlign: "center", flexShrink: 0 }} title="Font Size (px)" />
+                    <select value={settings.tagline_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, tagline_font: e.target.value }))} style={{ flex: "1 1 120px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "120px" }} title="Font Style">
+                      <FontSelectOptions />
+                    </select>
+                    <select value={settings.tagline_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, tagline_align: e.target.value }))} style={{ flex: "1 1 80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "80px" }} title="Alignment">
+                      <option value="left">Left</option>
+                      <option value="center">Center</option>
+                      <option value="right">Right</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
+                  <h4 style={{ margin: "0 0 10px 0" }}>Address Style</h4>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", width: "100%" }}>
+                    <input type="color" value={settings.address_color || "#475569"} onChange={(e) => setSettings((prev) => ({ ...prev, address_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px", flexShrink: 0 }} title="Color" />
+                    <Input type="number" min="8" max="30" value={settings.address_size || 14} onChange={(e) => setSettings((prev) => ({ ...prev, address_size: Number(e.target.value) }))} style={{ width: "70px", padding: "0 5px", textAlign: "center", flexShrink: 0 }} title="Font Size (px)" />
+                    <select value={settings.address_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, address_font: e.target.value }))} style={{ flex: "1 1 120px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "120px" }} title="Font Style">
+                      <FontSelectOptions />
+                    </select>
+                    <select value={settings.address_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, address_align: e.target.value }))} style={{ flex: "1 1 80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "80px" }} title="Alignment">
+                      <option value="left">Left</option>
+                      <option value="center">Center</option>
+                      <option value="right">Right</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
+                  <h4 style={{ margin: "0 0 10px 0" }}>Phone Numbers</h4>
+                  <Input value={settings.phone_numbers.join(", ")} onChange={(e) => setSettings((prev) => ({ ...prev, phone_numbers: e.target.value.split(",").map((item) => item.trim()).filter(Boolean) }))} placeholder="Phone numbers (comma separated)" style={{ marginBottom: "10px", width: "100%", boxSizing: "border-box" }} />
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", width: "100%" }}>
+                    <input type="color" value={settings.phone_color || "#475569"} onChange={(e) => setSettings((prev) => ({ ...prev, phone_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px", flexShrink: 0 }} title="Color" />
+                    <Input type="number" min="8" max="30" value={settings.phone_size || 13} onChange={(e) => setSettings((prev) => ({ ...prev, phone_size: Number(e.target.value) }))} style={{ width: "70px", padding: "0 5px", textAlign: "center", flexShrink: 0 }} title="Font Size (px)" />
+                    <select value={settings.phone_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, phone_font: e.target.value }))} style={{ flex: "1 1 120px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "120px" }} title="Font Style">
+                      <FontSelectOptions />
+                    </select>
+                    <select value={settings.phone_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, phone_align: e.target.value }))} style={{ flex: "1 1 80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "80px" }} title="Alignment">
+                      <option value="left">Left</option>
+                      <option value="center">Center</option>
+                      <option value="right">Right</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
+                  <h4 style={{ margin: "0 0 10px 0" }}>Email</h4>
+                  <Input value={settings.email} onChange={(e) => setSettings((prev) => ({ ...prev, email: e.target.value }))} placeholder="Email" style={{ marginBottom: "10px", width: "100%", boxSizing: "border-box" }} />
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", width: "100%" }}>
+                    <input type="color" value={settings.email_color || "#475569"} onChange={(e) => setSettings((prev) => ({ ...prev, email_color: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px", flexShrink: 0 }} title="Color" />
+                    <Input type="number" min="8" max="30" value={settings.email_size || 13} onChange={(e) => setSettings((prev) => ({ ...prev, email_size: Number(e.target.value) }))} style={{ width: "70px", padding: "0 5px", textAlign: "center", flexShrink: 0 }} title="Font Size (px)" />
+                    <select value={settings.email_font || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, email_font: e.target.value }))} style={{ flex: "1 1 120px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "120px" }} title="Font Style">
+                      <FontSelectOptions />
+                    </select>
+                    <select value={settings.email_align || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, email_align: e.target.value }))} style={{ flex: "1 1 80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "80px" }} title="Alignment">
+                      <option value="left">Left</option>
+                      <option value="center">Center</option>
+                      <option value="right">Right</option>
+                    </select>
+                  </div>
+                </div>
+
+                <Button onClick={saveSettings} style={{ width: "100%", marginBottom: "15px", boxSizing: "border-box" }}>Save Design Settings</Button>
+              </div>
+            )}
+
+            {settingsTab === "technical" && (
+              <div className="settings-technical-tab" style={{ width: "100%" }}>
+                
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f0fdf4", width: "100%", boxSizing: "border-box" }}>
+                  <h4 style={{ margin: "0 0 10px 0", color: "#166534", display: "flex", alignItems: "center", gap: "8px" }}><Upload size={18} /> Upload Custom Font</h4>
+                  <p style={{ fontSize: "0.75rem", color: "#666", marginBottom: "10px" }}>Upload a .ttf or .otf file to use it in your bill design.</p>
+                  <label style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px", border: "2px dashed #16a34a", borderRadius: "8px", cursor: "pointer", backgroundColor: "white", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: "0.85rem", fontWeight: "bold" }}>📁 Choose Font File</span>
+                    <input type="file" accept=".ttf,.otf,.woff,.woff2" onChange={handleFontUpload} style={{ display: "none" }} />
+                  </label>
+                  {settings.custom_fonts?.length > 0 && (
+                    <div style={{ marginTop: "10px" }}>
+                      <p style={{ fontSize: "0.75rem", fontWeight: "bold", margin: "0 0 5px 0" }}>Uploaded Fonts:</p>
+                      <ul style={{ fontSize: "0.75rem", margin: 0, paddingLeft: "15px" }}>
+                        {settings.custom_fonts.map(f => <li key={f.name}>{f.name}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
+                  <h4 style={{ margin: "0 0 10px 0" }}>Math & Formulas</h4>
+                  
+                  <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Silver Rate (per gram)</label>
+                  <Input value={settings.silver_rate_per_gram} onChange={(e) => setSettings((prev) => ({ ...prev, silver_rate_per_gram: num(e.target.value) }))} style={{ marginBottom: "2px" }} />
+                  <p style={{ fontSize: "0.75rem", color: "#666", marginBottom: "10px", marginTop: "0" }}>Example: 240</p>
+
+                  <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Making Charge (per gram)</label>
+                  <Input value={settings.making_charge_per_gram} onChange={(e) => setSettings((prev) => ({ ...prev, making_charge_per_gram: num(e.target.value) }))} style={{ marginBottom: "2px" }} />
+                  <p style={{ fontSize: "0.75rem", color: "#666", marginBottom: "10px", marginTop: "0" }}>Example: 15</p>
+
+                  <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Default HSN Code</label>
+                  <Input value={settings.default_hsn} onChange={(e) => setSettings((prev) => ({ ...prev, default_hsn: e.target.value }))} style={{ marginBottom: "2px" }} />
+                  <p style={{ fontSize: "0.75rem", color: "#666", marginBottom: "10px", marginTop: "0" }}>Example: 7113</p>
+
+                  <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Formula Note (Prints on bill)</label>
+                  <Input value={settings.formula_note} onChange={(e) => setSettings((prev) => ({ ...prev, formula_note: e.target.value }))} />
+                </div>
+
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
+                  <h4 style={{ margin: "0 0 10px 0" }}>Global Business IDs</h4>
+                  <label className="select-label" style={{ fontSize: "0.8rem" }}>GSTIN</label>
+                  <Input value={settings.gstin} onChange={(e) => setSettings((prev) => ({ ...prev, gstin: e.target.value }))} style={{ marginBottom: "8px", width: "100%" }} />
+                </div>
+
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
+                  <h4 style={{ margin: "0 0 10px 0" }}>Printing & Uploads</h4>
+                  <label className="select-label" htmlFor="print-scale-range" style={{ fontSize: "0.8rem" }}>Auto Print Scale: {printScale.toFixed(1)}%</label>
+                  <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "15px", flexWrap: "wrap" }}>
+                    <input id="print-scale-range" type="range" min="98" max="102" step="0.1" value={printScale} onChange={(e) => setPrintScale(clampPrintScale(Number(e.target.value)))} style={{ flex: "1 1 150px" }} />
+                    <Button type="button" variant="outline" size="sm" onClick={() => setPrintScale(100)}>Reset</Button>
+                  </div>
+
+                  <div style={{ marginBottom: "15px", width: "100%" }}>
+                    <label className="file-label" htmlFor="logo-upload-input" style={{ fontSize: "0.8rem" }}>Upload Shop Logo</label>
+                    <input id="logo-upload-input" type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/*" onChange={handleLogoUpload} style={{ display: "block", marginBottom: "5px", maxWidth: "100%" }} />
+                    <span style={{ fontSize: "0.75rem", color: "#666", wordBreak: "break-all" }}>{logoUploadName ? `Selected: ${logoUploadName}` : "No logo selected"}</span>
+                    {settings.logo_data_url && <img src={settings.logo_data_url} alt="Logo preview" style={{ maxWidth: "80px", marginTop: "5px", display: "block" }} />}
+                  </div>
+
+                  <div style={{ width: "100%" }}>
+                    <label className="file-label" htmlFor="about-qr-upload-input" style={{ fontSize: "0.8rem" }}>Upload About Us QR</label>
+                    <input id="about-qr-upload-input" type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/*" onChange={handleAboutQrUpload} style={{ display: "block", marginBottom: "5px", maxWidth: "100%" }} />
+                    <span style={{ fontSize: "0.75rem", color: "#666", wordBreak: "break-all" }}>{aboutUploadName ? `Selected: ${aboutUploadName}` : "No QR selected"}</span>
+                    {(settings.about_qr_data_url || STATIC_ABOUT_QR_URL) && <img src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="QR preview" style={{ maxWidth: "80px", marginTop: "5px", display: "block" }} />}
+                  </div>
+                </div>
+
+                <Button onClick={saveSettings} style={{ width: "100%", marginBottom: "15px" }}>Save Technical Settings</Button>
+
+                <div style={{ marginTop: "20px", padding: "15px", border: "1px solid #ef4444", borderRadius: "8px", backgroundColor: "#fef2f2", width: "100%", boxSizing: "border-box" }}>
+                  <h4 style={{ margin: "0 0 10px 0", color: "#b91c1c" }}>Database & Backup</h4>
+                  <div style={{ marginBottom: "15px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginBottom: "5px", color: "#7f1d1d" }}>
+                      <span>Storage Used: {(storageStats.used_bytes / 1024).toFixed(2)} KB</span>
+                      <span>{storageStats.percentage}%</span>
+                    </div>
+                    <div style={{ width: "100%", backgroundColor: "#fca5a5", borderRadius: "4px", height: "10px", overflow: "hidden" }}>
+                      <div style={{ width: `${storageStats.percentage}%`, backgroundColor: "#dc2626", height: "100%", transition: "width 0.5s ease" }}></div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <Button type="button" variant="outline" onClick={handleBackupBills}>⬇️ Download Backup (JSON)</Button>
+                    <Button type="button" variant="destructive" style={{ backgroundColor: "#ef4444", color: "white" }} onClick={handleDeleteAllBills}>⚠️ Wipe All Bills (Clear Storage)</Button>
+                  </div>
+                </div>
+
+              </div>
+            )}
+
+            {settingsTab === "branches" && (
+               <div className="settings-branches-tab" style={{ width: "100%" }}>
+                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px", flexWrap: "wrap", gap: "10px" }}>
+                       <p style={{ margin: 0, fontSize: "0.9rem", color: "#475569" }}>Manage isolated branch ledgers and addresses here.</p>
+                       <Button size="sm" onClick={() => {
+                           const newBranch = {
+                               id: `B${Date.now()}`,
+                               name: "New Branch",
+                               address: "",
+                               map_url: "#",
+                               invoice_upi_id: "",
+                               estimate_upi_id: "",
+                               cash_balance: 0,
+                               estimate_bank_balance: 0,
+                               invoice_bank_balance: 0
+                           };
+                           setSettings(prev => ({ ...prev, branches: [...prev.branches, newBranch] }));
+                       }}>+ Add Branch</Button>
+                   </div>
+
+                   {settings.branches.map((b, index) => (
+                       <div key={b.id} style={{ padding: "15px", border: "1px solid #cbd5e1", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
+                           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "10px" }}>
+                              <h4 style={{ margin: 0, color: "var(--brand)" }}>Branch: {b.name}</h4>
+                              {settings.branches.length > 1 && (
+                                  <Button size="sm" variant="outline" style={{ borderColor: "#ef4444", color: "#ef4444", padding: "0 8px", height: "24px" }} onClick={() => {
+                                      if(window.confirm(`Delete ${b.name}?`)) {
+                                          setSettings(prev => ({ ...prev, branches: prev.branches.filter(x => x.id !== b.id) }));
+                                      }
+                                  }}>Delete</Button>
+                              )}
+                           </div>
+
+                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Branch Name (Internal Use)</label>
+                           <Input value={b.name} onChange={(e) => {
+                               const newBranches = [...settings.branches];
+                               newBranches[index].name = e.target.value;
+                               setSettings(prev => ({ ...prev, branches: newBranches }));
+                           }} style={{ marginBottom: "8px", width: "100%" }} />
+
+                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Printed Bill Address</label>
+                           <Input value={b.address} onChange={(e) => {
+                               const newBranches = [...settings.branches];
+                               newBranches[index].address = e.target.value;
+                               setSettings(prev => ({ ...prev, branches: newBranches }));
+                           }} style={{ marginBottom: "8px", width: "100%" }} />
+
+                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Google Maps Review Link</label>
+                           <Input value={b.map_url} onChange={(e) => {
+                               const newBranches = [...settings.branches];
+                               newBranches[index].map_url = e.target.value;
+                               setSettings(prev => ({ ...prev, branches: newBranches }));
+                           }} style={{ marginBottom: "8px", width: "100%" }} />
+
+                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Invoice UPI ID</label>
+                           <Input value={b.invoice_upi_id} onChange={(e) => {
+                               const newBranches = [...settings.branches];
+                               newBranches[index].invoice_upi_id = e.target.value;
+                               setSettings(prev => ({ ...prev, branches: newBranches }));
+                           }} style={{ marginBottom: "8px", width: "100%" }} />
+
+                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Estimate UPI ID</label>
+                           <Input value={b.estimate_upi_id} onChange={(e) => {
+                               const newBranches = [...settings.branches];
+                               newBranches[index].estimate_upi_id = e.target.value;
+                               setSettings(prev => ({ ...prev, branches: newBranches }));
+                           }} style={{ marginBottom: "8px", width: "100%" }} />
+                       </div>
+                   ))}
+
+                   <Button onClick={saveSettings} style={{ width: "100%", marginBottom: "15px" }}>Save Branch Settings</Button>
+               </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {showAbout && (
+        <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "500px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
+          <div className="drawer-header">
+            <h3>About This App</h3>
+            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowAbout(false)}>
+              <ArrowLeft className="drawer-back-icon" /><span>Back</span>
+            </Button>
+          </div>
+          
+          <div className="cloud-note" style={{ marginTop: "15px", padding: "0 15px", boxSizing: "border-box" }}>
+            <h4>Cloud Database Setup</h4>
+            <ol>
+              <li>Create Supabase project and get project URL + service role key.</li>
+              <li>Add them in backend <code>SUPABASE_URL</code> and <code>SUPABASE_SERVICE_ROLE_KEY</code>.</li>
+              <li>Create <code>customers</code> and <code>number_counters</code> tables as in README.</li>
+            </ol>
+            <p className="cloud-status-text">Cloud status: {cloudStatus.enabled ? "Connected" : "Placeholder mode"} ({cloudStatus.mode})</p>
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
