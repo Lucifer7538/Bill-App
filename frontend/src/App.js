@@ -142,9 +142,12 @@ export default function App() {
   const [globalBranchId, setGlobalBranchId] = useState("B1");
   const [billBranchId, setBillBranchId] = useState("B1");
 
+  // 🚨 NEW: Core Migration State
+  const [currentBillId, setCurrentBillId] = useState(null);
+  
   const [mode, setMode] = useState("invoice");
   const [documentNumber, setDocumentNumber] = useState("");
-  const [editingDocNumber, setEditingDocNumber] = useState(null);
+  const [editingDocNumber, setEditingDocNumber] = useState(null); // Kept for legacy display tracking
   const [isNumberLoading, setIsNumberLoading] = useState(false);
   const [billDate, setBillDate] = useState(today());
 
@@ -173,7 +176,7 @@ export default function App() {
   const [billSearchQuery, setBillSearchQuery] = useState("");
   const [recentBranchFilter, setRecentBranchFilter] = useState("ALL");
   const [recentModeFilter, setRecentModeFilter] = useState("ALL");
-  const [recentDateFilter, setRecentDateFilter] = useState("ALL"); // 'ALL', 'THIS_MONTH', 'LAST_MONTH', 'CUSTOM'
+  const [recentDateFilter, setRecentDateFilter] = useState("ALL");
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
@@ -571,6 +574,7 @@ export default function App() {
   const updateItem = (id, key, value) => { markDirty(); setItems((prev) => prev.map((item) => (item.id === id ? { ...item, [key]: value } : item))); };
 
   const clearBill = async (nextMode = mode, nextBranch = billBranchId) => {
+    setCurrentBillId(null);
     setEditingDocNumber(null);
     setItems([createItem(settings.default_hsn)]); 
     setCustomer({ name: "", phone: "", address: "", email: "" });
@@ -582,6 +586,7 @@ export default function App() {
   };
 
   const loadBillForEditing = (bill) => {
+    setCurrentBillId(bill.id);
     setEditingDocNumber(bill.document_number);
     setMode(bill.mode);
     setBillBranchId(bill.branch_id || settings.branches[0].id);
@@ -615,7 +620,7 @@ export default function App() {
     try {
       await axios.delete(`${API}/bills/${bill.document_number}`, { headers: authHeaders });
       setRecentBillsList((prev) => prev.filter((b) => b.document_number !== bill.document_number));
-      if (editingDocNumber === bill.document_number) clearBill(mode, billBranchId);
+      if (currentBillId === bill.id) clearBill(mode, billBranchId);
       toast.success(`${bill.document_number} deleted successfully.`);
       await loadSettings(); 
     } catch { toast.error("Failed to delete the bill."); }
@@ -626,7 +631,7 @@ export default function App() {
     try {
       await axios.put(`${API}/bills/${bill.document_number}/toggle-payment`, { is_payment_done: newStatus }, { headers: authHeaders });
       toast.success(`Payment marked as ${newStatus ? 'DONE ✅' : 'PENDING ⏳'}`);
-      if (editingDocNumber === bill.document_number) { setIsPaymentDone(newStatus); }
+      if (currentBillId === bill.id) { setIsPaymentDone(newStatus); }
       setRecentBillsList(prev => prev.map(b => b.document_number === bill.document_number ? { ...b, is_payment_done: newStatus } : b));
       await loadSettings(); 
     } catch { toast.error("Failed to update payment status."); }
@@ -666,20 +671,34 @@ export default function App() {
     } catch { toast.error("Failed to delete bills."); }
   };
 
+  // 🚨 MASTER MIGRATION FOR MODE
   const handleModeChange = async (nextMode) => {
     if (mode === nextMode) return;
     if (isDirty && !paymentMethod) {
        toast.error("Please select payment method.");
        return;
     }
-    if (isDirty && !window.confirm("⚠️ You have unsaved changes!\n\nIf you switch modes now, your current data will be lost. Do you want to continue?")) return; 
-    setMode(nextMode);
-    await clearBill(nextMode, billBranchId);
+    
+    if (currentBillId) {
+      try {
+        const res = await axios.get(`${API}/bills/next-number?mode=${nextMode}&branch_id=${billBranchId}`, { headers: authHeaders });
+        setDocumentNumber(res.data.document_number);
+        setMode(nextMode);
+        markDirty();
+        toast.info(`Migrating to ${nextMode.toUpperCase()}`);
+      } catch (err) {
+        toast.error("Failed to fetch new number for migration.");
+      }
+    } else {
+      if (isDirty && !window.confirm("⚠️ You have unsaved changes!\n\nIf you switch modes now, your current data will be lost. Do you want to continue?")) return; 
+      setMode(nextMode);
+      await clearBill(nextMode, billBranchId);
+    }
   };
 
   const handleGlobalBranchChange = async (nextBranchId) => {
     setGlobalBranchId(nextBranchId);
-    if (!isDirty) {
+    if (!isDirty && !currentBillId) {
         setBillBranchId(nextBranchId);
         await reserveNumber(mode, nextBranchId);
     }
@@ -771,7 +790,6 @@ export default function App() {
       if (error.response) {
           toast.error(`Backend Error: ${error.response.data?.detail || error.response.statusText || "Check backend logs."}`);
       } else if (error.request) {
-          // It explicitly prints error.message so we can see if it's CORS or Timeout
           toast.error(`Network Error: ${error.message} (Is backend running?)`);
       } else {
           toast.error(`Error: ${error.message}`);
@@ -801,6 +819,7 @@ export default function App() {
     }
   };
 
+  // 🚨 MASTER MIGRATION FOR SAVING
   const saveBill = async () => {
     if (!paymentMethod) {
         toast.error("Please select payment method.");
@@ -817,14 +836,16 @@ export default function App() {
         items: computed.items.map((item) => ({ description: item.description, hsn: item.hsn, weight: num(item.weight), quantity: num(item.quantity), rate_override: item.rate_override === "" ? null : num(item.rate_override), amount_override: item.amount_override === "" ? null : num(item.amount_override), })),
       };
 
-      if (editingDocNumber) {
-        await axios.put(`${API}/bills/${editingDocNumber}`, payload, { headers: authHeaders });
-        toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} updated successfully.`);
+      if (currentBillId) {
+        await axios.put(`${API}/bills/update-by-id/${currentBillId}`, payload, { headers: authHeaders });
+        toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} updated & migrated successfully.`);
         setIsDirty(false);
+        setEditingDocNumber(documentNumber);
       } else {
         const res = await axios.post(`${API}/bills/save`, payload, { headers: authHeaders });
         toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} saved successfully.`);
         setIsDirty(false);
+        setCurrentBillId(res.data.id);
         setEditingDocNumber(res.data.document_number);
         setDocumentNumber(res.data.document_number);
       }
@@ -1624,9 +1645,20 @@ export default function App() {
                             toast.error("Please select payment method.");
                             return;
                         }
-                        setBillBranchId(e.target.value); 
+                        const nextBranch = e.target.value;
+                        setBillBranchId(nextBranch); 
                         markDirty(); 
-                        if (!editingDocNumber) { await reserveNumber(mode, e.target.value); }
+                        if (currentBillId) {
+                          try {
+                            const res = await axios.get(`${API}/bills/next-number?mode=${mode}&branch_id=${nextBranch}`, { headers: authHeaders });
+                            setDocumentNumber(res.data.document_number);
+                            toast.info(`Migrating to Branch: ${nextBranch}`);
+                          } catch (err) {
+                            toast.error("Failed to fetch new number for migration.");
+                          }
+                        } else {
+                          await reserveNumber(mode, nextBranch); 
+                        }
                     }} 
                     style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem", outline: "none", cursor: "pointer" }}
                 >
@@ -1642,11 +1674,11 @@ export default function App() {
                 value={documentNumber} 
                 onChange={(e) => { setDocumentNumber(e.target.value); markDirty(); }} 
                 placeholder="e.g. INV-0212" 
-                disabled={!!editingDocNumber} 
-                style={{ fontWeight: "bold", color: "var(--brand)", backgroundColor: editingDocNumber ? "#f1f5f9" : "white" }} 
+                disabled={!!currentBillId} 
+                style={{ fontWeight: "bold", color: "var(--brand)", backgroundColor: currentBillId ? "#f1f5f9" : "white" }} 
               />
               <p style={{ fontSize: "0.75rem", color: "#666", marginTop: "4px" }}>
-                {editingDocNumber ? "Cannot change number of a saved bill." : "Change this to skip the counter forward."}
+                {currentBillId ? "Cannot change number of a saved bill." : "Change this to skip the counter forward."}
               </p>
             </div>
 
@@ -1735,7 +1767,7 @@ export default function App() {
 
           <div className="control-card action-grid">
             <Button onClick={saveBill} disabled={savingBill} style={{ backgroundColor: "#0f172a" }}>
-              {savingBill ? "Saving..." : editingDocNumber ? `Update (${editingDocNumber})` : "Save Bill"}
+              {savingBill ? "Saving..." : currentBillId ? `Update & Migrate (${documentNumber})` : "Save Bill"}
             </Button>
             
             <Button onClick={() => setShowLedger(true)} style={{ backgroundColor: "#16a34a", color: "white" }}>Daily Sales & Ledger</Button>
