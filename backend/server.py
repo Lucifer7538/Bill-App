@@ -52,7 +52,7 @@ SUPABASE_ENABLED = bool(SUPABASE_URL and SUPABASE_KEY and "YOUR_" not in SUPABAS
 def now_iso():
     return datetime.now(timezone.utc).isoformat()
 
-# ✅ SMART LEDGER ENGINE: Perfectly calculates Advance & Balance splits
+# ✅ SMART LEDGER ENGINE
 def get_bill_ledger_values(bill: dict):
     c, eb, ib = 0.0, 0.0, 0.0
     mode = bill.get("mode")
@@ -75,13 +75,12 @@ def get_bill_ledger_values(bill: dict):
             total = float(bill.get("totals", {}).get("grand_total", 0))
             add_vals(bill.get("payment_method"), total, float(bill.get("split_cash", 0)))
     else:
-        # Booking or Service (Handles Advance and Balance Separately)
         if bill.get("is_advance_paid"):
             add_vals(bill.get("advance_method"), float(bill.get("advance_amount", 0)), float(bill.get("advance_split_cash", 0)))
         if bill.get("is_balance_paid"):
             total = float(bill.get("totals", {}).get("grand_total", 0))
             adv = float(bill.get("advance_amount", 0))
-            bal = max(0.0, total - adv) # The actual balance due
+            bal = max(0.0, total - adv)
             add_vals(bill.get("balance_method"), bal, float(bill.get("balance_split_cash", 0)))
 
     return c, eb, ib
@@ -118,7 +117,7 @@ def require_auth(authorization: str = Header(None)):
 
 @app.get("/")
 async def root():
-    return {"status": "online", "server": "Jalaram-Master-V8", "msg": "Backend is awake"}
+    return {"status": "online", "server": "Jalaram-Master-V9", "msg": "Backend is awake"}
 
 @api_router.post("/auth/login")
 async def login(payload: dict):
@@ -220,7 +219,6 @@ async def save_bill(payload: dict, _=Depends(require_auth)):
     doc = {**payload, "id": bill_id, "created_at": now_iso()}
     await bills_collection.insert_one(doc)
     
-    # Ledger Magic
     c, eb, ib = get_bill_ledger_values(doc)
     await apply_ledger_diff(branch_id, c, eb, ib, f"{doc.get('tx_type', 'sale').upper()}: {doc_num}")
     
@@ -248,10 +246,8 @@ async def update_bill_by_id(bill_id: str, payload: dict, _=Depends(require_auth)
     new_c, new_eb, new_ib = get_bill_ledger_values(payload)
 
     if old_b == new_b:
-        # Same branch: apply the mathematical difference perfectly
         await apply_ledger_diff(new_b, new_c - old_c, new_eb - old_eb, new_ib - old_ib, f"UPDATE: {doc_num}")
     else:
-        # Branch Migration
         await apply_ledger_diff(old_b, -old_c, -old_eb, -old_ib, f"MIGRATE OUT: {existing.get('document_number')}")
         await apply_ledger_diff(new_b, new_c, new_eb, new_ib, f"MIGRATE IN: {doc_num}")
 
