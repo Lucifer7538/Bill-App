@@ -52,46 +52,60 @@ SUPABASE_ENABLED = bool(SUPABASE_URL and SUPABASE_KEY and "YOUR_" not in SUPABAS
 def now_iso():
     return datetime.now(timezone.utc).isoformat()
 
-# --- The Ledger Engine ---
-async def update_ledger(bill: dict, reverse: bool = False):
-    m = -1 if reverse else 1
-    method = bill.get("payment_method")
-    mode = bill.get("mode")
-    branch_id = bill.get("branch_id")
-    
-    totals = bill.get("totals", {})
-    total = float(totals.get("grand_total") or totals.get("grandTotal") or 0)
-    
+# ✅ SMART LEDGER ENGINE: Perfectly calculates Advance & Balance splits
+def get_bill_ledger_values(bill: dict):
     c, eb, ib = 0.0, 0.0, 0.0
-    if method == "Cash": c = total
-    elif method in ["UPI", "Card"]:
-        if mode == "estimate": eb = total
-        else: ib = total
-    elif method == "Split":
-        c = float(bill.get("split_cash", 0))
-        if mode == "estimate": eb = total - c
-        else: ib = total - c
+    mode = bill.get("mode")
+    tx_type = bill.get("tx_type", "sale")
 
-    if c == 0 and eb == 0 and ib == 0: return
+    def add_vals(method, amount, split_c):
+        nonlocal c, eb, ib
+        if method == "Cash":
+            c += amount
+        elif method in ["UPI", "Card"]:
+            if mode == "estimate": eb += amount
+            else: ib += amount
+        elif method == "Split":
+            c += split_c
+            if mode == "estimate": eb += (amount - split_c)
+            else: ib += (amount - split_c)
 
+    if tx_type == "sale":
+        if bill.get("is_payment_done"):
+            total = float(bill.get("totals", {}).get("grand_total", 0))
+            add_vals(bill.get("payment_method"), total, float(bill.get("split_cash", 0)))
+    else:
+        # Booking or Service (Handles Advance and Balance Separately)
+        if bill.get("is_advance_paid"):
+            add_vals(bill.get("advance_method"), float(bill.get("advance_amount", 0)), float(bill.get("advance_split_cash", 0)))
+        if bill.get("is_balance_paid"):
+            total = float(bill.get("totals", {}).get("grand_total", 0))
+            adv = float(bill.get("advance_amount", 0))
+            bal = max(0.0, total - adv) # The actual balance due
+            add_vals(bill.get("balance_method"), bal, float(bill.get("balance_split_cash", 0)))
+
+    return c, eb, ib
+
+async def apply_ledger_diff(branch_id: str, diff_c: float, diff_eb: float, diff_ib: float, reason: str):
+    if diff_c == 0 and diff_eb == 0 and diff_ib == 0: return
+    
     await settings_collection.update_one(
         {"key": "app_settings", "branches.id": branch_id},
         {"$inc": {
-            "branches.$.cash_balance": c * m,
-            "branches.$.estimate_bank_balance": eb * m,
-            "branches.$.invoice_bank_balance": ib * m
+            "branches.$.cash_balance": diff_c,
+            "branches.$.estimate_bank_balance": diff_eb,
+            "branches.$.invoice_bank_balance": diff_ib
         }}
     )
 
-    log_reason = f"{'MIGRATION/REFUND' if reverse else 'SALE/PAYMENT'}: {bill.get('document_number')}"
     await ledger_logs_collection.insert_one({
         "id": str(uuid.uuid4()),
         "branch_id": branch_id,
         "date": now_iso(),
-        "reason": log_reason,
-        "cash_change": c * m,
-        "estimate_bank_change": eb * m,
-        "invoice_bank_change": ib * m
+        "reason": reason,
+        "cash_change": diff_c,
+        "estimate_bank_change": diff_eb,
+        "invoice_bank_change": diff_ib
     })
 
 def require_auth(authorization: str = Header(None)):
@@ -104,7 +118,7 @@ def require_auth(authorization: str = Header(None)):
 
 @app.get("/")
 async def root():
-    return {"status": "online", "server": "Jalaram-Master-V6", "msg": "Backend is awake"}
+    return {"status": "online", "server": "Jalaram-Master-V8", "msg": "Backend is awake"}
 
 @api_router.post("/auth/login")
 async def login(payload: dict):
@@ -121,7 +135,6 @@ async def verify(_=Depends(require_auth)):
 async def cloud_status(_=Depends(require_auth)):
     return {"provider": "supabase", "enabled": SUPABASE_ENABLED, "mode": "live" if SUPABASE_ENABLED else "fallback"}
 
-# --- Settings ---
 @api_router.get("/settings")
 async def get_settings(_=Depends(require_auth)):
     doc = await settings_collection.find_one({"key": "app_settings"}, {"_id": 0})
@@ -167,8 +180,6 @@ async def adjust(payload: dict, _=Depends(require_auth)):
 async def get_logs(branch_id: str = Query(...), _=Depends(require_auth)):
     return await ledger_logs_collection.find({"branch_id": branch_id}, {"_id": 0}).sort("date", -1).to_list(50)
 
-# --- Billing Logic ---
-
 @api_router.get("/bills/next-number")
 async def next_num(mode: str, branch_id: str, _=Depends(require_auth)):
     doc = await counters_collection.find_one({"mode": mode, "branch_id": branch_id})
@@ -176,7 +187,6 @@ async def next_num(mode: str, branch_id: str, _=Depends(require_auth)):
     prefix = "INV" if mode == "invoice" else "EST"
     return {"document_number": f"{branch_id}-{prefix}-{val:04d}"}
 
-# ✅ FIX 1: Restored the completely missing Reset Counter Route!
 @api_router.post("/bills/reset-counter")
 async def reset_counter(payload: dict, _=Depends(require_auth)):
     try:
@@ -210,8 +220,9 @@ async def save_bill(payload: dict, _=Depends(require_auth)):
     doc = {**payload, "id": bill_id, "created_at": now_iso()}
     await bills_collection.insert_one(doc)
     
-    if payload.get("is_payment_done"):
-        await update_ledger(doc)
+    # Ledger Magic
+    c, eb, ib = get_bill_ledger_values(doc)
+    await apply_ledger_diff(branch_id, c, eb, ib, f"{doc.get('tx_type', 'sale').upper()}: {doc_num}")
     
     return {"id": bill_id, "document_number": doc_num}
 
@@ -230,15 +241,22 @@ async def update_bill_by_id(bill_id: str, payload: dict, _=Depends(require_auth)
             upsert=True
         )
 
-    if existing.get("is_payment_done"):
-        await update_ledger(existing, reverse=True)
+    old_b = existing.get("branch_id")
+    new_b = payload.get("branch_id")
+    
+    old_c, old_eb, old_ib = get_bill_ledger_values(existing)
+    new_c, new_eb, new_ib = get_bill_ledger_values(payload)
+
+    if old_b == new_b:
+        # Same branch: apply the mathematical difference perfectly
+        await apply_ledger_diff(new_b, new_c - old_c, new_eb - old_eb, new_ib - old_ib, f"UPDATE: {doc_num}")
+    else:
+        # Branch Migration
+        await apply_ledger_diff(old_b, -old_c, -old_eb, -old_ib, f"MIGRATE OUT: {existing.get('document_number')}")
+        await apply_ledger_diff(new_b, new_c, new_eb, new_ib, f"MIGRATE IN: {doc_num}")
 
     await bills_collection.update_one({"id": bill_id}, {"$set": {**payload, "updated_at": now_iso()}})
-
-    if payload.get("is_payment_done"):
-        await update_ledger(payload)
-
-    return {"message": "Migration Successful"}
+    return {"message": "Update Successful"}
 
 @api_router.put("/bills/{document_number}/toggle-payment")
 async def toggle_pay(document_number: str, payload: dict, _=Depends(require_auth)):
@@ -246,14 +264,18 @@ async def toggle_pay(document_number: str, payload: dict, _=Depends(require_auth
         bill = await bills_collection.find_one({"document_number": document_number})
         if not bill: raise HTTPException(404, "Bill not found")
         
-        new_status = payload.get("is_payment_done")
-        
-        if new_status and not bill.get("is_payment_done"): 
-            await update_ledger(bill)
-        elif not new_status and bill.get("is_payment_done"): 
-            await update_ledger(bill, reverse=True)
+        if bill.get("tx_type") in ["booking", "service"]:
+            raise HTTPException(400, "Please click Edit to manage Booking or Service balances.")
             
+        old_c, old_eb, old_ib = get_bill_ledger_values(bill)
+        new_status = payload.get("is_payment_done")
+        bill["is_payment_done"] = new_status
+        
+        new_c, new_eb, new_ib = get_bill_ledger_values(bill)
+        
+        await apply_ledger_diff(bill.get("branch_id"), new_c - old_c, new_eb - old_eb, new_ib - old_ib, f"TOGGLE: {document_number}")
         await bills_collection.update_one({"document_number": document_number}, {"$set": {"is_payment_done": new_status}})
+        
         return {"message": "Payment Status Toggled"}
     except Exception as e:
         raise HTTPException(500, detail=str(e))
@@ -261,8 +283,9 @@ async def toggle_pay(document_number: str, payload: dict, _=Depends(require_auth
 @api_router.delete("/bills/{document_number}")
 async def delete_bill(document_number: str, _=Depends(require_auth)):
     bill = await bills_collection.find_one({"document_number": document_number})
-    if bill and bill.get("is_payment_done"):
-        await update_ledger(bill, reverse=True)
+    if bill:
+        c, eb, ib = get_bill_ledger_values(bill)
+        await apply_ledger_diff(bill.get("branch_id"), -c, -eb, -ib, f"DELETE/REFUND: {document_number}")
     await bills_collection.delete_one({"document_number": document_number})
     return {"message": "Deleted"}
 
