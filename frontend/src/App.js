@@ -411,6 +411,7 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [customer.phone, customer.name, token, isPublicView, authHeaders]);
 
+  // ✅ MATH DISPLAY BUG FIXED HERE
   const computed = useMemo(() => {
     const baseSilverRate = num(settings.silver_rate_per_gram);
     const baseMCPerGram = num(settings.making_charge_per_gram);
@@ -423,14 +424,24 @@ export default function App() {
 
       let mcAmount = 0;
       if (item.mc_override !== "") { mcAmount = weight * num(item.mc_override); } 
-      else if (flatMCBelow5g > 0 && weight > 0 && weight < 5) { mcAmount = flatMCBelow5g; } 
+      else if (flatMCBelow5g > 0 && weight > 0 && weight <= 5) { mcAmount = flatMCBelow5g; } 
       else { mcAmount = weight * baseMCPerGram; }
 
-      const totalItemCost = (weight * silverRate) + mcAmount;
-      const formulaAmount = mode === "estimate" ? totalItemCost * quantity : totalItemCost;
+      // Cost for a single piece
+      const singleItemCost = (weight * silverRate) + mcAmount;
+      
+      // Invoice mode ignores quantity inputs. Estimate mode uses quantity.
+      const formulaAmount = mode === "estimate" ? singleItemCost * quantity : singleItemCost;
       
       const amount = item.amount_override !== "" ? num(item.amount_override) : formulaAmount;
-      const rateForPrint = weight > 0 ? (amount / (mode === "estimate" ? quantity : 1)) / weight : 0;
+      
+      // THIS IS THE FIX: Forces Rate to visually match the math on the printout
+      // Estimates ("Qty x Rate") -> Displays rate per piece
+      // Invoices ("Weight | Rate") -> Displays rate per gram
+      const rateForPrint = mode === "estimate" 
+          ? (quantity > 0 ? amount / quantity : 0) 
+          : (weight > 0 ? amount / weight : 0);
+
       const { rupees, paise } = splitAmount(amount);
       return { ...item, slNo: index + 1, rate: rateForPrint, quantity, amount, rupees, paise, weight };
     });
@@ -584,11 +595,21 @@ export default function App() {
         }
       });
       const imageData = canvas.toDataURL("image/png", 1.0); const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" }); const pageWidth = pdf.internal.pageSize.getWidth(); const pageHeight = (canvas.height * pageWidth) / canvas.width;
-      pdf.addImage(imageData, "PNG", 0, 0, pageWidth, pageHeight); pdf.save(`${filename}.pdf`); toast.success("PDF Downloaded Successfully");
+      pdf.addImage(imageData, "PNG", 0, 0, pageWidth, pageHeight); 
+      
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      if (isIOS) {
+          const blobUrl = URL.createObjectURL(pdf.output('blob'));
+          window.location.href = blobUrl;
+          toast.success("PDF opened! Tap the iOS Share icon to Save.");
+      } else {
+          pdf.save(`${filename}.pdf`); 
+          toast.success("PDF Downloaded Successfully");
+      }
     } catch (error) { toast.error("Failed to download PDF."); }
   };
 
-  const shareWhatsApp = () => { const link = `${window.location.origin}/?view=${documentNumber}`; const cleanName = customer.name ? customer.name.trim() : "Customer"; const text = `Hello ${cleanName},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`; let cleanedPhone = customer.phone.replace(/\D/g, ""); if (cleanedPhone.length === 10) cleanedPhone = `91${cleanedPhone}`; window.open(`https://wa.me/${cleanedPhone}?text=${encodeURIComponent(text)}`, "_blank"); };
+  const shareWhatsApp = () => { const link = `${window.location.origin}/?view=${documentNumber}`; const cleanName = customer.name ? customer.name.trim() : "Customer"; const text = `Hello ${cleanName},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`; let cleanedPhone = customer.phone.replace(/\D/g, ""); if (cleanedPhone.length === 10) cleanedPhone = `91${cleanedPhone}`; window.location.href = `https://wa.me/${cleanedPhone}?text=${encodeURIComponent(text)}`; };
   const shareEmail = () => { const link = `${window.location.origin}/?view=${documentNumber}`; const cleanName = customer.name ? customer.name.trim() : "Customer"; const subject = `${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber}`; const body = `Dear ${cleanName},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`; window.location.href = `mailto:${customer.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; };
   
   const goToBillTop = () => { document.getElementById("bill-print-root")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
@@ -598,6 +619,7 @@ export default function App() {
   const todaysTotalEstBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'estimate').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
   const todaysTotalInvBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'invoice').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
 
+  // ✅ PUBLIC LINK MATH DISPLAY BUG FIXED HERE
   const publicComputed = useMemo(() => {
     if (!publicBill || !publicSettings) return { items: [], taxable: 0, cgst: 0, sgst: 0, igst: 0, mdr: 0, roundOff: 0, grandTotal: 0, discount: 0, exchange: 0 };
     const baseSilverRate = num(publicSettings.silver_rate_per_gram); const baseMCPerGram = num(publicSettings.making_charge_per_gram); const flatMCBelow5g = num(publicSettings.flat_mc_below_5g);
@@ -605,16 +627,22 @@ export default function App() {
     const mapped = (publicBill.items || []).map((item, index) => {
       const weight = num(item.weight); const quantity = Math.max(num(item.quantity || 1), 1);
       const silverRate = (item.rate_override !== undefined && item.rate_override !== null && item.rate_override !== "") ? num(item.rate_override) : baseSilverRate;
+      
       let mcAmount = 0;
       if (item.mc_override !== undefined && item.mc_override !== null && item.mc_override !== "") { mcAmount = weight * num(item.mc_override); } 
-      else if (flatMCBelow5g > 0 && weight > 0 && weight < 5) { mcAmount = flatMCBelow5g; } 
+      else if (flatMCBelow5g > 0 && weight > 0 && weight <= 5) { mcAmount = flatMCBelow5g; } 
       else { mcAmount = weight * baseMCPerGram; }
 
-      const totalItemCost = (weight * silverRate) + mcAmount;
-      const formulaAmount = publicBill.mode === "estimate" ? totalItemCost * quantity : totalItemCost;
+      const singleItemCost = (weight * silverRate) + mcAmount;
+      const formulaAmount = publicBill.mode === "estimate" ? singleItemCost * quantity : singleItemCost;
+      
       const amount = (item.amount !== undefined && item.amount !== null && item.amount !== "") ? num(item.amount) : (item.amount_override ? num(item.amount_override) : formulaAmount);
       const { rupees, paise } = splitAmount(amount);
-      const rateForPrint = weight > 0 ? (amount / (publicBill.mode === "estimate" ? quantity : 1)) / weight : 0;
+      
+      // THIS IS THE FIX: Forces Rate to visually match the math on the printout
+      const rateForPrint = publicBill.mode === "estimate" 
+          ? (quantity > 0 ? amount / quantity : 0) 
+          : (weight > 0 ? amount / weight : 0);
       
       return { ...item, sl_no: item.sl_no || (index + 1), rate: rateForPrint, amount, rupees, paise, weight, quantity };
     });
@@ -1403,7 +1431,7 @@ export default function App() {
                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px", flexWrap: "wrap", gap: "10px" }}><p style={{ margin: 0, fontSize: "0.9rem", color: "#475569" }}>Manage isolated branch ledgers and addresses here.</p><Button size="sm" onClick={() => { const newBranch = { id: `B${Date.now()}`, name: "New Branch", address: "", map_url: "#", invoice_upi_id: "", estimate_upi_id: "", gstin: "", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 }; setSettings(prev => ({ ...prev, branches: [...(prev.branches || []), newBranch] })); }}>+ Add Branch</Button></div>
                    {(settings.branches || []).map((b, index) => (
                        <div key={b.id} style={{ padding: "15px", border: "1px solid #cbd5e1", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
-                           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "10px" }}><h4 style={{ margin: 0, color: "var(--brand)" }}>Branch: {b.name}</h4>{(settings.branches || []).length > 1 && (<Button size="sm" variant="outline" style={{ borderColor: "#ef4444", color: "#ef4444", padding: "0 8px", height: "24px" }} onClick={() => { if(window.confirm(`Delete ${b.name}?`)) { setSettings(prev => ({ ...prev, branches: (prev.branches || []).filter(x => x.id !== b.id) })); } }}>Delete</Button>)}</div>
+                           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "10px" }}><h4 style={{ margin: "0, color: "var(--brand)" }}>Branch: {b.name}</h4>{(settings.branches || []).length > 1 && (<Button size="sm" variant="outline" style={{ borderColor: "#ef4444", color: "#ef4444", padding: "0 8px", height: "24px" }} onClick={() => { if(window.confirm(`Delete ${b.name}?`)) { setSettings(prev => ({ ...prev, branches: (prev.branches || []).filter(x => x.id !== b.id) })); } }}>Delete</Button>)}</div>
                            <label className="select-label" style={{ fontSize: "0.8rem" }}>Branch Name (Internal Use)</label><Input value={b.name || ""} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].name = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
                            <label className="select-label" style={{ fontSize: "0.8rem" }}>Printed Bill Address</label><Input value={b.address || ""} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].address = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
                            <label className="select-label" style={{ fontSize: "0.8rem" }}>Google Maps Review Link</label><Input value={b.map_url || ""} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].map_url = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
