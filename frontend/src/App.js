@@ -39,7 +39,6 @@ const getInitialPrintScale = () => { const saved = Number(localStorage.getItem("
 const splitAmount = (amt) => { const validAmt = Number.isFinite(amt) ? amt : 0; const rupees = Math.floor(validAmt); const paise = Math.round((validAmt - rupees) * 100).toString().padStart(2, "0"); return { rupees, paise }; };
 const registerFont = (name, dataUrl) => { const styleId = `custom-font-${name.replace(/\s+/g, '-').toLowerCase()}`; if (document.getElementById(styleId)) return; const style = document.createElement('style'); style.id = styleId; style.innerHTML = `@font-face { font-family: '${name}'; src: url('${dataUrl}'); }`; document.head.appendChild(style); };
 
-// ✅ PROPERLY DEFINED UI COMPONENTS (Prevents ReferenceError Crashes)
 const FontSelectOptions = ({ customFonts }) => (
   <><option value="sans-serif">Sans-serif</option><option value="Arial, Helvetica, sans-serif">Arial</option><option value="'Times New Roman', Times, serif">Times New Roman</option><option value="'Courier New', Courier, monospace">Courier New</option><option value="Georgia, serif">Georgia</option><option value="'Trebuchet MS', sans-serif">Trebuchet MS</option><option value="'Brush Script MT', cursive">Brush Script MT (Cursive)</option>{customFonts?.map(f => (<option key={f.name} value={`'${f.name}'`}>{f.name} (Custom)</option>))}</>
 );
@@ -66,7 +65,6 @@ const UpiAppsRow = ({ upiUri }) => (
   </div>
 );
 
-// ✅ BULLETPROOF BILL TABLE COMPONENT (This replaces the missing component)
 const BillTable = ({ mode, items }) => (
   <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
     <thead>
@@ -148,7 +146,8 @@ export default function App() {
   const [isNumberLoading, setIsNumberLoading] = useState(false);
   const [billDate, setBillDate] = useState(today());
 
-  const [customer, setCustomer] = useState({ name: "", phone: "", address: "", email: "" });
+  // Added ID field below
+  const [customer, setCustomer] = useState({ id: "", name: "", phone: "", address: "", email: "" });
   const [suggestions, setSuggestions] = useState([]);
   const [items, setItems] = useState([createItem()]);
   const [discount, setDiscount] = useState("0");
@@ -396,12 +395,12 @@ export default function App() {
     if (isPublicView) return;
     const bootstrap = async () => { if (!token) return; try { await loadSettings(); await fetchCloudStatus(); await reserveNumber(mode, billBranchId); } catch { toast.error("Could not load billing settings."); } };
     bootstrap();
-  }, [token, isPublicView]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [token, isPublicView]);
 
   useEffect(() => {
     if (!token || isPublicView) return;
     const interval = setInterval(() => { fetchCloudStatus(); }, 30000); return () => clearInterval(interval);
-  }, [token, isPublicView]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [token, isPublicView]);
 
   useEffect(() => {
     if (!token || isPublicView) return;
@@ -456,7 +455,8 @@ export default function App() {
   const checkIsBlank = () => { return !customer.name.trim() && !customer.phone.trim() && !customer.address.trim() && !(items || []).some(i => i.description.trim() || i.weight.trim() || i.amount_override.trim()) && (!discount || discount === "0") && (!exchange || exchange === "0") && !paymentMethod && !advanceMethod && !advanceAmount && !splitCash; };
 
   const clearBill = async (nextMode = mode, nextBranch = billBranchId) => {
-    setCurrentBillId(null); setEditingDocNumber(null); setItems([createItem(settings.default_hsn)]); setCustomer({ name: "", phone: "", address: "", email: "" });
+    // Clear the customer ID properly
+    setCurrentBillId(null); setEditingDocNumber(null); setItems([createItem(settings.default_hsn)]); setCustomer({ id: "", name: "", phone: "", address: "", email: "" });
     setSuggestions([]); setDiscount("0"); setExchange("0"); setManualRoundOff("");
     setTxType("sale"); setPaymentMethod(""); setSplitCash(""); setIsPaymentDone(false); setAdvanceAmount(""); setAdvanceMethod(""); setAdvanceSplitCash(""); setIsAdvancePaid(false); setBalanceMethod(""); setBalanceSplitCash(""); setIsBalancePaid(false); setNotes("");
     setBillDate(today()); setIsDirty(false); await reserveNumber(nextMode, nextBranch); goToBillTop();
@@ -469,11 +469,26 @@ export default function App() {
 
   const loadBillForEditing = (bill) => {
     setCurrentBillId(bill.id); setEditingDocNumber(bill.document_number); setMode(bill.mode); setBillBranchId(bill.branch_id || (settings.branches || [])[0].id); setDocumentNumber(bill.document_number); setBillDate(bill.date || today());
-    setCustomer({ name: bill.customer_name || bill.customer?.name || "", phone: bill.customer_phone || bill.customer?.phone || "", address: bill.customer_address || bill.customer?.address || "", email: bill.customer_email || bill.customer?.email || "" });
+    
+    // Check both bill.customer_id AND bill.customer?.id to ensure persistence
+    setCustomer({ 
+        id: bill.customer_id || bill.customer?.id || "", 
+        name: bill.customer_name || bill.customer?.name || "", 
+        phone: bill.customer_phone || bill.customer?.phone || "", 
+        address: bill.customer_address || bill.customer?.address || "", 
+        email: bill.customer_email || bill.customer?.email || "" 
+    });
+    
     setTxType(bill.tx_type || "sale"); setPaymentMethod(bill.payment_method || ""); setSplitCash(bill.split_cash !== null && bill.split_cash !== undefined ? String(bill.split_cash) : ""); setIsPaymentDone(bill.is_payment_done || false); 
     setAdvanceAmount(bill.advance_amount ? String(bill.advance_amount) : ""); setAdvanceMethod(bill.advance_method || ""); setAdvanceSplitCash(bill.advance_split_cash ? String(bill.advance_split_cash) : ""); setIsAdvancePaid(bill.is_advance_paid || false);
     setBalanceMethod(bill.balance_method || ""); setBalanceSplitCash(bill.balance_split_cash ? String(bill.balance_split_cash) : ""); setIsBalancePaid(bill.is_balance_paid || false);
-    setNotes(bill.notes || ""); setDiscount(bill.totals?.discount ? String(bill.totals.discount) : "0"); setExchange(bill.totals?.exchange ? String(bill.totals.exchange) : "0"); setManualRoundOff(bill.totals?.round_off !== null && bill.totals?.round_off !== undefined ? String(bill.totals.round_off) : "");
+    setNotes(bill.notes || ""); 
+    
+    // Fix applied here: Checking both the root and totals object for discount/exchange safely
+    setDiscount((bill.discount !== null && bill.discount !== undefined) ? String(bill.discount) : (bill.totals?.discount !== null && bill.totals?.discount !== undefined ? String(bill.totals.discount) : "0"));
+    setExchange((bill.exchange !== null && bill.exchange !== undefined) ? String(bill.exchange) : (bill.totals?.exchange !== null && bill.totals?.exchange !== undefined ? String(bill.totals.exchange) : "0"));
+    setManualRoundOff((bill.round_off !== null && bill.round_off !== undefined) ? String(bill.round_off) : ((bill.totals?.round_off !== null && bill.totals?.round_off !== undefined) ? String(bill.totals.round_off) : ""));
+    
     const loadedItems = (bill.items || []).map((item) => ({ id: `${Date.now()}-${Math.random()}`, description: item.description || "", hsn: item.hsn || "", weight: item.weight ? String(item.weight) : "", quantity: item.quantity ? String(item.quantity) : "1", mc_override: item.mc_override !== null && item.mc_override !== undefined ? String(item.mc_override) : "", rate_override: item.rate_override !== null && item.rate_override !== undefined ? String(item.rate_override) : "", amount_override: item.amount_override !== null && item.amount_override !== undefined ? String(item.amount_override) : "", }));
     setItems(loadedItems.length > 0 ? loadedItems : [createItem(settings.default_hsn)]); setIsDirty(false); setShowRecentBills(false); setShowLedger(false); toast.success(`Loaded ${bill.document_number} for editing`); goToBillTop();
   };
@@ -553,14 +568,27 @@ export default function App() {
 
     setSavingBill(true);
     try {
+      // Fix applied here: Sending customer_id, and nesting discount & exchange deeply inside totals so the database remembers them accurately.
       const payload = {
-        mode, branch_id: billBranchId, document_number: documentNumber, date: billDate, customer_name: customer.name, customer_phone: customer.phone, customer_address: customer.address, customer_email: customer.email,
+        mode, branch_id: billBranchId, document_number: documentNumber, date: billDate, 
+        customer_id: customer.id || null, customer_name: customer.name, customer_phone: customer.phone, customer_address: customer.address, customer_email: customer.email,
         tx_type: txType, payment_method: paymentMethod, is_payment_done: isPaymentDone, split_cash: num(splitCash), split_upi: Math.max(0, computed.grandTotal - num(splitCash)),
         advance_amount: num(advanceAmount), advance_method: advanceMethod, advance_split_cash: num(advanceSplitCash), is_advance_paid: isAdvancePaid,
         balance_method: balanceMethod, balance_split_cash: num(balanceSplitCash), is_balance_paid: isBalancePaid,
         discount: num(discount), exchange: num(exchange), round_off: manualRoundOff === "" ? null : num(manualRoundOff), notes,
         items: computed.items.map((item) => ({ description: item.description, hsn: item.hsn, weight: num(item.weight), quantity: num(item.quantity), mc_override: item.mc_override === "" ? null : num(item.mc_override), rate_override: item.rate_override === "" ? null : num(item.rate_override), amount_override: item.amount_override === "" ? null : num(item.amount_override), rate: item.rate, amount: item.amount, sl_no: item.slNo })),
-        totals: { grand_total: computed.grandTotal, subtotal: computed.subtotal }
+        totals: { 
+            grand_total: computed.grandTotal, 
+            subtotal: computed.subtotal,
+            taxable_amount: computed.taxable,
+            cgst: computed.cgst, 
+            sgst: computed.sgst, 
+            igst: computed.igst, 
+            mdr: computed.mdr,
+            discount: num(discount), 
+            exchange: num(exchange), 
+            round_off: manualRoundOff === "" ? null : num(manualRoundOff)
+        }
       };
 
       if (currentBillId) { await axios.put(`${API}/bills/update-by-id/${currentBillId}`, payload, { headers: authHeaders }); toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} updated & migrated successfully.`); setIsDirty(false); setEditingDocNumber(documentNumber); } 
@@ -586,8 +614,10 @@ export default function App() {
     } catch (error) { toast.error("Failed to download PDF."); }
   };
 
-  const shareWhatsApp = () => { const link = `${window.location.origin}/?view=${documentNumber}`; const text = `Hello ${customer.name || "Customer"},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`; let cleanedPhone = customer.phone.replace(/\D/g, ""); if (cleanedPhone.length === 10) cleanedPhone = `91${cleanedPhone}`; window.open(`https://wa.me/${cleanedPhone}?text=${encodeURIComponent(text)}`, "_blank"); };
-  const shareEmail = () => { const link = `${window.location.origin}/?view=${documentNumber}`; const subject = `${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber}`; const body = `Dear ${customer.name || "Customer"},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`; window.location.href = `mailto:${customer.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; };
+  // Fixed formatting to remove that awkward comma space
+  const shareWhatsApp = () => { const link = `${window.location.origin}/?view=${documentNumber}`; const cleanName = customer.name ? customer.name.trim() : "Customer"; const text = `Hello ${cleanName},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`; let cleanedPhone = customer.phone.replace(/\D/g, ""); if (cleanedPhone.length === 10) cleanedPhone = `91${cleanedPhone}`; window.open(`https://wa.me/${cleanedPhone}?text=${encodeURIComponent(text)}`, "_blank"); };
+  const shareEmail = () => { const link = `${window.location.origin}/?view=${documentNumber}`; const cleanName = customer.name ? customer.name.trim() : "Customer"; const subject = `${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber}`; const body = `Dear ${cleanName},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`; window.location.href = `mailto:${customer.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; };
+  
   const goToBillTop = () => { document.getElementById("bill-print-root")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
   const handleWifiClick = () => { navigator.clipboard.writeText("12345678").then(() => { toast.success("✅ Password '12345678' Copied! Go to settings and connect to 'JalaramJewellers Unlimited'.", { duration: 6000 }); }).catch(() => { toast.info("Wi-Fi: JalaramJewellers Unlimited | Pass: 12345678", { duration: 6000 }); }); };
 
@@ -884,7 +914,7 @@ export default function App() {
                         <div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(b.totals?.cgst || 0)}</strong></div><div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(b.totals?.sgst || 0)}</strong></div><div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(b.totals?.igst || 0)}</strong></div>
                       </>
                     ) : (
-                      <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(b.totals?.discount || 0)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(b.totals?.exchange || 0)}</strong></div></>
+                      <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money((b.discount !== null && b.discount !== undefined) ? b.discount : (b.totals?.discount || 0))}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money((b.exchange !== null && b.exchange !== undefined) ? b.exchange : (b.totals?.exchange || 0))}</strong></div></>
                     )}
                     <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(b.totals?.grand_total || 0)}</strong></div>
                     {b.tx_type && b.tx_type !== "sale" && (
@@ -1038,7 +1068,7 @@ export default function App() {
             {(suggestions || []).length > 0 && (
               <div className="suggestions">
                 {(suggestions || []).map((entry) => (
-                  <button key={entry.id} type="button" className="suggestion-item" onClick={() => { setCustomer({ name: entry.name, phone: entry.phone, address: entry.address, email: entry.email }); setSuggestions([]); markDirty(); }}>
+                  <button key={entry.id} type="button" className="suggestion-item" onClick={() => { setCustomer({ id: entry.id, name: entry.name, phone: entry.phone, address: entry.address, email: entry.email }); setSuggestions([]); markDirty(); }}>
                     {entry.name} · {entry.phone}
                   </button>
                 ))}
