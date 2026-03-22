@@ -53,18 +53,6 @@ const ConnectWithUs = ({ phoneLink, instaLink = "https://www.instagram.com/jalar
   </div>
 );
 
-const UpiAppsRow = ({ upiUri }) => (
-  <div style={{ marginTop: "20px" }}>
-    <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Or select your app directly:</p>
-    <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
-      <a href={upiUri.replace("upi://pay", "phonepe://pay")} style={{ padding: "8px 16px", backgroundColor: "#5f259f", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>PhonePe</a>
-      <a href={upiUri.replace("upi://pay", "tez://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#1a73e8", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>G-Pay</a>
-      <a href={upiUri.replace("upi://pay", "paytmmp://pay")} style={{ padding: "8px 16px", backgroundColor: "#00baf2", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>Paytm</a>
-      <a href={upiUri.replace("upi://pay", "credpay://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#212121", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>CRED</a>
-    </div>
-  </div>
-);
-
 const BillTable = ({ mode, items }) => (
   <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
     <thead>
@@ -146,7 +134,6 @@ export default function App() {
   const [isNumberLoading, setIsNumberLoading] = useState(false);
   const [billDate, setBillDate] = useState(today());
 
-  // Added ID field below
   const [customer, setCustomer] = useState({ id: "", name: "", phone: "", address: "", email: "" });
   const [suggestions, setSuggestions] = useState([]);
   const [items, setItems] = useState([createItem()]);
@@ -455,7 +442,6 @@ export default function App() {
   const checkIsBlank = () => { return !customer.name.trim() && !customer.phone.trim() && !customer.address.trim() && !(items || []).some(i => i.description.trim() || i.weight.trim() || i.amount_override.trim()) && (!discount || discount === "0") && (!exchange || exchange === "0") && !paymentMethod && !advanceMethod && !advanceAmount && !splitCash; };
 
   const clearBill = async (nextMode = mode, nextBranch = billBranchId) => {
-    // Clear the customer ID properly
     setCurrentBillId(null); setEditingDocNumber(null); setItems([createItem(settings.default_hsn)]); setCustomer({ id: "", name: "", phone: "", address: "", email: "" });
     setSuggestions([]); setDiscount("0"); setExchange("0"); setManualRoundOff("");
     setTxType("sale"); setPaymentMethod(""); setSplitCash(""); setIsPaymentDone(false); setAdvanceAmount(""); setAdvanceMethod(""); setAdvanceSplitCash(""); setIsAdvancePaid(false); setBalanceMethod(""); setBalanceSplitCash(""); setIsBalancePaid(false); setNotes("");
@@ -470,7 +456,6 @@ export default function App() {
   const loadBillForEditing = (bill) => {
     setCurrentBillId(bill.id); setEditingDocNumber(bill.document_number); setMode(bill.mode); setBillBranchId(bill.branch_id || (settings.branches || [])[0].id); setDocumentNumber(bill.document_number); setBillDate(bill.date || today());
     
-    // Check both bill.customer_id AND bill.customer?.id to ensure persistence
     setCustomer({ 
         id: bill.customer_id || bill.customer?.id || "", 
         name: bill.customer_name || bill.customer?.name || "", 
@@ -484,7 +469,6 @@ export default function App() {
     setBalanceMethod(bill.balance_method || ""); setBalanceSplitCash(bill.balance_split_cash ? String(bill.balance_split_cash) : ""); setIsBalancePaid(bill.is_balance_paid || false);
     setNotes(bill.notes || ""); 
     
-    // Fix applied here: Checking both the root and totals object for discount/exchange safely
     setDiscount((bill.discount !== null && bill.discount !== undefined) ? String(bill.discount) : (bill.totals?.discount !== null && bill.totals?.discount !== undefined ? String(bill.totals.discount) : "0"));
     setExchange((bill.exchange !== null && bill.exchange !== undefined) ? String(bill.exchange) : (bill.totals?.exchange !== null && bill.totals?.exchange !== undefined ? String(bill.totals.exchange) : "0"));
     setManualRoundOff((bill.round_off !== null && bill.round_off !== undefined) ? String(bill.round_off) : ((bill.totals?.round_off !== null && bill.totals?.round_off !== undefined) ? String(bill.totals.round_off) : ""));
@@ -568,7 +552,6 @@ export default function App() {
 
     setSavingBill(true);
     try {
-      // Fix applied here: Sending customer_id, and nesting discount & exchange deeply inside totals so the database remembers them accurately.
       const payload = {
         mode, branch_id: billBranchId, document_number: documentNumber, date: billDate, 
         customer_id: customer.id || null, customer_name: customer.name, customer_phone: customer.phone, customer_address: customer.address, customer_email: customer.email,
@@ -614,7 +597,6 @@ export default function App() {
     } catch (error) { toast.error("Failed to download PDF."); }
   };
 
-  // Fixed formatting to remove that awkward comma space
   const shareWhatsApp = () => { const link = `${window.location.origin}/?view=${documentNumber}`; const cleanName = customer.name ? customer.name.trim() : "Customer"; const text = `Hello ${cleanName},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`; let cleanedPhone = customer.phone.replace(/\D/g, ""); if (cleanedPhone.length === 10) cleanedPhone = `91${cleanedPhone}`; window.open(`https://wa.me/${cleanedPhone}?text=${encodeURIComponent(text)}`, "_blank"); };
   const shareEmail = () => { const link = `${window.location.origin}/?view=${documentNumber}`; const cleanName = customer.name ? customer.name.trim() : "Customer"; const subject = `${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber}`; const body = `Dear ${cleanName},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`; window.location.href = `mailto:${customer.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; };
   
@@ -670,7 +652,9 @@ export default function App() {
       if (isAdvancePaid && !isBalancePaid && (balanceMethod === "UPI" || balanceMethod === "Split")) { const bal = Math.max(0, computed.grandTotal - num(advanceAmount)); return balanceMethod === "Split" ? Math.max(0, bal - num(balanceSplitCash)) : bal; }
       return 0;
   };
-  const upiAmountToPay = getUpiAmount(); const showDashboardUpi = upiAmountToPay > 0;
+  const upiAmountToPay = getUpiAmount(); 
+  const isDashboardPaid = txType === "sale" ? isPaymentDone : isBalancePaid;
+  const showDashboardUpi = upiAmountToPay > 0 && !isDashboardPaid;
   const upiId = mode === "invoice" ? activeBillBranch.invoice_upi_id : activeBillBranch.estimate_upi_id;
   const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
   const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
@@ -789,10 +773,10 @@ export default function App() {
               )}
 
               {showPublicUpi && (
-                <div className="payment-qr-box">
-                  <p className="scan-title" style={{ marginBottom: "15px" }}>Click Below to Pay ₹{money(publicUpiAmt)}</p>
-                  <a href={publicUpiUri} style={{ display: "block", padding: "12px 20px", backgroundColor: "#16a34a", color: "white", textDecoration: "none", fontWeight: "bold", borderRadius: "8px", textAlign: "center", boxShadow: "0 4px 6px rgba(0,0,0,0.1)" }}>📱 Pay ₹{money(publicUpiAmt)} via Any UPI App</a>
-                  <UpiAppsRow upiUri={publicUpiUri} />
+                <div className="payment-qr-box" style={{ textAlign: "center", padding: "15px", border: "1.5px dashed #cbd5e1", borderRadius: "12px", marginTop: "15px" }}>
+                  <p className="scan-title" style={{ fontWeight: "bold", fontSize: "1.1rem", color: "#0f172a", margin: "0 0 10px 0" }}>Scan Here To Pay (₹{money(publicUpiAmt)})</p>
+                  <img src={`https://quickchart.io/qr?text=${encodeURIComponent(publicUpiUri)}&size=220`} alt="Dynamic payment QR" className="upi-qr" crossOrigin="anonymous" style={{ width: "160px", height: "160px", margin: "0 auto", display: "block" }} />
+                  <p className="upi-id" style={{ marginTop: "10px", fontSize: "0.9rem", color: "#64748b", margin: "10px 0 0 0" }}>UPI ID: {publicUpiId}</p>
                 </div>
               )}
             </div>
@@ -858,7 +842,6 @@ export default function App() {
       <div style={{ position: "absolute", top: "-9999px", left: "-9999px", opacity: 0, pointerEvents: "none" }}>
         {(filteredRecentBills || []).map(b => {
            const billBranch = (settings.branches || []).find(br => br.id === b.branch_id) || (settings.branches || [])[0] || defaultSettings.branches[0];
-           const bulkUpiAmountToPay = b.payment_method === "Split" ? num(b.split_upi) : (b.totals?.grand_total || 0);
            const printedItems = (b.items || []).map((item, index) => {
              const rate = (item.rate !== undefined && item.rate !== null) ? num(item.rate) : (item.rate_override ? num(item.rate_override) : 0);
              const amount = (item.amount !== undefined && item.amount !== null) ? num(item.amount) : (item.amount_override ? num(item.amount_override) : 0);
@@ -1019,10 +1002,10 @@ export default function App() {
               )}
 
               {showDashboardUpi && (
-                <div className="payment-qr-box">
-                  <p className="scan-title">Scan Here For Payment (₹{money(upiAmountToPay)})</p>
-                  <img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" crossOrigin="anonymous" />
-                  <p className="upi-id">UPI: {upiId}</p>
+                <div className="payment-qr-box" style={{ textAlign: "center", padding: "15px", border: "1.5px dashed #cbd5e1", borderRadius: "12px", marginTop: "15px" }}>
+                  <p className="scan-title" style={{ fontWeight: "bold", fontSize: "1.1rem", color: "#0f172a", margin: "0 0 10px 0" }}>Scan Here To Pay (₹{money(upiAmountToPay)})</p>
+                  <img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" crossOrigin="anonymous" style={{ width: "160px", height: "160px", margin: "0 auto", display: "block" }} />
+                  <p className="upi-id" style={{ marginTop: "10px", fontSize: "0.9rem", color: "#64748b", margin: "10px 0 0 0" }}>UPI ID: {upiId}</p>
                 </div>
               )}
             </div>
@@ -1438,31 +1421,4 @@ export default function App() {
                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px", flexWrap: "wrap", gap: "10px" }}><p style={{ margin: 0, fontSize: "0.9rem", color: "#475569" }}>Manage isolated branch ledgers and addresses here.</p><Button size="sm" onClick={() => { const newBranch = { id: `B${Date.now()}`, name: "New Branch", address: "", map_url: "#", invoice_upi_id: "", estimate_upi_id: "", gstin: "", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 }; setSettings(prev => ({ ...prev, branches: [...(prev.branches || []), newBranch] })); }}>+ Add Branch</Button></div>
                    {(settings.branches || []).map((b, index) => (
                        <div key={b.id} style={{ padding: "15px", border: "1px solid #cbd5e1", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
-                           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "10px" }}><h4 style={{ margin: 0, color: "var(--brand)" }}>Branch: {b.name}</h4>{(settings.branches || []).length > 1 && (<Button size="sm" variant="outline" style={{ borderColor: "#ef4444", color: "#ef4444", padding: "0 8px", height: "24px" }} onClick={() => { if(window.confirm(`Delete ${b.name}?`)) { setSettings(prev => ({ ...prev, branches: (prev.branches || []).filter(x => x.id !== b.id) })); } }}>Delete</Button>)}</div>
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Branch Name (Internal Use)</label><Input value={b.name || ""} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].name = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Printed Bill Address</label><Input value={b.address || ""} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].address = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Google Maps Review Link</label><Input value={b.map_url || ""} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].map_url = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Invoice UPI ID</label><Input value={b.invoice_upi_id || ""} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].invoice_upi_id = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Estimate UPI ID</label><Input value={b.estimate_upi_id || ""} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].estimate_upi_id = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>GSTIN</label><Input value={b.gstin || ""} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].gstin = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
-                       </div>
-                   ))}
-                   <Button onClick={saveSettings} style={{ width: "100%", marginBottom: "15px" }}>Save Branch Settings</Button>
-               </div>
-            )}
-          </div>
-        </section>
-      )}
-
-      {showAbout && (
-        <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "500px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
-          <div className="drawer-header"><h3>About This App</h3><Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowAbout(false)}><ArrowLeft className="drawer-back-icon" /><span>Back</span></Button></div>
-          <div className="cloud-note" style={{ marginTop: "15px", padding: "0 15px", boxSizing: "border-box" }}>
-            <h4>Cloud Database Setup</h4><ol><li>Create Supabase project and get project URL + service role key.</li><li>Add them in backend <code>SUPABASE_URL</code> and <code>SUPABASE_SERVICE_ROLE_KEY</code>.</li><li>Create <code>customers</code> and <code>number_counters</code> tables as in README.</li></ol>
-            <p className="cloud-status-text">Cloud status: {cloudStatus.enabled ? "Connected" : "Placeholder mode"} ({cloudStatus.mode})</p>
-          </div>
-        </section>
-      )}
-    </div>
-  );
-}
+                           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "10px" }}><h4 style={{ margin: 0, color: "var(--brand)" }}>Branch: {b.name}</h4>{(settings.branches || []).length > 1 && (<Button size="sm" variant="outline" style={{ borderColor: "#ef4444", color: "#ef4444", padding: "0 8px", height: "24px" }} onClick={() => { if(window.confirm(`Delete ${b.name}?`)) { setSettings(prev => ({ ...prev, branches: (prev.branches || []).filter(
