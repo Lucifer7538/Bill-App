@@ -74,8 +74,9 @@ const BillTable = ({ mode, items }) => (
           <th style={{ width: "38%" }}>DESCRIPTION</th>
           <th style={{ width: "10%" }}>HSN</th>
           <th style={{ width: "14%", whiteSpace: "nowrap" }}>WEIGHT (g)</th>
-          <th style={{ width: "15%", whiteSpace: "nowrap" }}>RATE Rs.</th>
-          <th style={{ width: "15%", whiteSpace: "nowrap" }}>AMOUNT</th>
+          {/* FIX: Set wrap to normal to prevent RATE Rs text overlap */}
+          <th style={{ width: "15%", whiteSpace: "normal" }}>RATE Rs.</th>
+          <th style={{ width: "15%", whiteSpace: "normal" }}>AMOUNT</th>
         </tr>
       ) : (
         <tr>
@@ -146,9 +147,10 @@ export default function App() {
   const [isNumberLoading, setIsNumberLoading] = useState(false);
   const [billDate, setBillDate] = useState(today());
 
+  // FIX: Start with 0 items. You have to click "Add Item" to add one!
   const [customer, setCustomer] = useState({ id: "", name: "", phone: "", address: "", email: "" });
   const [suggestions, setSuggestions] = useState([]);
-  const [items, setItems] = useState([createItem()]);
+  const [items, setItems] = useState([]);
   const [discount, setDiscount] = useState("0");
   const [exchange, setExchange] = useState("0");
   const [manualRoundOff, setManualRoundOff] = useState("");
@@ -207,6 +209,32 @@ export default function App() {
 
   const activeGlobalBranch = (settings.branches || []).find(b => b.id === globalBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
   const activeBillBranch = (settings.branches || []).find(b => b.id === billBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
+
+  // FIX: Global Keyboard Shortcuts Listener!
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Open Settings: Ctrl + Shift + S
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        setShowSettings(true);
+        return;
+      }
+      // Save Bill: Ctrl + S
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        document.getElementById("save-bill-btn")?.click();
+        return;
+      }
+      // New Bill: Ctrl + N
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        document.getElementById("new-bill-btn")?.click();
+        return;
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   useEffect(() => {
     if (settings.custom_fonts && settings.custom_fonts.length > 0) {
@@ -378,7 +406,6 @@ export default function App() {
     const newSettings = { ...defaultSettings, ...dbData, logo_data_url: savedLogo || dbData.logo_data_url || "", about_qr_data_url: savedAboutQr || dbData.about_qr_data_url || STATIC_ABOUT_QR_URL, custom_fonts: dbData.custom_fonts || localFonts };
     setSettings(newSettings);
     if (!(newSettings.branches || []).find(b => b.id === globalBranchId)) { setGlobalBranchId((newSettings.branches || [])[0].id); setBillBranchId((newSettings.branches || [])[0].id); }
-    setItems((prev) => { if (prev.length === 1 && !prev[0].description && !prev[0].weight && !prev[0].hsn) return [{ ...prev[0], hsn: newSettings.default_hsn }]; return prev; });
   };
 
   const reserveNumber = async (activeMode, activeBranch) => {
@@ -412,9 +439,10 @@ export default function App() {
   }, [customer.phone, customer.name, token, isPublicView, authHeaders]);
 
   const computed = useMemo(() => {
-    const baseSilverRate = num(settings.silver_rate_per_gram);
-    const baseMCPerGram = num(settings.making_charge_per_gram);
-    const flatMCBelow5g = num(settings.flat_mc_below_5g);
+    // FIX: Strong Number parsing for mathematical integrity
+    const baseSilverRate = Number(settings.silver_rate_per_gram) || 0;
+    const baseMCPerGram = Number(settings.making_charge_per_gram) || 0;
+    const flatMCBelow5g = Number(settings.flat_mc_below_5g) || 0;
 
     const mapped = (items || []).map((item, index) => {
       const weight = num(item.weight);
@@ -422,15 +450,20 @@ export default function App() {
       const silverRate = item.rate_override !== "" ? num(item.rate_override) : baseSilverRate;
 
       let mcAmount = 0;
-      if (item.mc_override !== "") { mcAmount = weight * num(item.mc_override); } 
-      else if (flatMCBelow5g > 0 && weight > 0 && weight <= 5) { mcAmount = flatMCBelow5g; } 
-      else { mcAmount = weight * baseMCPerGram; }
+      if (item.mc_override !== "") { 
+          mcAmount = weight * num(item.mc_override); 
+      } else if (flatMCBelow5g > 0 && weight > 0 && weight <= 5) { 
+          mcAmount = flatMCBelow5g; // FIX: Flat MC definitively applies <= 5g
+      } else { 
+          mcAmount = weight * baseMCPerGram; 
+      }
 
       const singleItemCost = (weight * silverRate) + mcAmount;
       const formulaAmount = mode === "estimate" ? singleItemCost * quantity : singleItemCost;
       
       const amount = item.amount_override !== "" ? num(item.amount_override) : formulaAmount;
       
+      // FIX: Ensure rate displays cleanly without mathematically confusing the customer
       const rateForPrint = mode === "estimate" 
           ? (quantity > 0 ? amount / quantity : 0) 
           : (weight > 0 ? amount / weight : 0);
@@ -458,7 +491,7 @@ export default function App() {
   const checkIsBlank = () => { return !customer.name.trim() && !customer.phone.trim() && !customer.address.trim() && !(items || []).some(i => i.description.trim() || i.weight.trim() || i.amount_override.trim()) && (!discount || discount === "0") && (!exchange || exchange === "0") && !paymentMethod && !advanceMethod && !advanceAmount && !splitCash; };
 
   const clearBill = async (nextMode = mode, nextBranch = billBranchId) => {
-    setCurrentBillId(null); setEditingDocNumber(null); setItems([createItem(settings.default_hsn)]); setCustomer({ id: "", name: "", phone: "", address: "", email: "" });
+    setCurrentBillId(null); setEditingDocNumber(null); setItems([]); setCustomer({ id: "", name: "", phone: "", address: "", email: "" });
     setSuggestions([]); setDiscount("0"); setExchange("0"); setManualRoundOff("");
     setTxType("sale"); setPaymentMethod(""); setSplitCash(""); setIsPaymentDone(false); setAdvanceAmount(""); setAdvanceMethod(""); setAdvanceSplitCash(""); setIsAdvancePaid(false); setBalanceMethod(""); setBalanceSplitCash(""); setIsBalancePaid(false); setNotes("");
     setBillDate(today()); setIsDirty(false); await reserveNumber(nextMode, nextBranch); goToBillTop();
@@ -480,7 +513,7 @@ export default function App() {
     setExchange((bill.exchange !== null && bill.exchange !== undefined) ? String(bill.exchange) : (bill.totals?.exchange !== null && bill.totals?.exchange !== undefined ? String(bill.totals.exchange) : "0"));
     setManualRoundOff((bill.round_off !== null && bill.round_off !== undefined) ? String(bill.round_off) : ((bill.totals?.round_off !== null && bill.totals?.round_off !== undefined) ? String(bill.totals.round_off) : ""));
     const loadedItems = (bill.items || []).map((item) => ({ id: `${Date.now()}-${Math.random()}`, description: item.description || "", hsn: item.hsn || "", weight: item.weight ? String(item.weight) : "", quantity: item.quantity ? String(item.quantity) : "1", mc_override: item.mc_override !== null && item.mc_override !== undefined ? String(item.mc_override) : "", rate_override: item.rate_override !== null && item.rate_override !== undefined ? String(item.rate_override) : "", amount_override: item.amount_override !== null && item.amount_override !== undefined ? String(item.amount_override) : "", }));
-    setItems(loadedItems.length > 0 ? loadedItems : [createItem(settings.default_hsn)]); setIsDirty(false); setShowRecentBills(false); setShowLedger(false); toast.success(`Loaded ${bill.document_number} for editing`); goToBillTop();
+    setItems(loadedItems.length > 0 ? loadedItems : []); setIsDirty(false); setShowRecentBills(false); setShowLedger(false); toast.success(`Loaded ${bill.document_number} for editing`); goToBillTop();
   };
 
   const handleDeleteBill = async (bill) => {
@@ -590,15 +623,9 @@ export default function App() {
       const imageData = canvas.toDataURL("image/png", 1.0); const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" }); const pageWidth = pdf.internal.pageSize.getWidth(); const pageHeight = (canvas.height * pageWidth) / canvas.width;
       pdf.addImage(imageData, "PNG", 0, 0, pageWidth, pageHeight); 
       
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      if (isIOS) {
-          const blobUrl = URL.createObjectURL(pdf.output('blob'));
-          window.location.href = blobUrl;
-          toast.success("PDF opened! Tap the iOS Share icon to Save.");
-      } else {
-          pdf.save(`${filename}.pdf`); 
-          toast.success("PDF Downloaded Successfully");
-      }
+      // FIX: Stripped out broken iOS ObjectURL handling to prevent about:blank screen.
+      pdf.save(`${filename}.pdf`); 
+      toast.success("PDF Downloaded Successfully");
     } catch (error) { toast.error("Failed to download PDF."); }
   };
 
@@ -614,7 +641,9 @@ export default function App() {
 
   const publicComputed = useMemo(() => {
     if (!publicBill || !publicSettings) return { items: [], taxable: 0, cgst: 0, sgst: 0, igst: 0, mdr: 0, roundOff: 0, grandTotal: 0, discount: 0, exchange: 0 };
-    const baseSilverRate = num(publicSettings.silver_rate_per_gram); const baseMCPerGram = num(publicSettings.making_charge_per_gram); const flatMCBelow5g = num(publicSettings.flat_mc_below_5g);
+    const baseSilverRate = Number(publicSettings.silver_rate_per_gram) || 0; 
+    const baseMCPerGram = Number(publicSettings.making_charge_per_gram) || 0; 
+    const flatMCBelow5g = Number(publicSettings.flat_mc_below_5g) || 0;
 
     const mapped = (publicBill.items || []).map((item, index) => {
       const weight = num(item.weight); const quantity = Math.max(num(item.quantity || 1), 1);
@@ -938,9 +967,11 @@ export default function App() {
         </div>
       </header>
 
-      <main className="main-layout">
+      {/* FIX: New responsive flexbox split-screen layout for Tablet/PC views */}
+      <main style={{ display: "flex", flexWrap: "wrap", gap: "20px", alignItems: "flex-start", padding: "15px", maxWidth: "1600px", margin: "0 auto" }}>
         
-        <section id="bill-print-root" className="bill-sheet" style={{ "--print-scale-factor": (printScale / 100).toFixed(3), position: 'relative', zIndex: 1 }}>
+        {/* LEFT SIDE: Bill Preview */}
+        <section id="bill-print-root" className="bill-sheet" style={{ flex: "1.5 1 600px", minWidth: "350px", position: window.innerWidth > 900 ? "sticky" : "relative", top: window.innerWidth > 900 ? "20px" : "auto", margin: 0, "--print-scale-factor": (printScale / 100).toFixed(3), zIndex: 1 }}>
           {(txType === "sale" ? isPaymentDone : isBalancePaid) && <div className="watermark-done">FULLY PAID</div>}
           <div className="bill-header">
             <div className="logo-area">
@@ -980,7 +1011,11 @@ export default function App() {
             <p><strong>Phone:</strong> {customer.phone || "-"}</p>
           </div>
 
-          <BillTable mode={mode} items={computed.items} />
+          {items.length > 0 ? (
+             <BillTable mode={mode} items={computed.items} />
+          ) : (
+             <div style={{ textAlign: "center", padding: "30px", border: "1px dashed #cbd5e1", margin: "20px 0", color: "#94a3b8" }}>Add items to see them on the bill</div>
+          )}
 
           <div className="sheet-bottom-stack">
             <div className="totals">
@@ -1029,7 +1064,8 @@ export default function App() {
           <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
         </section>
 
-        <aside className="controls no-print">
+        {/* RIGHT SIDE: Data Entry Controls */}
+        <aside className="controls no-print" style={{ flex: "1 1 400px", minWidth: "300px", margin: 0 }}>
           <div className="control-card">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
                 <h3 style={{ margin: 0 }}>Bill Details</h3>
@@ -1074,10 +1110,11 @@ export default function App() {
                 <Input value={item.mc_override} onChange={(e) => updateItem(item.id, "mc_override", e.target.value)} placeholder="Custom MC ₹/g" />
                 <Input value={item.rate_override} onChange={(e) => updateItem(item.id, "rate_override", e.target.value)} placeholder="Custom Silver Rate" />
                 <Input value={item.amount_override} onChange={(e) => updateItem(item.id, "amount_override", e.target.value)} placeholder="Fixed Amount ₹" />
-                <Button type="button" variant="outline" onClick={() => { setItems((prev) => prev.filter((row) => row.id !== item.id)); markDirty(); }} disabled={(items || []).length === 1}>Remove</Button>
+                <Button type="button" variant="outline" onClick={() => { setItems((prev) => prev.filter((row) => row.id !== item.id)); markDirty(); }}>Remove</Button>
               </div>
             ))}
-            <Button type="button" onClick={() => { setItems((prev) => [...prev, createItem(settings.default_hsn)]); markDirty(); }}>Add Item</Button>
+            {/* FIX: Explicitly click to add items instead of generating blanks on load */}
+            <Button type="button" onClick={() => { setItems((prev) => [...prev, createItem(settings.default_hsn)]); markDirty(); }} style={{ width: "100%", border: "2px dashed #94a3b8", backgroundColor: "#f8fafc", color: "#334155" }}>+ Add Item</Button>
           </div>
 
           <div className="control-card">
@@ -1160,14 +1197,14 @@ export default function App() {
           </div>
 
           <div className="control-card action-grid">
-            <Button onClick={saveBill} disabled={savingBill} style={{ backgroundColor: "#0f172a" }}>{savingBill ? "Saving..." : currentBillId ? `Update & Migrate (${editingDocNumber})` : "Save Bill"}</Button>
+            <Button id="save-bill-btn" onClick={saveBill} disabled={savingBill} style={{ backgroundColor: "#0f172a" }}>{savingBill ? "Saving..." : currentBillId ? `Update & Migrate (${editingDocNumber})` : "Save Bill"}</Button>
             <Button onClick={() => setShowLedger(true)} style={{ backgroundColor: "#16a34a", color: "white" }}>Daily Sales & Ledger</Button>
             <Button onClick={() => { setShowRecentBills(true); setBillSearchQuery(""); setRecentBranchFilter("ALL"); setRecentModeFilter("ALL"); setRecentDateFilter("ALL"); }} variant="outline">Recent Bills</Button>
             <Button onClick={() => downloadPdf("bill-print-root", documentNumber || mode)}>Download PDF</Button>
             <Button onClick={() => window.print()}>Print</Button>
             <Button onClick={shareWhatsApp}>WhatsApp Link</Button>
             <Button onClick={shareEmail}>Email Link</Button>
-            <Button onClick={handleNewBillClick} variant="outline">New Bill</Button>
+            <Button id="new-bill-btn" onClick={handleNewBillClick} variant="outline">New Bill</Button>
             <Button onClick={() => setShowSettings(true)} variant="outline">Settings</Button>
           </div>
         </aside>
