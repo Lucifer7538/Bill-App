@@ -25,6 +25,7 @@ const defaultSettings = {
   email_color: "#475569", email_size: 13, email_font: "sans-serif", email_align: "center",
   silver_rate_per_gram: 240, making_charge_per_gram: 15, flat_mc_below_5g: 150, default_hsn: "7113",
   formula_note: "Line total = Weight x (Silver rate per gram + Making charge per gram)", logo_data_url: "", about_qr_data_url: STATIC_ABOUT_QR_URL, custom_fonts: [],
+  enter_as_tab: true, // NEW: Default setting for Enter-to-jump
   branches: [
     { id: "B1", name: "Branch 1 (Old Town)", address: "Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2", map_url: "https://g.page/r/CVvnomQZn7zxEBE/review", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", gstin: "21AAUFJ1925F1ZH", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 },
     { id: "B2", name: "Branch 2 (Unit-2)", address: "Branch - 2 : Shop No.14, BMC Market Complex, Market Building, Near Petrol Pump, Unit-2, BBSR-9", map_url: "#", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", gstin: "21AAUFJ1925F1ZH", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 }
@@ -53,6 +54,18 @@ const ConnectWithUs = ({ phoneLink, instaLink = "https://www.instagram.com/jalar
   </div>
 );
 
+const UpiAppsRow = ({ upiUri }) => (
+  <div style={{ marginTop: "20px" }}>
+    <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Or select your app directly:</p>
+    <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
+      <a href={upiUri.replace("upi://pay", "phonepe://pay")} style={{ padding: "8px 16px", backgroundColor: "#5f259f", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>PhonePe</a>
+      <a href={upiUri.replace("upi://pay", "tez://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#1a73e8", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>G-Pay</a>
+      <a href={upiUri.replace("upi://pay", "paytmmp://pay")} style={{ padding: "8px 16px", backgroundColor: "#00baf2", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>Paytm</a>
+      <a href={upiUri.replace("upi://pay", "credpay://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#212121", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>CRED</a>
+    </div>
+  </div>
+);
+
 const BillTable = ({ mode, items }) => (
   <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
     <thead>
@@ -70,7 +83,6 @@ const BillTable = ({ mode, items }) => (
           <th style={{ width: "8%" }}>Sl. No.</th>
           <th style={{ width: "38%" }}>Particulars</th>
           <th style={{ width: "16%", whiteSpace: "normal" }}>Weight</th>
-          {/* FIX: Column renamed to properly reflect Rate display */}
           <th style={{ width: "18%", whiteSpace: "normal" }}>RATE Rs.</th>
           <th style={{ width: "12%", whiteSpace: "normal" }}>Rs.</th>
           <th style={{ width: "8%", whiteSpace: "normal" }}>Ps.</th>
@@ -83,7 +95,6 @@ const BillTable = ({ mode, items }) => (
           {mode === "invoice" ? (
             <><td>{item.sl_no || item.slNo}</td><td>{item.description || "-"}</td><td>{item.hsn || "-"}</td><td>{money(item.weight)}</td><td>{money(item.rate)}</td><td>{item.rupees}.{item.paise}</td></>
           ) : (
-            /* FIX: Only pure Rate math is printed in the table cell now */
             <><td>{item.sl_no || item.slNo}</td><td>{item.description || "-"}</td><td>{money(item.weight)}</td><td>{money(item.rate)}</td><td>{item.rupees}</td><td>{item.paise}</td></>
           )}
         </tr>
@@ -199,21 +210,38 @@ export default function App() {
   const activeGlobalBranch = (settings.branches || []).find(b => b.id === globalBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
   const activeBillBranch = (settings.branches || []).find(b => b.id === billBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
 
+  // FIX: Global Keyboard Shortcuts & "Enter-to-Tab" System
   useEffect(() => {
     const handleKeyDown = (e) => {
+      // Open Settings: Ctrl + Shift + S
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 's') {
         e.preventDefault(); setShowSettings(true); return;
       }
+      // Save Bill: Ctrl + S
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault(); document.getElementById("save-bill-btn")?.click(); return;
       }
+      // New Bill: Ctrl + N
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
         e.preventDefault(); document.getElementById("new-bill-btn")?.click(); return;
+      }
+      // Enter-to-Jump functionality
+      if ((settings.enter_as_tab ?? true) && e.key === 'Enter') {
+        const active = document.activeElement;
+        // Intercept ONLY on input fields and dropdowns, allowing buttons/textareas to work normally
+        if (active && (active.tagName === 'INPUT' || active.tagName === 'SELECT') && active.type !== 'submit') {
+          e.preventDefault();
+          const focusable = Array.from(document.querySelectorAll('input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])'));
+          const index = focusable.indexOf(active);
+          if (index > -1 && index < focusable.length - 1) {
+            focusable[index + 1].focus();
+          }
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [settings.enter_as_tab]); // Dynamically update if the setting changes
 
   useEffect(() => {
     if (settings.custom_fonts && settings.custom_fonts.length > 0) {
@@ -385,7 +413,7 @@ export default function App() {
     let dbData = response.data || {};
     if (!dbData.branches) dbData.branches = defaultSettings.branches;
     let localFonts = []; const localFontsRaw = localStorage.getItem("jj_custom_fonts"); if (localFontsRaw) { try { localFonts = JSON.parse(localFontsRaw); } catch (e) {} }
-    const newSettings = { ...defaultSettings, ...dbData, logo_data_url: savedLogo || dbData.logo_data_url || "", about_qr_data_url: savedAboutQr || dbData.about_qr_data_url || STATIC_ABOUT_QR_URL, custom_fonts: dbData.custom_fonts || localFonts };
+    const newSettings = { enter_as_tab: true, ...defaultSettings, ...dbData, logo_data_url: savedLogo || dbData.logo_data_url || "", about_qr_data_url: savedAboutQr || dbData.about_qr_data_url || STATIC_ABOUT_QR_URL, custom_fonts: dbData.custom_fonts || localFonts };
     setSettings(newSettings);
     if (!(newSettings.branches || []).find(b => b.id === globalBranchId)) { setGlobalBranchId((newSettings.branches || [])[0].id); setBillBranchId((newSettings.branches || [])[0].id); }
   };
@@ -444,8 +472,9 @@ export default function App() {
       
       const amount = item.amount_override !== "" ? num(item.amount_override) : formulaAmount;
       
-      // FIX: Calculate True Rate per Gram to resolve confusion
-      const rateForPrint = weight > 0 ? (amount / quantity) / weight : 0;
+      const rateForPrint = mode === "estimate" 
+          ? (quantity > 0 ? amount / quantity : 0) 
+          : (weight > 0 ? amount / weight : 0);
 
       const { rupees, paise } = splitAmount(amount);
       return { ...item, slNo: index + 1, rate: rateForPrint, quantity, amount, rupees, paise, weight };
@@ -783,7 +812,6 @@ export default function App() {
                 </>
               )}
 
-              {/* FIX: Removed App buttons. Dynamic QR Code strictly renders. */}
               {showPublicUpi && (
                 <div className="payment-qr-box">
                   <p className="scan-title">Scan Here For Payment (₹{money(publicUpiAmt)})</p>
@@ -944,105 +972,107 @@ export default function App() {
         </div>
       </header>
 
-      {/* FIX: Improved flex layout using active window tracking. Guaranteed to trigger split-screen when horizontal! */}
-      <main style={{ display: "flex", flexDirection: windowWidth >= 700 ? "row" : "column", gap: "20px", alignItems: "flex-start", padding: "15px", maxWidth: "1600px", margin: "0 auto" }}>
+      {/* FIX: Independent Dual-Scroll zones for Table / Phone Landscape */}
+      <main style={{ display: "flex", flexDirection: windowWidth >= 750 ? "row" : "column", gap: "20px", alignItems: "flex-start", padding: "15px", maxWidth: "1600px", margin: "0 auto", height: windowWidth >= 750 ? "calc(100vh - 80px)" : "auto", overflow: "hidden" }}>
         
-        {/* LEFT SIDE: Bill Preview */}
-        <section id="bill-print-root" className="bill-sheet" style={{ width: windowWidth >= 700 ? "calc(55% - 10px)" : "100%", position: windowWidth >= 700 ? "sticky" : "relative", top: windowWidth >= 700 ? "20px" : "auto", margin: 0, "--print-scale-factor": (printScale / 100).toFixed(3), zIndex: 1 }}>
-          {(txType === "sale" ? isPaymentDone : isBalancePaid) && <div className="watermark-done">FULLY PAID</div>}
-          <div className="bill-header">
-            <div className="logo-area">
-              {settings.logo_data_url ? <img src={settings.logo_data_url} alt="Shop Logo" className="shop-logo" crossOrigin="anonymous" /> : <div className="shop-logo-fallback">JJ</div>}
-              <div style={{ width: "100%", textAlign: settings.shop_name_align || "center" }}>
-                <h2 className="sheet-shop-title" style={{ fontFamily: settings.shop_name_font || "sans-serif", color: settings.shop_name_color || "#000", fontSize: `${settings.shop_name_size}px`, margin: 0 }}>{settings.shop_name}</h2>
+        {/* LEFT SIDE: Bill Preview Scroll Zone */}
+        <div className="no-print-scroll-wrapper" style={{ flex: windowWidth >= 750 ? "1.2 1 400px" : "1 1 100%", width: "100%", height: "100%", overflowY: windowWidth >= 750 ? "auto" : "visible", paddingBottom: windowWidth >= 750 ? "50px" : "0" }}>
+          <section id="bill-print-root" className="bill-sheet" style={{ width: "100%", margin: 0, "--print-scale-factor": (printScale / 100).toFixed(3) }}>
+            {(txType === "sale" ? isPaymentDone : isBalancePaid) && <div className="watermark-done">FULLY PAID</div>}
+            <div className="bill-header">
+              <div className="logo-area">
+                {settings.logo_data_url ? <img src={settings.logo_data_url} alt="Shop Logo" className="shop-logo" crossOrigin="anonymous" /> : <div className="shop-logo-fallback">JJ</div>}
+                <div style={{ width: "100%", textAlign: settings.shop_name_align || "center" }}>
+                  <h2 className="sheet-shop-title" style={{ fontFamily: settings.shop_name_font || "sans-serif", color: settings.shop_name_color || "#000", fontSize: `${settings.shop_name_size}px`, margin: 0 }}>{settings.shop_name}</h2>
+                </div>
+                <div style={{ width: "100%", textAlign: settings.tagline_align || "center" }}>
+                  <p className="sheet-tagline" style={{ fontFamily: settings.tagline_font || "sans-serif", color: settings.tagline_color || "#475569", fontSize: `${settings.tagline_size}px`, margin: "5px 0" }}>{settings.tagline}</p>
+                </div>
               </div>
-              <div style={{ width: "100%", textAlign: settings.tagline_align || "center" }}>
-                <p className="sheet-tagline" style={{ fontFamily: settings.tagline_font || "sans-serif", color: settings.tagline_color || "#475569", fontSize: `${settings.tagline_size}px`, margin: "5px 0" }}>{settings.tagline}</p>
+
+              <div className="contact-area">
+                <div className="contact-address" style={{ fontFamily: settings.address_font || "sans-serif", display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '8px', alignItems: settings.address_align === 'left' ? 'flex-start' : settings.address_align === 'right' ? 'flex-end' : 'center', textAlign: settings.address_align || "center" }}>
+                    <a href={activeBillBranch.map_url !== "#" ? activeBillBranch.map_url : "#"} target="_blank" rel="noopener noreferrer" style={{ color: settings.address_color || "#475569", fontSize: `${settings.address_size || 14}px`, textDecoration: 'none' }}>{activeBillBranch.address}</a>
+                </div>
+                <div style={{ width: "100%", textAlign: settings.phone_align || "center", fontFamily: settings.phone_font || "sans-serif", fontSize: `${settings.phone_size || 13}px`, marginBottom: "4px" }}>
+                  {(settings.phone_numbers || []).join(" | ")}
+                </div>
+                <div style={{ width: "100%", textAlign: settings.email_align || "center", fontFamily: settings.email_font || "sans-serif", fontSize: `${settings.email_size || 13}px`, marginBottom: "4px" }}>
+                  <a href={`mailto:${settings.email}`} style={{ color: settings.email_color || "#475569", textDecoration: 'none' }}>{settings.email}</a>
+                </div>
+                {mode === "invoice" && activeBillBranch.gstin && <p style={{ margin: "4px 0", textAlign: "center", fontWeight: "bold" }}>GSTIN: {activeBillBranch.gstin}</p>}
               </div>
             </div>
 
-            <div className="contact-area">
-              <div className="contact-address" style={{ fontFamily: settings.address_font || "sans-serif", display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '8px', alignItems: settings.address_align === 'left' ? 'flex-start' : settings.address_align === 'right' ? 'flex-end' : 'center', textAlign: settings.address_align || "center" }}>
-                  <a href={activeBillBranch.map_url !== "#" ? activeBillBranch.map_url : "#"} target="_blank" rel="noopener noreferrer" style={{ color: settings.address_color || "#475569", fontSize: `${settings.address_size || 14}px`, textDecoration: 'none' }}>{activeBillBranch.address}</a>
-              </div>
-              <div style={{ width: "100%", textAlign: settings.phone_align || "center", fontFamily: settings.phone_font || "sans-serif", fontSize: `${settings.phone_size || 13}px`, marginBottom: "4px" }}>
-                {(settings.phone_numbers || []).join(" | ")}
-              </div>
-              <div style={{ width: "100%", textAlign: settings.email_align || "center", fontFamily: settings.email_font || "sans-serif", fontSize: `${settings.email_size || 13}px`, marginBottom: "4px" }}>
-                <a href={`mailto:${settings.email}`} style={{ color: settings.email_color || "#475569", textDecoration: 'none' }}>{settings.email}</a>
-              </div>
-              {mode === "invoice" && activeBillBranch.gstin && <p style={{ margin: "4px 0", textAlign: "center", fontWeight: "bold" }}>GSTIN: {activeBillBranch.gstin}</p>}
+            <div className="sheet-banner">{txType === "booking" ? "BOOKING RECEIPT" : txType === "service" ? "SERVICE ORDER" : mode === "invoice" ? "TAX INVOICE" : "ESTIMATE"}</div>
+
+            <div className="meta-grid">
+              <p><strong>{mode === "invoice" ? "Invoice No" : "Estimate No"}:</strong> {isNumberLoading ? "Generating..." : documentNumber || "-"}</p>
+              <p><strong>Date:</strong> {billDate}</p>
             </div>
-          </div>
 
-          <div className="sheet-banner">{txType === "booking" ? "BOOKING RECEIPT" : txType === "service" ? "SERVICE ORDER" : mode === "invoice" ? "TAX INVOICE" : "ESTIMATE"}</div>
+            <div className="customer-box">
+              <p><strong>Name:</strong> {customer.name || "-"}</p>
+              <p><strong>Address:</strong> {customer.address || "-"}</p>
+              <p><strong>Phone:</strong> {customer.phone || "-"}</p>
+            </div>
 
-          <div className="meta-grid">
-            <p><strong>{mode === "invoice" ? "Invoice No" : "Estimate No"}:</strong> {isNumberLoading ? "Generating..." : documentNumber || "-"}</p>
-            <p><strong>Date:</strong> {billDate}</p>
-          </div>
+            {items.length > 0 ? (
+              <BillTable mode={mode} items={computed.items} />
+            ) : (
+              <div style={{ textAlign: "center", padding: "30px", border: "1px dashed #cbd5e1", margin: "20px 0", color: "#94a3b8" }}>Add items to see them on the bill</div>
+            )}
 
-          <div className="customer-box">
-            <p><strong>Name:</strong> {customer.name || "-"}</p>
-            <p><strong>Address:</strong> {customer.address || "-"}</p>
-            <p><strong>Phone:</strong> {customer.phone || "-"}</p>
-          </div>
+            <div className="sheet-bottom-stack">
+              <div className="totals">
+                <div className="totals-row"><span>{mode === "invoice" ? "Taxable Amt." : "TOTAL"}</span><strong>₹{money(computed.taxable)}</strong></div>
+                {mode === "invoice" ? (
+                  <>
+                    <div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(computed.cgst)}</strong></div>
+                    <div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(computed.sgst)}</strong></div>
+                    <div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(computed.igst)}</strong></div>
+                  </>
+                ) : (
+                  <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(discount)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(exchange)}</strong></div></>
+                )}
+                <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(computed.mdr)}</strong></div>
+                <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(computed.roundOff)}</strong></div>
+                <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(computed.grandTotal)}</strong></div>
 
-          {items.length > 0 ? (
-             <BillTable mode={mode} items={computed.items} />
-          ) : (
-             <div style={{ textAlign: "center", padding: "30px", border: "1px dashed #cbd5e1", margin: "20px 0", color: "#94a3b8" }}>Add items to see them on the bill</div>
-          )}
+                {txType !== "sale" && (
+                  <>
+                    <div className="totals-row" style={{ marginTop: "10px", color: "#16a34a" }}><span>ADVANCE RECEIVED</span><strong>₹{money(advanceAmount)}</strong></div>
+                    <div className="totals-row" style={{ color: "#dc2626" }}><span>BALANCE DUE</span><strong>₹{money(Math.max(0, computed.grandTotal - num(advanceAmount)))}</strong></div>
+                  </>
+                )}
 
-          <div className="sheet-bottom-stack">
-            <div className="totals">
-              <div className="totals-row"><span>{mode === "invoice" ? "Taxable Amt." : "TOTAL"}</span><strong>₹{money(computed.taxable)}</strong></div>
+                {showDashboardUpi && (
+                  <div className="payment-qr-box">
+                    <p className="scan-title">Scan Here For Payment (₹{money(upiAmountToPay)})</p>
+                    <img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" crossOrigin="anonymous" />
+                    <p className="upi-id">UPI: {upiId}</p>
+                  </div>
+                )}
+              </div>
+
               {mode === "invoice" ? (
-                <>
-                  <div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(computed.cgst)}</strong></div>
-                  <div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(computed.sgst)}</strong></div>
-                  <div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(computed.igst)}</strong></div>
-                </>
+                <div className="declaration">
+                  <p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p>
+                  <div className="about-qr"><p className="section-title">About Us QR</p>{(settings.about_qr_data_url || STATIC_ABOUT_QR_URL) && <img src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="About us QR" className="about-qr-image" crossOrigin="anonymous" />}</div>
+                </div>
               ) : (
-                <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(discount)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(exchange)}</strong></div></>
-              )}
-              <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(computed.mdr)}</strong></div>
-              <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(computed.roundOff)}</strong></div>
-              <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(computed.grandTotal)}</strong></div>
-
-              {txType !== "sale" && (
-                <>
-                  <div className="totals-row" style={{ marginTop: "10px", color: "#16a34a" }}><span>ADVANCE RECEIVED</span><strong>₹{money(advanceAmount)}</strong></div>
-                  <div className="totals-row" style={{ color: "#dc2626" }}><span>BALANCE DUE</span><strong>₹{money(Math.max(0, computed.grandTotal - num(advanceAmount)))}</strong></div>
-                </>
-              )}
-
-              {showDashboardUpi && (
-                <div className="payment-qr-box">
-                  <p className="scan-title">Scan Here For Payment (₹{money(upiAmountToPay)})</p>
-                  <img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" crossOrigin="anonymous" />
-                  <p className="upi-id">UPI: {upiId}</p>
+                <div className="policies">
+                  <p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul>
+                  <div className="about-qr"><p className="section-title">About Us QR</p>{(settings.about_qr_data_url || STATIC_ABOUT_QR_URL) && <img src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="About us QR" className="about-qr-image" crossOrigin="anonymous" />}</div>
                 </div>
               )}
             </div>
+            <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
+          </section>
+        </div>
 
-            {mode === "invoice" ? (
-              <div className="declaration">
-                <p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p>
-                <div className="about-qr"><p className="section-title">About Us QR</p>{(settings.about_qr_data_url || STATIC_ABOUT_QR_URL) && <img src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="About us QR" className="about-qr-image" crossOrigin="anonymous" />}</div>
-              </div>
-            ) : (
-              <div className="policies">
-                <p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul>
-                <div className="about-qr"><p className="section-title">About Us QR</p>{(settings.about_qr_data_url || STATIC_ABOUT_QR_URL) && <img src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="About us QR" className="about-qr-image" crossOrigin="anonymous" />}</div>
-              </div>
-            )}
-          </div>
-          <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
-        </section>
-
-        {/* RIGHT SIDE: Data Entry Controls */}
-        <aside className="controls no-print" style={{ width: windowWidth >= 700 ? "calc(45% - 10px)" : "100%", margin: 0 }}>
+        {/* RIGHT SIDE: Data Entry Scroll Zone */}
+        <aside className="controls no-print" style={{ flex: windowWidth >= 750 ? "1 1 350px" : "1 1 100%", width: "100%", height: windowWidth >= 750 ? "100%" : "auto", overflowY: windowWidth >= 750 ? "auto" : "visible", margin: 0, paddingRight: windowWidth >= 750 ? "10px" : "0", paddingBottom: windowWidth >= 750 ? "50px" : "0" }}>
           <div className="control-card">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
                 <h3 style={{ margin: 0 }}>Bill Details</h3>
@@ -1406,6 +1436,20 @@ export default function App() {
                   <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Below 5g Rule: Flat Making Charge (₹)</label><Input value={settings.flat_mc_below_5g || ""} onChange={(e) => setSettings((prev) => ({ ...prev, flat_mc_below_5g: num(e.target.value) }))} style={{ marginBottom: "2px" }} /><p style={{ fontSize: "0.75rem", color: "#666", marginBottom: "10px", marginTop: "0" }}>Example: 150</p>
                   <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Default HSN Code</label><Input value={settings.default_hsn || ""} onChange={(e) => setSettings((prev) => ({ ...prev, default_hsn: e.target.value }))} style={{ marginBottom: "10px" }} />
                   <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Formula Note (Prints on bill)</label><Input value={settings.formula_note || ""} onChange={(e) => setSettings((prev) => ({ ...prev, formula_note: e.target.value }))} />
+                </div>
+
+                {/* FIX: Keyboard Shortcuts Box added to Settings tab */}
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
+                  <h4 style={{ margin: "0 0 10px 0" }}>⌨️ Keyboard Shortcuts</h4>
+                  <p style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "10px", lineHeight: "1.6" }}>
+                    <strong>Ctrl + S:</strong> Save/Update Bill <br/>
+                    <strong>Ctrl + N:</strong> Start New Bill <br/>
+                    <strong>Ctrl + Shift + S:</strong> Open Settings
+                  </p>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", cursor: "pointer", backgroundColor: "white", padding: "8px", border: "1px solid #cbd5e1", borderRadius: "6px" }}>
+                    <input type="checkbox" checked={settings.enter_as_tab ?? true} onChange={(e) => setSettings(prev => ({ ...prev, enter_as_tab: e.target.checked }))} style={{ cursor: "pointer" }} />
+                    <strong>Use 'Enter' / 'Return' key to jump to next input box</strong>
+                  </label>
                 </div>
 
                 <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
