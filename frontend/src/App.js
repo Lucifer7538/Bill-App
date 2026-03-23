@@ -46,6 +46,7 @@ const BillTable = ({ mode, items }) => (
 );
 
 export default function App() {
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [isCompactView, setIsCompactView] = useState(window.innerWidth <= 520);
   const [isDirty, setIsDirty] = useState(false); const markDirty = () => setIsDirty(true);
   const [isPublicView, setIsPublicView] = useState(false); const [publicBill, setPublicBill] = useState(null); const [publicSettings, setPublicSettings] = useState(null); const [publicLoading, setPublicLoading] = useState(false);
@@ -62,6 +63,8 @@ export default function App() {
   const [logType, setLogType] = useState("expense"); const [logAmount, setLogAmount] = useState(""); const [logReason, setLogReason] = useState(""); const [logSourceVault, setLogSourceVault] = useState("cash"); const [logTargetVault, setLogTargetVault] = useState("estimate_bank");
   const [editingBalances, setEditingBalances] = useState(false); const [manualCash, setManualCash] = useState(""); const [manualEstBank, setManualEstBank] = useState(""); const [manualInvBank, setManualInvBank] = useState("");
   const [storageStats, setStorageStats] = useState({ used_bytes: 0, percentage: 0 }); const [savingBill, setSavingBill] = useState(false); const [printScale, setPrintScale] = useState(getInitialPrintScale);
+  const [showAbout, setShowAbout] = useState(false); const [cloudStatus, setCloudStatus] = useState({ provider: "supabase", enabled: false, mode: "loading" });
+  
   const authHeaders = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
   const activeGlobalBranch = settings.branches?.find(b => b.id === globalBranchId) || settings.branches?.[0] || defaultSettings.branches[0];
   const activeBillBranch = settings.branches?.find(b => b.id === billBranchId) || settings.branches?.[0] || defaultSettings.branches[0];
@@ -97,10 +100,10 @@ export default function App() {
 
   useEffect(() => { if (settings.custom_fonts) settings.custom_fonts.forEach(f => registerFont(f.name, f.dataUrl)); }, [settings.custom_fonts]);
   useEffect(() => { const params = new URLSearchParams(window.location.search); const viewDoc = params.get("view"); if (viewDoc) { setIsPublicView(true); setPublicLoading(true); axios.get(`${API}/bills/public/${viewDoc}`).then(res => { setPublicBill(res.data.bill); const s = { ...defaultSettings, ...res.data.settings }; if (s.custom_fonts) s.custom_fonts.forEach(f => registerFont(f.name, f.dataUrl)); setPublicSettings(s); }).catch(() => setPublicBill("NOT_FOUND")).finally(() => setPublicLoading(false)); } }, []);
-  useEffect(() => { const handleResize = () => setIsCompactView(window.innerWidth <= 520); window.addEventListener("resize", handleResize); return () => window.removeEventListener("resize", handleResize); }, []);
+  useEffect(() => { const handleResize = () => { setIsCompactView(window.innerWidth <= 520); setWindowWidth(window.innerWidth); }; window.addEventListener("resize", handleResize); return () => window.removeEventListener("resize", handleResize); }, []);
   useEffect(() => { localStorage.setItem("jj_print_scale", String(clampPrintScale(printScale))); }, [printScale]);
   useEffect(() => { if (!isPublicView && token) { axios.get(`${API}/auth/verify`, { headers: authHeaders }).catch(() => { localStorage.removeItem("jj_auth_token"); setToken(""); }).finally(() => setCheckingSession(false)); } }, [token, isPublicView, authHeaders]);
-  useEffect(() => { if (showRecentBills && token && !isPublicView) { axios.get(`${API}/bills/recent?limit=50&branch_filter=ALL`, { headers: authHeaders }).then(res => setRecentBillsList(res.data)).catch(() => toast.error("Failed to load")); } }, [showRecentBills, token, isPublicView, authHeaders]);
+  useEffect(() => { if (showRecentBills && token && !isPublicView) { axios.get(`${API}/bills/recent?limit=500&branch_filter=ALL`, { headers: authHeaders }).then(res => setRecentBillsList(res.data)).catch(() => toast.error("Failed to load")); } }, [showRecentBills, token, isPublicView, authHeaders]);
   useEffect(() => { if (showLedger && token && !isPublicView) { loadSettings().then(() => axios.get(`${API}/bills/today?date=${today()}&branch_id=${globalBranchId}`, { headers: authHeaders })).then(res => setTodayBills(res.data)).then(() => axios.get(`${API}/settings/ledger/logs?branch_id=${globalBranchId}`, { headers: authHeaders })).then(res => setLedgerLogs(res.data)); } }, [showLedger, token, isPublicView, globalBranchId, authHeaders]);
   useEffect(() => { if (!token || isPublicView) return; const query = customer.phone.trim() || customer.name.trim(); if (query.length < 2) { setSuggestions([]); return; } const t = setTimeout(() => { axios.get(`${API}/customers/suggest`, { headers: authHeaders, params: { query } }).then(res => setSuggestions(res.data || [])); }, 250); return () => clearTimeout(t); }, [customer.phone, customer.name, token, isPublicView, authHeaders]);
 
@@ -138,23 +141,33 @@ export default function App() {
   const getUpiAmount = () => { if (txType === "sale") return paymentMethod === "Split" ? Math.max(0, computed.grandTotal - num(splitCash)) : computed.grandTotal; if (!isAdvancePaid && (advanceMethod === "UPI" || advanceMethod === "Split")) return advanceMethod === "Split" ? Math.max(0, num(advanceAmount) - num(advanceSplitCash)) : num(advanceAmount); if (isAdvancePaid && !isBalancePaid && (balanceMethod === "UPI" || balanceMethod === "Split")) return balanceMethod === "Split" ? Math.max(0, Math.max(0, computed.grandTotal - num(advanceAmount)) - num(balanceSplitCash)) : Math.max(0, computed.grandTotal - num(advanceAmount)); return 0; };
   const upiAmt = getUpiAmount(); const upiId = mode === "invoice" ? activeBillBranch.invoice_upi_id : activeBillBranch.estimate_upi_id; const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmt)}&cu=INR&tn=Bill_${documentNumber}`;
 
-  if (isPublicView && publicBill) {
+  if (isPublicView) {
+    if (publicLoading) return <div className="loading-screen">Loading...</div>; if (!publicBill) return <div className="loading-screen">Not Found</div>;
+    const publicSettingsObj = publicSettings || defaultSettings;
+    const pbBranch = publicSettingsObj.branches?.find(b => b.id === publicBill.branch_id) || publicSettingsObj.branches?.[0] || defaultSettings.branches[0];
+    const isSale = publicBill.tx_type === "sale" || !publicBill.tx_type;
+    const gTotal = num(publicBill.totals?.grand_total || 0);
+    let pUpiAmt = 0;
+    if (isSale) { pUpiAmt = publicBill.payment_method === "Split" ? num(publicBill.split_upi) : gTotal; } else { if (!publicBill.is_advance_paid && (publicBill.advance_method === "UPI" || publicBill.advance_method === "Split")) { pUpiAmt = publicBill.advance_method === "Split" ? Math.max(0, num(publicBill.advance_amount) - num(publicBill.advance_split_cash)) : num(publicBill.advance_amount); } else if (publicBill.is_advance_paid && !publicBill.is_balance_paid && (publicBill.balance_method === "UPI" || publicBill.balance_method === "Split")) { const bal = Math.max(0, gTotal - num(publicBill.advance_amount)); pUpiAmt = publicBill.balance_method === "Split" ? Math.max(0, bal - num(publicBill.balance_split_cash)) : bal; } }
+    const sUpi = pUpiAmt > 0 && !(isSale ? publicBill.is_payment_done : publicBill.is_balance_paid);
+    const pUpiId = publicBill.mode === "invoice" ? pbBranch.invoice_upi_id : pbBranch.estimate_upi_id;
+    const pUpiUri = `upi://pay?pa=${pUpiId}&pn=${encodeURIComponent(publicSettingsObj.shop_name)}&am=${money(pUpiAmt)}&cu=INR&tn=Bill_${publicBill.document_number}`;
+
     return (
       <div className="billing-app" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px' }}>
         <section id="public-bill-root" className="bill-sheet" style={{ "--print-scale-factor": 1, position: 'relative', zIndex: 1 }}>
           <div className="bill-header">
-            <div className="logo-area">{publicSettings?.logo_data_url && <img src={publicSettings.logo_data_url} alt="Logo" className="shop-logo" crossOrigin="anonymous" />}<h2 className="sheet-shop-title">{publicSettings?.shop_name}</h2><p className="sheet-tagline">{publicSettings?.tagline}</p></div>
-            <div className="contact-area"><div className="contact-address">{publicSettings?.branches?.[0]?.address}</div><div>{publicSettings?.phone_numbers?.join(" | ")}</div></div>
+            <div className="logo-area">{publicSettingsObj.logo_data_url && <img src={publicSettingsObj.logo_data_url} alt="Logo" className="shop-logo" crossOrigin="anonymous" />}<h2 className="sheet-shop-title">{publicSettingsObj.shop_name}</h2><p className="sheet-tagline">{publicSettingsObj.tagline}</p></div>
+            <div className="contact-area"><div className="contact-address">{pbBranch.address}</div><div>{publicSettingsObj.phone_numbers?.join(" | ")}</div></div>
           </div>
           <div className="sheet-banner">{publicBill.mode === "invoice" ? "TAX INVOICE" : "ESTIMATE"}</div>
           <div className="meta-grid"><p><strong>No:</strong> {publicBill.document_number}</p><p><strong>Date:</strong> {publicBill.date}</p></div>
           <div className="customer-box"><p><strong>Name:</strong> {publicBill.customer_name || "-"}</p><p><strong>Address:</strong> {publicBill.customer_address || "-"}</p><p><strong>Phone:</strong> {publicBill.customer_phone || "-"}</p></div>
           <BillTable mode={publicBill.mode} items={publicBill.items || []} />
           <div className="sheet-bottom-stack">
-            <div className="totals">
-              <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(publicBill.totals?.grand_total || 0)}</strong></div>
-            </div>
-            <ConnectWithUs phoneLink={publicSettings?.phone_numbers?.[0]} />
+            <div className="totals"><div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(gTotal)}</strong></div></div>
+            {sUpi && (<div className="payment-qr-box"><p className="scan-title">Scan Here For Payment</p><img src={`https://quickchart.io/qr?text=${encodeURIComponent(pUpiUri)}&size=220`} alt="QR Code" className="upi-qr" crossOrigin="anonymous" /></div>)}
+            <ConnectWithUs phoneLink={publicSettingsObj.phone_numbers?.[0]} />
           </div>
         </section>
       </div>
@@ -167,12 +180,8 @@ export default function App() {
   return (
     <div className="billing-app">
       <style dangerouslySetInnerHTML={{ __html: `
-        @media (min-width: 600px) {
-          .dual-pane-container { display: flex; flex-direction: row; height: calc(100vh - 85px); overflow: hidden; gap: 20px; padding: 15px; max-width: 1600px; margin: 0 auto; box-sizing: border-box; align-items: flex-start; }
-          .dual-pane-left { flex: 1.2; height: 100%; overflow-y: auto; padding-right: 10px; }
-          .dual-pane-right { flex: 1; height: 100%; overflow-y: auto; padding-left: 10px; padding-bottom: 50px; }
-        }
-        @media (max-width: 599px) { .dual-pane-container { display: flex; flex-direction: column; gap: 20px; padding: 15px; box-sizing: border-box; } }
+        @media (min-width: 600px) { .dual-pane-container { display: flex; flex-direction: row; height: calc(100vh - 85px); overflow: hidden; gap: 20px; padding: 15px; max-width: 1600px; margin: 0 auto; box-sizing: border-box; align-items: flex-start; } .dual-pane-left { flex: 1.2; height: 100%; overflow-y: auto; padding-right: 10px; width: 100%; } .dual-pane-right { flex: 1; height: 100%; overflow-y: auto; padding-left: 10px; padding-bottom: 50px; width: 100%; } }
+        @media (max-width: 599px) { .dual-pane-container { display: flex; flex-direction: column; gap: 20px; padding: 15px; box-sizing: border-box; } .dual-pane-left, .dual-pane-right { width: 100%; overflow: visible; } }
       `}} />
       <Toaster position="bottom-right" />
       
@@ -247,7 +256,7 @@ export default function App() {
               <div style={{ marginTop: '15px' }}>
                 <select id="jump-payment-method" value={paymentMethod} onChange={e => { setPaymentMethod(e.target.value); markDirty(); }} className="native-select"><option value="" disabled>Select Method</option><option value="Cash">Cash</option><option value="UPI">UPI</option><option value="Split">Split</option></select>
                 {paymentMethod === "Split" && (<div style={{ display: "flex", gap: "10px", marginTop: "10px" }}><Input inputMode="decimal" value={splitCash} onChange={e => { setSplitCash(e.target.value); markDirty(); }} placeholder="Cash Received" /><Input value={`UPI: ₹${money(Math.max(0, computed.grandTotal - num(splitCash)))}`} disabled /></div>)}
-                <div style={{ marginTop: "15px", padding: "12px", backgroundColor: isPaymentDone ? "#dcfce7" : "#fef3c7", border: `1.5px solid ${isPaymentDone ? "#22c55e" : "#f59e0b"}`, borderRadius: "8px", display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} onClick={() => { setIsPaymentDone(!isPaymentDone); markDirty(); }}><input type="checkbox" checked={isPaymentDone} onChange={e => { setIsPaymentDone(e.target.checked); markDirty(); }} style={{ width: "20px", height: "20px", cursor: "pointer" }} /><strong style={{ color: isPaymentDone ? "#166534" : "#b45309" }}>{isPaymentDone ? "✅ PAYMENT DONE" : "⏳ PAYMENT PENDING"}</strong></div>
+                <div style={{ marginTop: "15px", padding: "12px", backgroundColor: isPaymentDone ? "#dcfce7" : "#fef3c7", border: `1.5px solid ${isPaymentDone ? "#22c55e" : "#f59e0b"}`, borderRadius: "8px", display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} onClick={() => { setIsPaymentDone(!isPaymentDone); markDirty(); }}><input type="checkbox" checked={isPaymentDone} onChange={e => { setIsPaymentDone(e.target.checked); markDirty(); }} style={{ width: "20px", height: "20px", cursor: "pointer" }} /><strong style={{ color: isPaymentDone ? "#166534" : "#b45309" }}>{isPaymentDone ? "✅ PAYMENT DONE" : "⏳ PENDING"}</strong></div>
               </div>
             )}
           </div>
@@ -255,7 +264,7 @@ export default function App() {
           <div className="control-card action-grid">
             <Button id="save-bill-btn" onClick={saveBill} disabled={savingBill} style={{ backgroundColor: "#0f172a" }}>Save Bill</Button>
             <Button onClick={() => window.print()} style={{ backgroundColor: "#16a34a", color: "white" }}>Print</Button>
-            <Button onClick={shareWhatsApp}>WhatsApp Link</Button>
+            <Button onClick={() => window.open(`https://wa.me/${customer.phone.replace(/\D/g, "").length === 10 ? '91' + customer.phone.replace(/\D/g, "") : customer.phone.replace(/\D/g, "")}?text=${encodeURIComponent(`Hello,\n\nHere is your ${mode} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nView here: ${window.location.origin}/?view=${documentNumber}`)}`, "_blank")}>WhatsApp</Button>
             <Button id="new-bill-btn" onClick={handleNewBill} variant="outline">New Bill</Button>
             <Button onClick={() => setShowSettings(true)} variant="outline">Settings</Button>
           </div>
@@ -271,7 +280,7 @@ export default function App() {
             {settingsTab === "technical" && (
               <div className="settings-technical-tab" style={{ width: "100%" }}>
                 <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
-                  <h4 style={{ margin: "0 0 10px 0", display: "flex", justifyContent: "space-between" }}>⌨️ Custom Keyboard Shortcuts</h4>
+                  <h4 style={{ margin: "0 0 10px 0" }}>⌨️ Custom Keyboard Shortcuts</h4>
                   <div style={{ marginBottom: "15px" }}>
                     {(settings.shortcuts || []).map((sc, index) => (
                       <div key={sc.id} style={{ display: "flex", gap: "5px", marginBottom: "8px", alignItems: "center", flexWrap: "wrap", padding: "8px", backgroundColor: "white", borderRadius: "6px", border: "1px solid #cbd5e1" }}>
