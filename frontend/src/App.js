@@ -58,29 +58,17 @@ const ConnectWithUs = ({ phoneLink, instaLink = "https://www.instagram.com/jalar
   </div>
 );
 
-const UpiAppsRow = ({ upiUri }) => (
-  <div style={{ marginTop: "20px" }}>
-    <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Or select your app directly:</p>
-    <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
-      <a href={upiUri.replace("upi://pay", "phonepe://pay")} style={{ padding: "8px 16px", backgroundColor: "#5f259f", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>PhonePe</a>
-      <a href={upiUri.replace("upi://pay", "tez://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#1a73e8", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>G-Pay</a>
-      <a href={upiUri.replace("upi://pay", "paytmmp://pay")} style={{ padding: "8px 16px", backgroundColor: "#00baf2", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>Paytm</a>
-      <a href={upiUri.replace("upi://pay", "credpay://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#212121", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>CRED</a>
-    </div>
-  </div>
-);
-
 const BillTable = ({ mode, items }) => (
   <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
     <thead>
       {mode === "invoice" ? (
         <tr>
           <th style={{ width: "8%" }}>Sl. No.</th>
-          <th style={{ width: "32%" }}>DESCRIPTION</th>
+          <th style={{ width: "30%" }}>DESCRIPTION</th>
           <th style={{ width: "10%" }}>HSN</th>
-          <th style={{ width: "16%", whiteSpace: "normal" }}>WEIGHT (g)</th>
-          <th style={{ width: "16%", whiteSpace: "normal" }}>RATE Rs.</th>
-          <th style={{ width: "18%", whiteSpace: "normal" }}>AMOUNT</th>
+          <th style={{ width: "14%", whiteSpace: "normal" }}>WEIGHT (g)</th>
+          <th style={{ width: "18%", whiteSpace: "normal" }}>RATE Rs.</th>
+          <th style={{ width: "20%", whiteSpace: "normal" }}>AMOUNT</th>
         </tr>
       ) : (
         <tr>
@@ -128,6 +116,7 @@ const DesignSettingRow = ({ title, fieldPrefix, settings, setSettings }) => (
   </div>
 );
 
+// --- MAIN APP ---
 export default function App() {
   const [isCompactView, setIsCompactView] = useState(window.innerWidth <= 520);
   const [isDirty, setIsDirty] = useState(false);
@@ -218,9 +207,11 @@ export default function App() {
   const activeGlobalBranch = (settings.branches || []).find(b => b.id === globalBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
   const activeBillBranch = (settings.branches || []).find(b => b.id === billBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
 
-  // FIX: Custom Jumping Shortcuts added dynamically
+  // FIX: Added protection against virtual keyboard crashes (undefined e.key)
   useEffect(() => {
     const handleKeyDown = (e) => {
+      if (!e || !e.key) return; // Strict safety net for mobile keyboards
+
       const active = document.activeElement;
 
       // Enter-to-Jump functionality
@@ -914,14 +905,13 @@ export default function App() {
 
   return (
     <div className="billing-app">
-      {/* FIX: Pure CSS guarantees dual-scroll layout on phones in landscape mode without JS bugs */}
       <style>{`
-        @media (min-width: 650px) {
-          .dual-pane-container { display: flex; flex-direction: row; height: calc(100vh - 75px); overflow: hidden; gap: 20px; padding: 15px; max-width: 1600px; margin: 0 auto; box-sizing: border-box; align-items: stretch; }
-          .dual-pane-left { flex: 1.2; height: 100%; overflow-y: auto; padding-right: 15px; }
-          .dual-pane-right { flex: 1; height: 100%; overflow-y: auto; padding-left: 5px; padding-right: 5px; padding-bottom: 50px; }
+        @media (min-width: 768px) {
+          .dual-pane-container { display: flex; flex-direction: row; height: calc(100vh - 75px); overflow: hidden; gap: 20px; padding: 15px; max-width: 1600px; margin: 0 auto; box-sizing: border-box; }
+          .dual-pane-left { flex: 1.3 1 400px; height: 100%; overflow-y: auto; padding-right: 15px; }
+          .dual-pane-right { flex: 1 1 350px; height: 100%; overflow-y: auto; padding-left: 5px; padding-right: 5px; padding-bottom: 50px; }
         }
-        @media (max-width: 649px) {
+        @media (max-width: 767px) {
           .dual-pane-container { display: flex; flex-direction: column; gap: 20px; padding: 15px; box-sizing: border-box; }
           .dual-pane-left, .dual-pane-right { width: 100%; overflow: visible; }
         }
@@ -1024,7 +1014,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* NEW: Pure CSS Dual-Pane Layout */}
       <main className="dual-pane-container">
         
         <div className="dual-pane-left">
@@ -1488,7 +1477,6 @@ export default function App() {
                   <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Formula Note (Prints on bill)</label><Input value={settings.formula_note || ""} onChange={(e) => setSettings((prev) => ({ ...prev, formula_note: e.target.value }))} />
                 </div>
 
-                {/* NEW: Expanded Custom Shortcuts Module */}
                 <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
                   <h4 style={{ margin: "0 0 10px 0", display: "flex", justifyContent: "space-between" }}>⌨️ Custom Keyboard Shortcuts</h4>
                   
