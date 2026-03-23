@@ -58,6 +58,18 @@ const ConnectWithUs = ({ phoneLink, instaLink = "https://www.instagram.com/jalar
   </div>
 );
 
+const UpiAppsRow = ({ upiUri }) => (
+  <div style={{ marginTop: "20px" }}>
+    <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Or select your app directly:</p>
+    <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
+      <a href={upiUri.replace("upi://pay", "phonepe://pay")} style={{ padding: "8px 16px", backgroundColor: "#5f259f", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>PhonePe</a>
+      <a href={upiUri.replace("upi://pay", "tez://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#1a73e8", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>G-Pay</a>
+      <a href={upiUri.replace("upi://pay", "paytmmp://pay")} style={{ padding: "8px 16px", backgroundColor: "#00baf2", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>Paytm</a>
+      <a href={upiUri.replace("upi://pay", "credpay://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#212121", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>CRED</a>
+    </div>
+  </div>
+);
+
 const BillTable = ({ mode, items }) => (
   <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
     <thead>
@@ -82,21 +94,15 @@ const BillTable = ({ mode, items }) => (
       )}
     </thead>
     <tbody>
-      {items.map((item, idx) => {
-        const displayRate = mode === "estimate" 
-            ? (num(item.quantity) > 0 ? num(item.amount) / num(item.quantity) : 0)
-            : (num(item.weight) > 0 ? num(item.amount) / num(item.weight) : 0);
-
-        return (
-          <tr key={idx}>
-            {mode === "invoice" ? (
-              <><td>{item.sl_no || item.slNo}</td><td>{item.description || "-"}</td><td>{item.hsn || "-"}</td><td>{money(item.weight)}</td><td>{money(displayRate)}</td><td>{item.rupees}.{item.paise}</td></>
-            ) : (
-              <><td>{item.sl_no || item.slNo}</td><td>{item.description || "-"}</td><td>{money(item.weight)}</td><td>{money(displayRate)}</td><td>{item.rupees}</td><td>{item.paise}</td></>
-            )}
-          </tr>
-        );
-      })}
+      {items.map((item, idx) => (
+        <tr key={idx || item.id}>
+          {mode === "invoice" ? (
+            <><td>{item.sl_no || item.slNo || (idx + 1)}</td><td>{item.description || "-"}</td><td>{item.hsn || "-"}</td><td>{money(item.weight)}</td><td>{money(item.rate)}</td><td>{item.rupees || "0"}.{item.paise || "00"}</td></>
+          ) : (
+            <><td>{item.sl_no || item.slNo || (idx + 1)}</td><td>{item.description || "-"}</td><td>{money(item.weight)}</td><td>{money(item.rate)}</td><td>{item.rupees || "0"}</td><td>{item.paise || "00"}</td></>
+          )}
+        </tr>
+      ))}
     </tbody>
   </table>
 );
@@ -208,46 +214,45 @@ export default function App() {
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Prevents crash from virtual keyboards emitting unidentified strings
-      if (!e || typeof e.key !== 'string') return;
+      try {
+        if (!e || typeof e.key !== 'string' || e.key === 'Unidentified') return; // Absolute protection against virtual keyboard crashes
 
-      const active = document.activeElement;
+        const active = document.activeElement;
+        
+        if ((settings.enter_as_tab ?? true) && e.key === 'Enter') {
+          if (active && (active.tagName === 'INPUT' || active.tagName === 'SELECT') && active.type !== 'submit') {
+            e.preventDefault();
+            const focusable = Array.from(document.querySelectorAll('input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])'));
+            const index = focusable.indexOf(active);
+            if (index > -1 && index < focusable.length - 1) focusable[index + 1].focus();
+            return;
+          }
+        }
 
-      // Enter-to-Jump functionality
-      if ((settings.enter_as_tab ?? true) && e.key === 'Enter') {
-        if (active && (active.tagName === 'INPUT' || active.tagName === 'SELECT') && active.type !== 'submit') {
+        const matchedSc = (settings.shortcuts || []).find(sc => 
+          sc.key && typeof sc.key === 'string' && e.key.toLowerCase() === sc.key.toLowerCase() && 
+          !!sc.ctrl === (e.ctrlKey || e.metaKey) && 
+          !!sc.shift === e.shiftKey
+        );
+
+        if (matchedSc) {
           e.preventDefault();
-          const focusable = Array.from(document.querySelectorAll('input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])'));
-          const index = focusable.indexOf(active);
-          if (index > -1 && index < focusable.length - 1) focusable[index + 1].focus();
-          return;
+          switch(matchedSc.action) {
+            case 'save_bill': document.getElementById('save-bill-btn')?.click(); break;
+            case 'new_bill': document.getElementById('new-bill-btn')?.click(); break;
+            case 'add_item': document.getElementById('add-item-btn')?.click(); break;
+            case 'open_settings': setShowSettings(true); break;
+            case 'jump_customer': document.getElementById('jump-customer-name')?.focus(); break;
+            case 'jump_phone': document.getElementById('jump-customer-phone')?.focus(); break;
+            case 'jump_items': document.getElementById('jump-item-desc')?.focus(); break;
+            case 'jump_weight': document.getElementById('jump-weight')?.focus(); break;
+            case 'jump_rate': document.getElementById('jump-rate')?.focus(); break;
+            case 'jump_discount': document.getElementById('jump-discount')?.focus(); break;
+            case 'jump_payment': document.getElementById('jump-payment-method')?.focus(); break;
+            default: break;
+          }
         }
-      }
-
-      // Check User Configured Shortcuts
-      const matchedSc = (settings.shortcuts || []).find(sc => 
-        sc.key && e.key.toLowerCase() === sc.key.toLowerCase() && 
-        !!sc.ctrl === (e.ctrlKey || e.metaKey) && 
-        !!sc.shift === e.shiftKey
-      );
-
-      if (matchedSc) {
-        e.preventDefault();
-        switch(matchedSc.action) {
-          case 'save_bill': document.getElementById('save-bill-btn')?.click(); break;
-          case 'new_bill': document.getElementById('new-bill-btn')?.click(); break;
-          case 'add_item': document.getElementById('add-item-btn')?.click(); break;
-          case 'open_settings': setShowSettings(true); break;
-          case 'jump_customer': document.getElementById('jump-customer-name')?.focus(); break;
-          case 'jump_phone': document.getElementById('jump-customer-phone')?.focus(); break;
-          case 'jump_items': document.getElementById('jump-item-desc')?.focus(); break;
-          case 'jump_weight': document.getElementById('jump-weight')?.focus(); break;
-          case 'jump_rate': document.getElementById('jump-rate')?.focus(); break;
-          case 'jump_discount': document.getElementById('jump-discount')?.focus(); break;
-          case 'jump_payment': document.getElementById('jump-payment-method')?.focus(); break;
-          default: break;
-        }
-      }
+      } catch (err) { console.error("Safely ignored shortcut exception", err); }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -1089,7 +1094,7 @@ export default function App() {
 
                 {showDashboardUpi && (
                   <div className="payment-qr-box">
-                    <p className="scan-title">Scan Here For Payment</p>
+                    <p className="scan-title">Scan Here For Payment (₹{money(upiAmountToPay)})</p>
                     <img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" crossOrigin="anonymous" />
                     <p className="upi-id">UPI: {upiId}</p>
                   </div>
@@ -1152,7 +1157,7 @@ export default function App() {
               <div key={item.id} className="item-row-editor">
                 <Input id={index === 0 ? "jump-item-desc" : undefined} value={item.description} onChange={(e) => updateItem(item.id, "description", e.target.value)} placeholder="Description" />
                 <Input value={item.hsn} onChange={(e) => updateItem(item.id, "hsn", e.target.value)} placeholder="HSN" />
-                <Input id={index === 0 ? "jump-weight" : undefined} value={item.weight} onChange={(e) => updateItem(item.id, "weight", e.target.value)} placeholder="Weight" />
+                <Input id={index === 0 ? "jump-weight" : undefined} value={item.weight || ""} onChange={(e) => updateItem(item.id, "weight", e.target.value)} placeholder="Weight" />
                 <Input value={item.quantity} onChange={(e) => updateItem(item.id, "quantity", e.target.value)} placeholder="Qty" />
                 <Input value={item.mc_override} onChange={(e) => updateItem(item.id, "mc_override", e.target.value)} placeholder="Custom MC ₹/g" />
                 <Input id={index === 0 ? "jump-rate" : undefined} value={item.rate_override} onChange={(e) => updateItem(item.id, "rate_override", e.target.value)} placeholder="Custom Silver Rate" />
@@ -1346,224 +1351,4 @@ export default function App() {
             <div>
               <h4 style={{ margin: "0 0 15px 0", fontSize: "1.1rem", color: "#1e293b" }}>Today's Bills</h4>
               {ledgerLoading ? (<p>Loading bills...</p>) : (todayBills || []).length === 0 ? (<p style={{ color: "#666" }}>No bills generated today yet.</p>) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                  {(todayBills || []).map(b => (
-                    <div key={b.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px", border: "1px solid #e2e8f0", borderRadius: "6px", backgroundColor: "white" }}>
-                      <div>
-                        <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "4px" }}>
-                          <strong style={{ color: b.mode === 'invoice' ? "#dc2626" : "#2563eb" }}>{b.document_number}</strong>
-                          <span style={{ fontSize: "0.75rem", padding: "2px 6px", backgroundColor: (b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "#dcfce7" : "#fee2e2", color: (b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "#166534" : "#991b1b", borderRadius: "4px" }}>
-                            {(b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "Paid" : "Pending"}
-                          </span>
-                        </div>
-                        <div style={{ fontSize: "0.85rem", color: "#475569" }}>{b.customer_name || b.customer?.name || "Unknown"} • {b.tx_type || "Sale"}</div>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <strong style={{ fontSize: "1.1rem" }}>₹{money(b.totals?.grand_total || 0)}</strong>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {showRecentBills && (
-        <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "550px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
-          <div className="drawer-header" style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10, paddingBottom: "15px", borderBottom: "1px solid #e2e8f0" }}>
-            <h3>Recent Bills & Exports</h3>
-            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowRecentBills(false)}><ArrowLeft className="drawer-back-icon" /><span>Back</span></Button>
-          </div>
-
-          <div style={{ padding: "15px" }}>
-            <div style={{ marginBottom: "20px" }}>
-              <Button onClick={handleBulkDownload} disabled={isBulkDownloading || (filteredRecentBills || []).length === 0} style={{ width: "100%", backgroundColor: "#0f172a", height: "auto", padding: "10px", display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", justifyContent: "center", fontSize: "1rem", boxSizing: "border-box" }}>
-                {isBulkDownloading ? "Generating PDF... Please Wait" : <><Download size={18} /> Download {(filteredRecentBills || []).length} Bills as Single PDF</>}
-              </Button>
-            </div>
-
-            <div style={{ backgroundColor: "#f8fafc", padding: "15px", borderRadius: "8px", border: "1px solid #cbd5e1", marginBottom: "20px" }}>
-               <h4 style={{ margin: "0 0 10px 0", color: "#334155", fontSize: "0.9rem" }}>Filter Bills</h4>
-               <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "10px" }}>
-                 <div style={{ flex: "1 1 120px" }}><label style={{ fontSize: "0.75rem", color: "#64748b" }}>Branch</label><select value={recentBranchFilter} onChange={(e) => setRecentBranchFilter(e.target.value)} className="native-select"><option value="ALL">All Branches</option>{(settings.branches || []).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
-                 <div style={{ flex: "1 1 120px" }}><label style={{ fontSize: "0.75rem", color: "#64748b" }}>Bill Type</label><select value={recentModeFilter} onChange={(e) => setRecentModeFilter(e.target.value)} className="native-select"><option value="ALL">All Types</option><option value="invoice">Invoices Only</option><option value="estimate">Estimates Only</option></select></div>
-               </div>
-               <div style={{ marginBottom: "10px" }}><label style={{ fontSize: "0.75rem", color: "#64748b" }}>Date Range</label><select value={recentDateFilter} onChange={(e) => setRecentDateFilter(e.target.value)} className="native-select"><option value="ALL">All Time</option><option value="THIS_MONTH">This Month</option><option value="LAST_MONTH">Last Month</option><option value="CUSTOM">Custom Date Range</option></select></div>
-               {recentDateFilter === "CUSTOM" && (
-                 <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "10px" }}>
-                    <div style={{ flex: "1 1 120px" }}><label style={{ fontSize: "0.75rem", color: "#64748b" }}>Start Date</label><Input type="date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} /></div>
-                    <div style={{ flex: "1 1 120px" }}><label style={{ fontSize: "0.75rem", color: "#64748b" }}>End Date</label><Input type="date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} /></div>
-                 </div>
-               )}
-               <div><label style={{ fontSize: "0.75rem", color: "#64748b" }}>Search Name/Phone/Inv Number</label><Input placeholder="Type to search..." value={billSearchQuery} onChange={(e) => setBillSearchQuery(e.target.value)} /></div>
-            </div>
-
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "15px", paddingBottom: "15px", borderBottom: "1px dashed #cbd5e1" }}>
-              <Button size="sm" variant="outline" onClick={() => handleResetCounter("invoice")} style={{ flex: "1 1 100%", borderColor: "#dc2626", color: "#dc2626" }}>Reset Invoice No.</Button>
-              <Button size="sm" variant="outline" onClick={() => handleResetCounter("estimate")} style={{ flex: "1 1 100%", borderColor: "#2563eb", color: "#2563eb" }}>Reset Estimate No.</Button>
-            </div>
-
-            {loadingRecent ? (
-              <p style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>Loading bills from database...</p>
-            ) : (filteredRecentBills || []).length === 0 ? (
-              <p style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>No bills found matching these filters.</p>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                {(filteredRecentBills || []).map((b) => (
-                  <div key={b.id} style={{ border: "1px solid var(--border)", padding: "12px", borderRadius: "8px", backgroundColor: "white" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", marginBottom: "8px" }}>
-                      <strong style={{ color: b.mode === "invoice" ? "#dc2626" : "#2563eb" }}>{b.document_number}</strong><span style={{ fontSize: "0.85rem", color: "#666" }}>{b.date}</span>
-                    </div>
-                    <div style={{ marginBottom: "8px", fontWeight: "500" }}>{b.customer_name || b.customer?.name || "Unknown Customer"}</div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
-                      <strong>₹{money(b.totals?.grand_total || 0)}</strong>
-                      <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-                        <label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85rem", cursor: "pointer", marginRight: "5px", padding: "4px 8px", backgroundColor: (b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "#dcfce7" : "#fef3c7", color: (b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "#166534" : "#b45309", borderRadius: "5px", fontWeight: "bold" }}>
-                          <input type="checkbox" checked={(b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) || false} onChange={() => handleQuickPaymentToggle(b)} style={{ cursor: "pointer" }} />
-                          {(b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "Paid" : "Pending"}
-                        </label>
-                        <Button size="sm" variant="destructive" style={{ backgroundColor: "#ef4444", color: "white" }} onClick={() => handleDeleteBill(b)}>Delete</Button>
-                        <Button size="sm" onClick={() => { if (isDirty && !window.confirm("⚠️ You have unsaved changes. Discard them and load this old bill?")) return; loadBillForEditing(b); }}>Edit</Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-      )}
-
-      {showSettings && (
-        <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "500px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
-          <div className="drawer-header">
-            <h3>Settings</h3>
-            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowSettings(false)}><ArrowLeft className="drawer-back-icon" /><span>Back</span></Button>
-          </div>
-
-          <div style={{ padding: "0 15px 15px 15px", boxSizing: "border-box", width: "100%" }}>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "20px" }}>
-              <Button variant={settingsTab === "design" ? "default" : "outline"} onClick={() => setSettingsTab("design")} style={{ flex: "1 1 100px" }}>🎨 Design</Button>
-              <Button variant={settingsTab === "technical" ? "default" : "outline"} onClick={() => setSettingsTab("technical")} style={{ flex: "1 1 100px" }}>⚙️ Tech</Button>
-              <Button variant={settingsTab === "branches" ? "default" : "outline"} onClick={() => setSettingsTab("branches")} style={{ flex: "1 1 100px" }}><Store size={16} style={{marginRight:"4px"}}/> Branches</Button>
-            </div>
-
-            {settingsTab === "design" && (
-              <div className="settings-design-tab" style={{ width: "100%" }}>
-                <DesignSettingRow title="Shop Name" fieldPrefix="shop_name" settings={settings} setSettings={setSettings} />
-                <DesignSettingRow title="Tagline" fieldPrefix="tagline" settings={settings} setSettings={setSettings} />
-                <DesignSettingRow title="Address Style (Edit info in Branches)" fieldPrefix="address" settings={settings} setSettings={setSettings} />
-                <DesignSettingRow title="Phone Numbers" fieldPrefix="phone" settings={settings} setSettings={setSettings} />
-                <DesignSettingRow title="Email" fieldPrefix="email" settings={settings} setSettings={setSettings} />
-                <Button onClick={saveSettings} style={{ width: "100%", marginBottom: "15px", boxSizing: "border-box" }}>Save Design Settings</Button>
-              </div>
-            )}
-
-            {settingsTab === "technical" && (
-              <div className="settings-technical-tab" style={{ width: "100%" }}>
-                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f0fdf4", width: "100%", boxSizing: "border-box" }}>
-                  <h4 style={{ margin: "0 0 10px 0", color: "#166534", display: "flex", alignItems: "center", gap: "8px" }}><Upload size={18} /> Upload Custom Font</h4>
-                  <label style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px", border: "2px dashed #16a34a", borderRadius: "8px", cursor: "pointer", backgroundColor: "white", flexWrap: "wrap" }}><span style={{ fontSize: "0.85rem", fontWeight: "bold" }}>📁 Choose Font File</span><input type="file" accept=".ttf,.otf,.woff,.woff2" onChange={handleFontUpload} style={{ display: "none" }} /></label>
-                  {(settings.custom_fonts || []).length > 0 && (<div style={{ marginTop: "10px" }}><p style={{ fontSize: "0.75rem", fontWeight: "bold", margin: "0 0 5px 0" }}>Uploaded Fonts:</p><ul style={{ fontSize: "0.75rem", margin: 0, paddingLeft: "15px" }}>{(settings.custom_fonts || []).map(f => <li key={f.name}>{f.name}</li>)}</ul></div>)}
-                </div>
-
-                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
-                  <h4 style={{ margin: "0 0 10px 0" }}>Math & Formulas</h4>
-                  <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Silver Rate (per gram)</label><Input value={settings.silver_rate_per_gram || ""} onChange={(e) => setSettings((prev) => ({ ...prev, silver_rate_per_gram: num(e.target.value) }))} style={{ marginBottom: "10px" }} />
-                  <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Making Charge (per gram)</label><Input value={settings.making_charge_per_gram || ""} onChange={(e) => setSettings((prev) => ({ ...prev, making_charge_per_gram: num(e.target.value) }))} style={{ marginBottom: "10px" }} />
-                  <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Below 5g Rule: Flat Making Charge (₹)</label><Input value={settings.flat_mc_below_5g || ""} onChange={(e) => setSettings((prev) => ({ ...prev, flat_mc_below_5g: num(e.target.value) }))} style={{ marginBottom: "2px" }} /><p style={{ fontSize: "0.75rem", color: "#666", marginBottom: "10px", marginTop: "0" }}>Example: 150</p>
-                  <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Default HSN Code</label><Input value={settings.default_hsn || ""} onChange={(e) => setSettings((prev) => ({ ...prev, default_hsn: e.target.value }))} style={{ marginBottom: "10px" }} />
-                  <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Formula Note (Prints on bill)</label><Input value={settings.formula_note || ""} onChange={(e) => setSettings((prev) => ({ ...prev, formula_note: e.target.value }))} />
-                </div>
-
-                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
-                  <h4 style={{ margin: "0 0 10px 0", display: "flex", justifyContent: "space-between" }}>⌨️ Custom Keyboard Shortcuts</h4>
-                  
-                  <div style={{ marginBottom: "15px" }}>
-                    {(settings.shortcuts || []).map((sc, index) => (
-                      <div key={sc.id} style={{ display: "flex", gap: "5px", marginBottom: "8px", alignItems: "center", flexWrap: "wrap", padding: "8px", backgroundColor: "white", borderRadius: "6px", border: "1px solid #cbd5e1" }}>
-                        <select value={sc.action} onChange={e => updateShortcut(index, 'action', e.target.value)} style={{ padding: "4px", borderRadius: "4px", border: "1px solid #cbd5e1", fontSize: "0.8rem" }}>
-                          <option value="save_bill">Action: Save Bill</option>
-                          <option value="new_bill">Action: New Bill</option>
-                          <option value="add_item">Action: Add Item Line</option>
-                          <option value="open_settings">Action: Open Settings</option>
-                          <option value="jump_customer">Jump to: Customer Name</option>
-                          <option value="jump_phone">Jump to: Phone Number</option>
-                          <option value="jump_items">Jump to: Item Details</option>
-                          <option value="jump_weight">Jump to: Item Weight</option>
-                          <option value="jump_rate">Jump to: Custom Silver Rate</option>
-                          <option value="jump_discount">Jump to: Discount Box</option>
-                          <option value="jump_payment">Jump to: Payment Method</option>
-                        </select>
-                        <label style={{ fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "2px" }}><input type="checkbox" checked={sc.ctrl} onChange={e => updateShortcut(index, 'ctrl', e.target.checked)} /> Ctrl</label>
-                        <label style={{ fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "2px" }}><input type="checkbox" checked={sc.shift} onChange={e => updateShortcut(index, 'shift', e.target.checked)} /> Shift</label>
-                        <Input style={{ width: "40px", padding: "4px", textAlign: "center", height: "28px" }} maxLength={1} value={sc.key} onChange={e => updateShortcut(index, 'key', e.target.value.toLowerCase())} placeholder="Key" />
-                        <Button variant="outline" size="sm" onClick={() => removeShortcut(index)} style={{ height: "28px", padding: "0 8px", color: "red", borderColor: "red" }}>X</Button>
-                      </div>
-                    ))}
-                    <Button size="sm" variant="outline" onClick={() => setSettings(prev => ({ ...prev, shortcuts: [...(prev.shortcuts || []), { id: Date.now(), action: 'save_bill', ctrl: false, shift: false, key: '' }] }))} style={{ width: "100%", borderStyle: "dashed" }}>+ Add New Shortcut Command</Button>
-                  </div>
-
-                  <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", cursor: "pointer", backgroundColor: "white", padding: "8px", border: "1px solid #cbd5e1", borderRadius: "6px" }}>
-                    <input type="checkbox" checked={settings.enter_as_tab ?? true} onChange={(e) => setSettings(prev => ({ ...prev, enter_as_tab: e.target.checked }))} style={{ cursor: "pointer" }} />
-                    <strong>Use 'Enter' / 'Return' key to jump to next input box</strong>
-                  </label>
-                </div>
-
-                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
-                  <h4 style={{ margin: "0 0 10px 0" }}>Global Business IDs</h4><label className="select-label" style={{ fontSize: "0.8rem" }}>GSTIN</label><Input value={settings.gstin || ""} onChange={(e) => setSettings((prev) => ({ ...prev, gstin: e.target.value }))} style={{ marginBottom: "8px", width: "100%" }} />
-                </div>
-
-                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
-                  <h4 style={{ margin: "0 0 10px 0" }}>Printing & Uploads</h4>
-                  <label className="select-label" htmlFor="print-scale-range" style={{ fontSize: "0.8rem" }}>Auto Print Scale: {Number(printScale).toFixed(1)}%</label>
-                  <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "15px", flexWrap: "wrap" }}><input id="print-scale-range" type="range" min="98" max="102" step="0.1" value={printScale} onChange={(e) => setPrintScale(clampPrintScale(Number(e.target.value)))} style={{ flex: "1 1 150px" }} /><Button type="button" variant="outline" size="sm" onClick={() => setPrintScale(100)}>Reset</Button></div>
-                  <div style={{ marginBottom: "15px", width: "100%" }}><label className="file-label" htmlFor="logo-upload-input" style={{ fontSize: "0.8rem" }}>Upload Shop Logo</label><input id="logo-upload-input" type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/*" onChange={handleLogoUpload} style={{ display: "block", marginBottom: "5px", maxWidth: "100%" }} /><span style={{ fontSize: "0.75rem", color: "#666", wordBreak: "break-all" }}>{logoUploadName ? `Selected: ${logoUploadName}` : "No logo selected"}</span>{settings.logo_data_url && <img src={settings.logo_data_url} alt="Logo preview" style={{ maxWidth: "80px", marginTop: "5px", display: "block" }} />}</div>
-                  <div style={{ width: "100%" }}><label className="file-label" htmlFor="about-qr-upload-input" style={{ fontSize: "0.8rem" }}>Upload About Us QR</label><input id="about-qr-upload-input" type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/*" onChange={handleAboutQrUpload} style={{ display: "block", marginBottom: "5px", maxWidth: "100%" }} /><span style={{ fontSize: "0.75rem", color: "#666", wordBreak: "break-all" }}>{aboutUploadName ? `Selected: ${aboutUploadName}` : "No QR selected"}</span>{(settings.about_qr_data_url || STATIC_ABOUT_QR_URL) && <img src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="QR preview" style={{ maxWidth: "80px", marginTop: "5px", display: "block" }} />}</div>
-                </div>
-
-                <Button onClick={saveSettings} style={{ width: "100%", marginBottom: "15px" }}>Save Technical Settings</Button>
-
-                <div style={{ marginTop: "20px", padding: "15px", border: "1px solid #ef4444", borderRadius: "8px", backgroundColor: "#fef2f2", width: "100%", boxSizing: "border-box" }}>
-                  <h4 style={{ margin: "0 0 10px 0", color: "#b91c1c" }}>Database & Backup</h4>
-                  <div style={{ marginBottom: "15px" }}><div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginBottom: "5px", color: "#7f1d1d" }}><span>Storage Used: {((storageStats?.used_bytes || 0) / 1024).toFixed(2)} KB</span><span>{storageStats?.percentage || 0}%</span></div><div style={{ width: "100%", backgroundColor: "#fca5a5", borderRadius: "4px", height: "10px", overflow: "hidden" }}><div style={{ width: `${storageStats?.percentage || 0}%`, backgroundColor: "#dc2626", height: "100%", transition: "width 0.5s ease" }}></div></div></div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}><Button type="button" variant="outline" onClick={handleBackupBills}>⬇️ Download Backup (JSON)</Button><Button type="button" variant="destructive" style={{ backgroundColor: "#ef4444", color: "white" }} onClick={handleDeleteAllBills}>⚠️ Wipe All Bills (Clear Storage)</Button></div>
-                </div>
-              </div>
-            )}
-
-            {settingsTab === "branches" && (
-               <div className="settings-branches-tab" style={{ width: "100%" }}>
-                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px", flexWrap: "wrap", gap: "10px" }}><p style={{ margin: 0, fontSize: "0.9rem", color: "#475569" }}>Manage isolated branch ledgers and addresses here.</p><Button size="sm" onClick={() => { const newBranch = { id: `B${Date.now()}`, name: "New Branch", address: "", map_url: "#", invoice_upi_id: "", estimate_upi_id: "", gstin: "", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 }; setSettings(prev => ({ ...prev, branches: [...(prev.branches || []), newBranch] })); }}>+ Add Branch</Button></div>
-                   {(settings.branches || []).map((b, index) => (
-                       <div key={b.id} style={{ padding: "15px", border: "1px solid #cbd5e1", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
-                           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "10px" }}><h4 style={{ margin: 0, color: "var(--brand)" }}>Branch: {b.name}</h4>{(settings.branches || []).length > 1 && (<Button size="sm" variant="outline" style={{ borderColor: "#ef4444", color: "#ef4444", padding: "0 8px", height: "24px" }} onClick={() => { if(window.confirm(`Delete ${b.name}?`)) { setSettings(prev => ({ ...prev, branches: (prev.branches || []).filter(x => x.id !== b.id) })); } }}>Delete</Button>)}</div>
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Branch Name (Internal Use)</label><Input value={b.name || ""} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].name = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Printed Bill Address</label><Input value={b.address || ""} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].address = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Google Maps Review Link</label><Input value={b.map_url || ""} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].map_url = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Invoice UPI ID</label><Input value={b.invoice_upi_id || ""} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].invoice_upi_id = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Estimate UPI ID</label><Input value={b.estimate_upi_id || ""} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].estimate_upi_id = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
-                           <label className="select-label" style={{ fontSize: "0.8rem" }}>GSTIN</label><Input value={b.gstin || ""} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].gstin = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
-                       </div>
-                   ))}
-                   <Button onClick={saveSettings} style={{ width: "100%", marginBottom: "15px" }}>Save Branch Settings</Button>
-               </div>
-            )}
-          </div>
-        </section>
-      )}
-
-      {showAbout && (
-        <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "500px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
-          <div className="drawer-header"><h3>About This App</h3><Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowAbout(false)}><ArrowLeft className="drawer-back-icon" /><span>Back</span></Button></div>
-          <div className="cloud-note" style={{ marginTop: "15px", padding: "0 15px", boxSizing: "border-box" }}>
-            <h4>Cloud Database Setup</h4><ol><li>Create Supabase project and get project URL + service role key.</li><li>Add them in backend <code>SUPABASE_URL</code> and <code>SUPABASE_SERVICE_ROLE_KEY</code>.</li><li>Create <code>customers</code> and <code>number_counters</code> tables as in README.</li></ol>
-            <p className="cloud-status-text">Cloud status: {cloudStatus.enabled ? "Connected" : "Placeholder mode"} ({cloudStatus.mode})</p>
-          </div>
-        </section>
-      )}
-    </div>
-  );
-}
+                <div style={{ display:
