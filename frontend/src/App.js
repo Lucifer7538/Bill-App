@@ -58,7 +58,18 @@ const ConnectWithUs = ({ phoneLink, instaLink = "https://www.instagram.com/jalar
   </div>
 );
 
-// FIX: Table forces pure mathematical recalculation so it NEVER prints a wrong rate visual
+const UpiAppsRow = ({ upiUri }) => (
+  <div style={{ marginTop: "20px" }}>
+    <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Or select your app directly:</p>
+    <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
+      <a href={upiUri.replace("upi://pay", "phonepe://pay")} style={{ padding: "8px 16px", backgroundColor: "#5f259f", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>PhonePe</a>
+      <a href={upiUri.replace("upi://pay", "tez://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#1a73e8", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>G-Pay</a>
+      <a href={upiUri.replace("upi://pay", "paytmmp://pay")} style={{ padding: "8px 16px", backgroundColor: "#00baf2", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>Paytm</a>
+      <a href={upiUri.replace("upi://pay", "credpay://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#212121", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>CRED</a>
+    </div>
+  </div>
+);
+
 const BillTable = ({ mode, items }) => (
   <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
     <thead>
@@ -84,7 +95,6 @@ const BillTable = ({ mode, items }) => (
     </thead>
     <tbody>
       {items.map((item, idx) => {
-        // Bulletproof dynamic display rate calculation for print
         const displayRate = mode === "estimate" 
             ? (num(item.quantity) > 0 ? num(item.amount) / num(item.quantity) : 0)
             : (num(item.weight) > 0 ? num(item.amount) / num(item.weight) : 0);
@@ -94,7 +104,7 @@ const BillTable = ({ mode, items }) => (
             {mode === "invoice" ? (
               <><td>{item.sl_no || item.slNo}</td><td>{item.description || "-"}</td><td>{item.hsn || "-"}</td><td>{money(item.weight)}</td><td>{money(displayRate)}</td><td>{item.rupees}.{item.paise}</td></>
             ) : (
-              <><td>{item.sl_no || item.slNo}</td><td>{item.description || "-"}</td><td>{money(item.weight)}</td><td>{money(item.quantity)} x {money(displayRate)}</td><td>{item.rupees}</td><td>{item.paise}</td></>
+              <><td>{item.sl_no || item.slNo}</td><td>{item.description || "-"}</td><td>{money(item.weight)}</td><td>{money(displayRate)}</td><td>{item.rupees}</td><td>{item.paise}</td></>
             )}
           </tr>
         );
@@ -118,7 +128,6 @@ const DesignSettingRow = ({ title, fieldPrefix, settings, setSettings }) => (
   </div>
 );
 
-// --- MAIN APP ---
 export default function App() {
   const [isCompactView, setIsCompactView] = useState(window.innerWidth <= 520);
   const [isDirty, setIsDirty] = useState(false);
@@ -209,12 +218,12 @@ export default function App() {
   const activeGlobalBranch = (settings.branches || []).find(b => b.id === globalBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
   const activeBillBranch = (settings.branches || []).find(b => b.id === billBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
 
-  // FIX: Custom ShortCut Builder & Listener
+  // FIX: Custom Jumping Shortcuts added dynamically
   useEffect(() => {
     const handleKeyDown = (e) => {
       const active = document.activeElement;
 
-      // 1. Enter-to-Jump functionality
+      // Enter-to-Jump functionality
       if ((settings.enter_as_tab ?? true) && e.key === 'Enter') {
         if (active && (active.tagName === 'INPUT' || active.tagName === 'SELECT') && active.type !== 'submit') {
           e.preventDefault();
@@ -225,7 +234,7 @@ export default function App() {
         }
       }
 
-      // 2. Custom Configured Shortcuts
+      // Check User Configured Shortcuts
       const matchedSc = (settings.shortcuts || []).find(sc => 
         sc.key && e.key.toLowerCase() === sc.key.toLowerCase() && 
         !!sc.ctrl === (e.ctrlKey || e.metaKey) && 
@@ -234,10 +243,18 @@ export default function App() {
 
       if (matchedSc) {
         e.preventDefault();
-        if (matchedSc.action === 'save_bill') document.getElementById('save-bill-btn')?.click();
-        if (matchedSc.action === 'new_bill') document.getElementById('new-bill-btn')?.click();
-        if (matchedSc.action === 'open_settings') setShowSettings(true);
-        if (matchedSc.action === 'add_item') document.getElementById('add-item-btn')?.click();
+        switch(matchedSc.action) {
+          case 'save_bill': document.getElementById('save-bill-btn')?.click(); break;
+          case 'new_bill': document.getElementById('new-bill-btn')?.click(); break;
+          case 'add_item': document.getElementById('add-item-btn')?.click(); break;
+          case 'open_settings': setShowSettings(true); break;
+          case 'jump_customer': document.getElementById('jump-customer-name')?.focus(); break;
+          case 'jump_phone': document.getElementById('jump-customer-phone')?.focus(); break;
+          case 'jump_items': document.getElementById('jump-item-desc')?.focus(); break;
+          case 'jump_discount': document.getElementById('jump-discount')?.focus(); break;
+          case 'jump_payment': document.getElementById('jump-payment-method')?.focus(); break;
+          default: break;
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -412,7 +429,6 @@ export default function App() {
     if (!dbData.branches) dbData.branches = defaultSettings.branches;
     let localFonts = []; const localFontsRaw = localStorage.getItem("jj_custom_fonts"); if (localFontsRaw) { try { localFonts = JSON.parse(localFontsRaw); } catch (e) {} }
     
-    // Merge dynamically loaded shortcuts or fallback to defaults
     const loadedShortcuts = dbData.shortcuts && dbData.shortcuts.length > 0 ? dbData.shortcuts : defaultSettings.shortcuts;
 
     const newSettings = { 
@@ -494,7 +510,6 @@ export default function App() {
       
       const amount = item.amount_override !== "" ? num(item.amount_override) : formulaAmount;
       
-      // Calculate true print rate dynamically to safeguard against database mismatches
       const rateForPrint = mode === "estimate" 
           ? (quantity > 0 ? amount / quantity : 0) 
           : (weight > 0 ? amount / weight : 0);
@@ -836,10 +851,9 @@ export default function App() {
                 </>
               )}
 
-              {/* FIX: Removed all buttons, leaving only the clean QR code for public view */}
               {showPublicUpi && (
                 <div className="payment-qr-box">
-                  <p className="scan-title">Scan Here For Payment (₹{money(publicUpiAmt)})</p>
+                  <p className="scan-title">Scan Here For Payment</p>
                   <img src={`https://quickchart.io/qr?text=${encodeURIComponent(publicUpiUri)}&size=220`} alt="Dynamic payment QR" className="upi-qr" crossOrigin="anonymous" />
                   <p className="upi-id">UPI: {publicUpiId}</p>
                 </div>
@@ -900,14 +914,14 @@ export default function App() {
 
   return (
     <div className="billing-app">
-      {/* PURE CSS Layout to strictly force Dual-Panes on Landscape devices without buggy JS tracking */}
+      {/* FIX: Pure CSS guarantees dual-scroll layout on phones in landscape mode without JS bugs */}
       <style>{`
-        @media (min-width: 768px) {
-          .dual-pane-container { display: flex; flex-direction: row; height: calc(100vh - 75px); overflow: hidden; gap: 20px; padding: 15px; max-width: 1600px; margin: 0 auto; box-sizing: border-box; }
-          .dual-pane-left { flex: 1.3 1 400px; height: 100%; overflow-y: auto; padding-right: 15px; }
-          .dual-pane-right { flex: 1 1 350px; height: 100%; overflow-y: auto; padding-left: 5px; padding-right: 5px; padding-bottom: 50px; }
+        @media (min-width: 650px) {
+          .dual-pane-container { display: flex; flex-direction: row; height: calc(100vh - 75px); overflow: hidden; gap: 20px; padding: 15px; max-width: 1600px; margin: 0 auto; box-sizing: border-box; align-items: stretch; }
+          .dual-pane-left { flex: 1.2; height: 100%; overflow-y: auto; padding-right: 15px; }
+          .dual-pane-right { flex: 1; height: 100%; overflow-y: auto; padding-left: 5px; padding-right: 5px; padding-bottom: 50px; }
         }
-        @media (max-width: 767px) {
+        @media (max-width: 649px) {
           .dual-pane-container { display: flex; flex-direction: column; gap: 20px; padding: 15px; box-sizing: border-box; }
           .dual-pane-left, .dual-pane-right { width: 100%; overflow: visible; }
         }
@@ -1010,10 +1024,9 @@ export default function App() {
         </div>
       </header>
 
-      {/* Dual Pane Layout wrapper */}
+      {/* NEW: Pure CSS Dual-Pane Layout */}
       <main className="dual-pane-container">
         
-        {/* LEFT SIDE: Independent Bill Preview Scroll Pane */}
         <div className="dual-pane-left">
           <section id="bill-print-root" className="bill-sheet" style={{ margin: 0, "--print-scale-factor": (printScale / 100).toFixed(3), zIndex: 1 }}>
             {(txType === "sale" ? isPaymentDone : isBalancePaid) && <div className="watermark-done">FULLY PAID</div>}
@@ -1086,7 +1099,7 @@ export default function App() {
 
                 {showDashboardUpi && (
                   <div className="payment-qr-box">
-                    <p className="scan-title">Scan Here For Payment (₹{money(upiAmountToPay)})</p>
+                    <p className="scan-title">Scan Here For Payment</p>
                     <img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" crossOrigin="anonymous" />
                     <p className="upi-id">UPI: {upiId}</p>
                   </div>
@@ -1109,7 +1122,6 @@ export default function App() {
           </section>
         </div>
 
-        {/* RIGHT SIDE: Independent Data Entry Scroll Pane */}
         <aside className="controls no-print dual-pane-right">
           <div className="control-card">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
@@ -1127,8 +1139,8 @@ export default function App() {
               <Input value={documentNumber} onChange={(e) => { setDocumentNumber(e.target.value); markDirty(); }} placeholder="e.g. INV-0212" disabled={!!currentBillId} style={{ fontWeight: "bold", color: "var(--brand)", backgroundColor: currentBillId ? "#f1f5f9" : "white" }} />
             </div>
 
-            <Input value={customer.name} onChange={(e) => { setCustomer((prev) => ({ ...prev, name: e.target.value })); markDirty(); }} placeholder="Customer name" />
-            <Input value={customer.phone} onChange={(e) => { setCustomer((prev) => ({ ...prev, phone: e.target.value })); markDirty(); }} placeholder="Phone" />
+            <Input id="jump-customer-name" value={customer.name} onChange={(e) => { setCustomer((prev) => ({ ...prev, name: e.target.value })); markDirty(); }} placeholder="Customer name" />
+            <Input id="jump-customer-phone" value={customer.phone} onChange={(e) => { setCustomer((prev) => ({ ...prev, phone: e.target.value })); markDirty(); }} placeholder="Phone" />
             <Input value={customer.address} onChange={(e) => { setCustomer((prev) => ({ ...prev, address: e.target.value })); markDirty(); }} placeholder="Address" />
             <Input value={customer.email} onChange={(e) => { setCustomer((prev) => ({ ...prev, email: e.target.value })); markDirty(); }} placeholder="Email" />
             <Input type="text" value={billDate} onChange={(e) => { setBillDate(e.target.value); markDirty(); }} placeholder="YYYY-MM-DD" />
@@ -1146,9 +1158,9 @@ export default function App() {
 
           <div className="control-card">
             <h3>Item Lines</h3>
-            {(items || []).map((item) => (
+            {(items || []).map((item, index) => (
               <div key={item.id} className="item-row-editor">
-                <Input value={item.description} onChange={(e) => updateItem(item.id, "description", e.target.value)} placeholder="Description" />
+                <Input id={index === 0 ? "jump-item-desc" : undefined} value={item.description} onChange={(e) => updateItem(item.id, "description", e.target.value)} placeholder="Description" />
                 <Input value={item.hsn} onChange={(e) => updateItem(item.id, "hsn", e.target.value)} placeholder="HSN" />
                 <Input value={item.weight} onChange={(e) => updateItem(item.id, "weight", e.target.value)} placeholder="Weight" />
                 <Input value={item.quantity} onChange={(e) => updateItem(item.id, "quantity", e.target.value)} placeholder="Qty" />
@@ -1163,7 +1175,7 @@ export default function App() {
 
           <div className="control-card">
             <h3>Adjustments</h3>
-            <Input value={discount} onChange={(e) => { setDiscount(e.target.value); markDirty(); }} placeholder="Discount" />
+            <Input id="jump-discount" value={discount} onChange={(e) => { setDiscount(e.target.value); markDirty(); }} placeholder="Discount" />
             <Input value={exchange} onChange={(e) => { setExchange(e.target.value); markDirty(); }} placeholder="Exchange" />
             <Input value={manualRoundOff} onChange={(e) => { setManualRoundOff(e.target.value); markDirty(); }} placeholder="Manual round off (optional)" />
           </div>
@@ -1180,7 +1192,7 @@ export default function App() {
             {txType === "sale" && (
               <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
                 <label className="select-label">Payment Method</label>
-                <select value={paymentMethod} onChange={(e) => { setPaymentMethod(e.target.value); markDirty(); }} className="native-select">
+                <select id="jump-payment-method" value={paymentMethod} onChange={(e) => { setPaymentMethod(e.target.value); markDirty(); }} className="native-select">
                   <option value="" disabled>Select Method</option><option value="Cash">Cash</option><option value="UPI">UPI</option>
                   {mode === "invoice" && <option value="Card">Card</option>}
                   <option value="Split">Split (Cash + UPI)</option>
@@ -1202,7 +1214,7 @@ export default function App() {
               <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
                 <h4 style={{ margin: '0 0 10px 0', color: '#16a34a' }}>Advance Payment</h4>
                 <Input placeholder="Advance Received ₹" value={advanceAmount} onChange={e => {setAdvanceAmount(e.target.value); markDirty();}} style={{ marginBottom: '10px' }} />
-                <select value={advanceMethod} onChange={(e) => { setAdvanceMethod(e.target.value); markDirty(); }} className="native-select">
+                <select id="jump-payment-method" value={advanceMethod} onChange={(e) => { setAdvanceMethod(e.target.value); markDirty(); }} className="native-select">
                   <option value="" disabled>Select Advance Method</option><option value="Cash">Cash</option><option value="UPI">UPI</option>
                   {mode === "invoice" && <option value="Card">Card</option>}
                   <option value="Split">Split (Cash + UPI)</option>
@@ -1476,7 +1488,7 @@ export default function App() {
                   <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Formula Note (Prints on bill)</label><Input value={settings.formula_note || ""} onChange={(e) => setSettings((prev) => ({ ...prev, formula_note: e.target.value }))} />
                 </div>
 
-                {/* FIX: Add New Custom Shortcuts Module */}
+                {/* NEW: Expanded Custom Shortcuts Module */}
                 <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
                   <h4 style={{ margin: "0 0 10px 0", display: "flex", justifyContent: "space-between" }}>⌨️ Custom Keyboard Shortcuts</h4>
                   
@@ -1484,10 +1496,15 @@ export default function App() {
                     {(settings.shortcuts || []).map((sc, index) => (
                       <div key={sc.id} style={{ display: "flex", gap: "5px", marginBottom: "8px", alignItems: "center", flexWrap: "wrap", padding: "8px", backgroundColor: "white", borderRadius: "6px", border: "1px solid #cbd5e1" }}>
                         <select value={sc.action} onChange={e => updateShortcut(index, 'action', e.target.value)} style={{ padding: "4px", borderRadius: "4px", border: "1px solid #cbd5e1", fontSize: "0.8rem" }}>
-                          <option value="save_bill">Save Bill</option>
-                          <option value="new_bill">New Bill</option>
-                          <option value="add_item">Add Item</option>
-                          <option value="open_settings">Open Settings</option>
+                          <option value="save_bill">Action: Save Bill</option>
+                          <option value="new_bill">Action: New Bill</option>
+                          <option value="add_item">Action: Add Item Line</option>
+                          <option value="open_settings">Action: Open Settings</option>
+                          <option value="jump_customer">Jump to: Customer Name</option>
+                          <option value="jump_phone">Jump to: Phone Number</option>
+                          <option value="jump_items">Jump to: Item Details</option>
+                          <option value="jump_discount">Jump to: Discount Box</option>
+                          <option value="jump_payment">Jump to: Payment Method</option>
                         </select>
                         <label style={{ fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "2px" }}><input type="checkbox" checked={sc.ctrl} onChange={e => updateShortcut(index, 'ctrl', e.target.checked)} /> Ctrl</label>
                         <label style={{ fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "2px" }}><input type="checkbox" checked={sc.shift} onChange={e => updateShortcut(index, 'shift', e.target.checked)} /> Shift</label>
