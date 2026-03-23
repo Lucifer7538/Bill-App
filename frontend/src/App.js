@@ -12,15 +12,25 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL ? BACKEND_URL.replace(/\/$/, '') : ""}/api`;
 const STATIC_ABOUT_QR_URL = process.env.REACT_APP_ABOUT_QR_URL;
 
-const createItem = (defaultHsn = "") => ({ id: `${Date.now()}-${Math.random()}`, description: "", hsn: defaultHsn, weight: "", quantity: "1", rate_override: "", amount_override: "", mc_override: "" });
+const createItem = (defaultHsn = "") => ({
+  id: `${Date.now()}-${Math.random()}`, description: "", hsn: defaultHsn, weight: "", quantity: "1", rate_override: "", amount_override: "", mc_override: ""
+});
 
 const defaultSettings = {
   shop_name: "Jalaram Jewellers", tagline: "The Silver Specialist", phone_numbers: ["+91 9583221115", "+91 9776177296", "+91 7538977527"], email: "jalaramjewellers26@gmail.com",
-  shop_name_color: "#000000", shop_name_size: 26, shop_name_font: "sans-serif", shop_name_align: "center", tagline_color: "#475569", tagline_size: 12, tagline_font: "sans-serif", tagline_align: "center",
-  address_color: "#475569", address_size: 14, address_font: "sans-serif", address_align: "center", phone_color: "#475569", phone_size: 13, phone_font: "sans-serif", phone_align: "center",
-  email_color: "#475569", email_size: 13, email_font: "sans-serif", email_align: "center", silver_rate_per_gram: 240, making_charge_per_gram: 15, flat_mc_below_5g: 150, default_hsn: "7113",
-  formula_note: "Line total = Weight x (Silver rate per gram + Making charge per gram)", logo_data_url: "", about_qr_data_url: STATIC_ABOUT_QR_URL, custom_fonts: [], enter_as_tab: true, 
-  shortcuts: [{ id: "s1", key: "s", ctrl: true, shift: false, action: "save_bill" }, { id: "s2", key: "n", ctrl: true, shift: false, action: "new_bill" }],
+  shop_name_color: "#000000", shop_name_size: 26, shop_name_font: "sans-serif", shop_name_align: "center",
+  tagline_color: "#475569", tagline_size: 12, tagline_font: "sans-serif", tagline_align: "center",
+  address_color: "#475569", address_size: 14, address_font: "sans-serif", address_align: "center",
+  phone_color: "#475569", phone_size: 13, phone_font: "sans-serif", phone_align: "center",
+  email_color: "#475569", email_size: 13, email_font: "sans-serif", email_align: "center",
+  silver_rate_per_gram: 240, making_charge_per_gram: 15, flat_mc_below_5g: 150, default_hsn: "7113",
+  formula_note: "Line total = Weight x (Silver rate per gram + Making charge per gram)", logo_data_url: "", about_qr_data_url: STATIC_ABOUT_QR_URL, custom_fonts: [],
+  enter_as_tab: true, 
+  shortcuts: [
+    { id: "s1", key: "s", ctrl: true, shift: false, action: "save_bill" },
+    { id: "s2", key: "n", ctrl: true, shift: false, action: "new_bill" },
+    { id: "s3", key: "w", ctrl: true, shift: false, action: "jump_weight" }
+  ],
   branches: [
     { id: "B1", name: "Branch 1 (Old Town)", address: "Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2", map_url: "https://g.page/r/CVvnomQZn7zxEBE/review", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", gstin: "21AAUFJ1925F1ZH", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 },
     { id: "B2", name: "Branch 2 (Unit-2)", address: "Branch - 2 : Shop No.14, BMC Market Complex, Market Building, Near Petrol Pump, Unit-2, BBSR-9", map_url: "#", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", gstin: "21AAUFJ1925F1ZH", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 }
@@ -35,7 +45,9 @@ const getInitialPrintScale = () => { const saved = Number(localStorage.getItem("
 const splitAmount = (amt) => { const validAmt = Number.isFinite(amt) ? amt : 0; const rupees = Math.floor(validAmt); const paise = Math.round((validAmt - rupees) * 100).toString().padStart(2, "0"); return { rupees, paise }; };
 const registerFont = (name, dataUrl) => { const styleId = `custom-font-${name.replace(/\s+/g, '-').toLowerCase()}`; if (document.getElementById(styleId)) return; const style = document.createElement('style'); style.id = styleId; style.innerHTML = `@font-face { font-family: '${name}'; src: url('${dataUrl}'); }`; document.head.appendChild(style); };
 
-const FontSelectOptions = ({ customFonts }) => (<><option value="sans-serif">Sans-serif</option><option value="Arial, Helvetica, sans-serif">Arial</option><option value="'Times New Roman', Times, serif">Times New Roman</option><option value="'Courier New', Courier, monospace">Courier New</option><option value="Georgia, serif">Georgia</option><option value="'Trebuchet MS', sans-serif">Trebuchet MS</option><option value="'Brush Script MT', cursive">Brush Script MT (Cursive)</option>{customFonts?.map(f => (<option key={f.name} value={`'${f.name}'`}>{f.name} (Custom)</option>))}</>);
+const FontSelectOptions = ({ customFonts }) => (
+  <><option value="sans-serif">Sans-serif</option><option value="Arial, Helvetica, sans-serif">Arial</option><option value="'Times New Roman', Times, serif">Times New Roman</option><option value="'Courier New', Courier, monospace">Courier New</option><option value="Georgia, serif">Georgia</option><option value="'Trebuchet MS', sans-serif">Trebuchet MS</option><option value="'Brush Script MT', cursive">Brush Script MT (Cursive)</option>{customFonts?.map(f => (<option key={f.name} value={`'${f.name}'`}>{f.name} (Custom)</option>))}</>
+);
 
 const ConnectWithUs = ({ phoneLink, instaLink = "https://www.instagram.com/jalaram_jewellers_?igsh=MWZnNmlzMTYyOWNzeA%3D%3D&utm_source=qr" }) => (
   <div style={{ marginTop: "25px", borderTop: "1px dashed #e2e8f0", paddingTop: "20px" }}>
@@ -47,30 +59,35 @@ const ConnectWithUs = ({ phoneLink, instaLink = "https://www.instagram.com/jalar
   </div>
 );
 
-const UpiAppsRow = ({ upiUri }) => (
-  <div style={{ marginTop: "20px" }}>
-    <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Or select your app directly:</p>
-    <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
-      <a href={upiUri.replace("upi://pay", "phonepe://pay")} style={{ padding: "8px 16px", backgroundColor: "#5f259f", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem" }}>PhonePe</a>
-      <a href={upiUri.replace("upi://pay", "tez://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#1a73e8", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem" }}>G-Pay</a>
-      <a href={upiUri.replace("upi://pay", "paytmmp://pay")} style={{ padding: "8px 16px", backgroundColor: "#00baf2", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem" }}>Paytm</a>
-      <a href={upiUri.replace("upi://pay", "credpay://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#212121", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem" }}>CRED</a>
-    </div>
-  </div>
-);
-
 const BillTable = ({ mode, items }) => (
   <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
     <thead>
       {mode === "invoice" ? (
-        <tr><th style={{ width: "8%" }}>Sl. No.</th><th style={{ width: "32%" }}>DESCRIPTION</th><th style={{ width: "10%" }}>HSN</th><th style={{ width: "16%", whiteSpace: "normal" }}>WEIGHT (g)</th><th style={{ width: "16%", whiteSpace: "normal" }}>RATE Rs.</th><th style={{ width: "18%", whiteSpace: "normal" }}>AMOUNT</th></tr>
+        <tr>
+          <th style={{ width: "8%" }}>Sl. No.</th>
+          <th style={{ width: "32%" }}>DESCRIPTION</th>
+          <th style={{ width: "10%" }}>HSN</th>
+          <th style={{ width: "16%", whiteSpace: "normal" }}>WEIGHT (g)</th>
+          <th style={{ width: "16%", whiteSpace: "normal" }}>RATE Rs.</th>
+          <th style={{ width: "18%", whiteSpace: "normal" }}>AMOUNT</th>
+        </tr>
       ) : (
-        <tr><th style={{ width: "8%" }}>Sl. No.</th><th style={{ width: "38%" }}>Particulars</th><th style={{ width: "16%", whiteSpace: "normal" }}>Weight</th><th style={{ width: "18%", whiteSpace: "normal" }}>RATE Rs.</th><th style={{ width: "12%", whiteSpace: "normal" }}>Rs.</th><th style={{ width: "8%", whiteSpace: "normal" }}>Ps.</th></tr>
+        <tr>
+          <th style={{ width: "8%" }}>Sl. No.</th>
+          <th style={{ width: "38%" }}>Particulars</th>
+          <th style={{ width: "16%", whiteSpace: "normal" }}>Weight</th>
+          <th style={{ width: "18%", whiteSpace: "normal" }}>RATE Rs.</th>
+          <th style={{ width: "12%", whiteSpace: "normal" }}>Rs.</th>
+          <th style={{ width: "8%", whiteSpace: "normal" }}>Ps.</th>
+        </tr>
       )}
     </thead>
     <tbody>
       {items.map((item, idx) => {
-        const displayRate = mode === "estimate" ? (num(item.quantity) > 0 ? num(item.amount) / num(item.quantity) : 0) : (num(item.weight) > 0 ? num(item.amount) / num(item.weight) : 0);
+        const displayRate = mode === "estimate" 
+            ? (num(item.quantity) > 0 ? num(item.amount) / num(item.quantity) : 0) 
+            : (num(item.weight) > 0 ? num(item.amount) / num(item.weight) : 0);
+
         return (
           <tr key={idx}>
             {mode === "invoice" ? (
@@ -103,25 +120,30 @@ export default function App() {
   const [isCompactView, setIsCompactView] = useState(window.innerWidth <= 520);
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
+  
   const [isPublicView, setIsPublicView] = useState(false);
   const [publicBill, setPublicBill] = useState(null);
   const [publicSettings, setPublicSettings] = useState(null);
   const [publicLoading, setPublicLoading] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+
   const [passcode, setPasscode] = useState("");
   const [token, setToken] = useState(localStorage.getItem("jj_auth_token") || "");
   const [checkingSession, setCheckingSession] = useState(Boolean(localStorage.getItem("jj_auth_token")));
   const [isWakingUp, setIsWakingUp] = useState(false);
   const [loggingIn, setLoggingIn] = useState(false);
+
   const [settings, setSettings] = useState(defaultSettings);
   const [globalBranchId, setGlobalBranchId] = useState("B1");
   const [billBranchId, setBillBranchId] = useState("B1");
+
   const [currentBillId, setCurrentBillId] = useState(null);
   const [mode, setMode] = useState("invoice");
   const [documentNumber, setDocumentNumber] = useState("");
   const [editingDocNumber, setEditingDocNumber] = useState(null);
   const [isNumberLoading, setIsNumberLoading] = useState(false);
   const [billDate, setBillDate] = useState(today());
+
   const [customer, setCustomer] = useState({ id: "", name: "", phone: "", address: "", email: "" });
   const [suggestions, setSuggestions] = useState([]);
   const [items, setItems] = useState([]);
@@ -129,17 +151,21 @@ export default function App() {
   const [exchange, setExchange] = useState("0");
   const [manualRoundOff, setManualRoundOff] = useState("");
   const [notes, setNotes] = useState("");
+
   const [txType, setTxType] = useState("sale");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [splitCash, setSplitCash] = useState("");
   const [isPaymentDone, setIsPaymentDone] = useState(false); 
+
   const [advanceAmount, setAdvanceAmount] = useState("");
   const [advanceMethod, setAdvanceMethod] = useState("");
   const [advanceSplitCash, setAdvanceSplitCash] = useState("");
   const [isAdvancePaid, setIsAdvancePaid] = useState(false);
+
   const [balanceMethod, setBalanceMethod] = useState("");
   const [balanceSplitCash, setBalanceSplitCash] = useState("");
   const [isBalancePaid, setIsBalancePaid] = useState(false);
+
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState("design"); 
   const [showAbout, setShowAbout] = useState(false);
@@ -180,78 +206,125 @@ export default function App() {
   const activeGlobalBranch = (settings.branches || []).find(b => b.id === globalBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
   const activeBillBranch = (settings.branches || []).find(b => b.id === billBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
 
+  // SAFER WINDOW TRACKING: Debounced to prevent React crashes during virtual keyboard opening
+  useEffect(() => { 
+    let timeoutId = null;
+    const handleResize = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        setWindowWidth(window.innerWidth);
+        setIsCompactView(window.innerWidth <= 520);
+      }, 150); // Small delay to let the iOS keyboard finish animating safely
+    }; 
+    window.addEventListener("resize", handleResize); 
+    window.addEventListener("orientationchange", handleResize); 
+    return () => {
+      window.removeEventListener("resize", handleResize); 
+      window.removeEventListener("orientationchange", handleResize); 
+    }
+  }, []);
+
+  // SAFER KEYBOARD SHORTCUTS: Guarded with try-catch
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (!e || typeof e.key !== 'string') return;
-      const active = document.activeElement;
-      if ((settings.enter_as_tab ?? true) && e.key === 'Enter') {
-        if (active && (active.tagName === 'INPUT' || active.tagName === 'SELECT') && active.type !== 'submit') {
+      try {
+        if (!e || typeof e.key !== 'string') return;
+        
+        const active = document.activeElement;
+
+        // Enter-to-Jump functionality
+        if ((settings.enter_as_tab ?? true) && e.key === 'Enter') {
+          if (active && (active.tagName === 'INPUT' || active.tagName === 'SELECT') && active.type !== 'submit') {
+            e.preventDefault();
+            const focusable = Array.from(document.querySelectorAll('input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])'));
+            const index = focusable.indexOf(active);
+            if (index > -1 && index < focusable.length - 1) focusable[index + 1].focus();
+            return;
+          }
+        }
+
+        // Custom Shortcuts
+        const matchedSc = (settings.shortcuts || []).find(sc => 
+          sc && sc.key && typeof e.key === 'string' && 
+          e.key.toLowerCase() === String(sc.key).toLowerCase() && 
+          !!sc.ctrl === (e.ctrlKey || e.metaKey) && 
+          !!sc.shift === e.shiftKey
+        );
+
+        if (matchedSc) {
           e.preventDefault();
-          const focusable = Array.from(document.querySelectorAll('input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])'));
-          const index = focusable.indexOf(active);
-          if (index > -1 && index < focusable.length - 1) focusable[index + 1].focus();
-          return;
+          switch(matchedSc.action) {
+            case 'save_bill': document.getElementById('save-bill-btn')?.click(); break;
+            case 'new_bill': document.getElementById('new-bill-btn')?.click(); break;
+            case 'add_item': document.getElementById('add-item-btn')?.click(); break;
+            case 'open_settings': setShowSettings(true); break;
+            case 'jump_customer': document.getElementById('jump-customer-name')?.focus(); break;
+            case 'jump_phone': document.getElementById('jump-customer-phone')?.focus(); break;
+            case 'jump_items': document.getElementById('jump-item-desc')?.focus(); break;
+            case 'jump_weight': document.getElementById('jump-weight')?.focus(); break;
+            case 'jump_rate': document.getElementById('jump-rate')?.focus(); break;
+            case 'jump_discount': document.getElementById('jump-discount')?.focus(); break;
+            case 'jump_payment': document.getElementById('jump-payment-method')?.focus(); break;
+            default: break;
+          }
         }
-      }
-      const matchedSc = (settings.shortcuts || []).find(sc => sc && sc.key && typeof e.key === 'string' && e.key.toLowerCase() === String(sc.key).toLowerCase() && !!sc.ctrl === (e.ctrlKey || e.metaKey) && !!sc.shift === e.shiftKey);
-      if (matchedSc) {
-        e.preventDefault();
-        switch(matchedSc.action) {
-          case 'save_bill': document.getElementById('save-bill-btn')?.click(); break;
-          case 'new_bill': document.getElementById('new-bill-btn')?.click(); break;
-          case 'add_item': document.getElementById('add-item-btn')?.click(); break;
-          case 'open_settings': setShowSettings(true); break;
-          case 'jump_customer': document.getElementById('jump-customer-name')?.focus(); break;
-          case 'jump_phone': document.getElementById('jump-customer-phone')?.focus(); break;
-          case 'jump_items': document.getElementById('jump-item-desc')?.focus(); break;
-          case 'jump_weight': document.getElementById('jump-weight')?.focus(); break;
-          case 'jump_rate': document.getElementById('jump-rate')?.focus(); break;
-          case 'jump_discount': document.getElementById('jump-discount')?.focus(); break;
-          case 'jump_payment': document.getElementById('jump-payment-method')?.focus(); break;
-          default: break;
-        }
+      } catch (err) {
+        console.error("Safely caught keyboard listener error", err);
       }
     };
-    window.addEventListener('keydown', handleKeyDown); return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [settings.shortcuts, settings.enter_as_tab]);
 
-  useEffect(() => { if (settings.custom_fonts && settings.custom_fonts.length > 0) { settings.custom_fonts.forEach(f => registerFont(f.name, f.dataUrl)); } }, [settings.custom_fonts]);
+  useEffect(() => {
+    if (settings.custom_fonts && settings.custom_fonts.length > 0) {
+      settings.custom_fonts.forEach(f => registerFont(f.name, f.dataUrl));
+    }
+  }, [settings.custom_fonts]);
 
   const handleFontUpload = async (event) => {
-    const file = event.target.files?.[0]; if (!file) return; const fontName = file.name.split('.')[0];
+    const file = event.target.files?.[0]; if (!file) return;
+    const fontName = file.name.split('.')[0];
     try {
       const reader = new FileReader();
       reader.onload = async (e) => {
-        const dataUrl = e.target.result; const newFont = { name: fontName, dataUrl }; const updatedFonts = [...(settings.custom_fonts || []), newFont];
-        setSettings(prev => ({ ...prev, custom_fonts: updatedFonts })); localStorage.setItem("jj_custom_fonts", JSON.stringify(updatedFonts)); registerFont(fontName, dataUrl); toast.success(`Font "${fontName}" uploaded!`);
-      }; reader.readAsDataURL(file);
+        const dataUrl = e.target.result; const newFont = { name: fontName, dataUrl };
+        const updatedFonts = [...(settings.custom_fonts || []), newFont];
+        setSettings(prev => ({ ...prev, custom_fonts: updatedFonts }));
+        localStorage.setItem("jj_custom_fonts", JSON.stringify(updatedFonts));
+        registerFont(fontName, dataUrl); toast.success(`Font "${fontName}" uploaded!`);
+      };
+      reader.readAsDataURL(file);
     } catch { toast.error("Font upload failed."); }
   };
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search); const viewDoc = params.get("view");
+    const params = new URLSearchParams(window.location.search);
+    const viewDoc = params.get("view");
     if (viewDoc) {
       setIsPublicView(true); setPublicLoading(true);
       const fetchPublicBill = async () => {
         try {
-          const res = await axios.get(`${API}/bills/public/${viewDoc}`); setPublicBill(res.data.bill); const sData = { ...defaultSettings, ...res.data.settings };
-          if (!sData.branches) sData.branches = defaultSettings.branches; if (sData.custom_fonts) sData.custom_fonts.forEach(f => registerFont(f.name, f.dataUrl)); setPublicSettings(sData);
+          const res = await axios.get(`${API}/bills/public/${viewDoc}`);
+          setPublicBill(res.data.bill);
+          const sData = { ...defaultSettings, ...res.data.settings };
+          if (!sData.branches) sData.branches = defaultSettings.branches;
+          if (sData.custom_fonts) sData.custom_fonts.forEach(f => registerFont(f.name, f.dataUrl));
+          setPublicSettings(sData);
         } catch (err) { setPublicBill("NOT_FOUND"); } finally { setPublicLoading(false); }
-      }; fetchPublicBill();
+      };
+      fetchPublicBill();
     }
   }, []);
 
-  // FIX: Safe live width tracking to power the CSS-less React Style split-screen without crashing the DOM
-  useEffect(() => { 
-    const handleResize = () => {
-      setWindowWidth(window.innerWidth);
-      setIsCompactView(window.innerWidth <= 520);
-    }; 
-    window.addEventListener("resize", handleResize); 
-    return () => window.removeEventListener("resize", handleResize); 
-  }, []);
+  useEffect(() => {
+    const handleEsc = (event) => {
+      if (event.key !== "Escape") return;
+      setShowSettings(false); setShowAbout(false); setShowRecentBills(false); setShowLedger(false); setShowFeedbackModal(false);
+    };
+    window.addEventListener("keydown", handleEsc); return () => window.removeEventListener("keydown", handleEsc);
+  }, [showSettings, showAbout, showRecentBills, showLedger, showFeedbackModal]);
 
-  useEffect(() => { const handleEsc = (event) => { if (event.key !== "Escape") return; setShowSettings(false); setShowAbout(false); setShowRecentBills(false); setShowLedger(false); setShowFeedbackModal(false); }; window.addEventListener("keydown", handleEsc); return () => window.removeEventListener("keydown", handleEsc); }, [showSettings, showAbout, showRecentBills, showLedger, showFeedbackModal]);
   useEffect(() => { localStorage.setItem("jj_print_scale", String(clampPrintScale(printScale))); }, [printScale]);
 
   useEffect(() => {
@@ -262,25 +335,40 @@ export default function App() {
       try { await axios.get(`${API}/auth/verify`, { headers: authHeaders }); } 
       catch { localStorage.removeItem("jj_auth_token"); setToken(""); } 
       finally { clearTimeout(slowServerTimeout); setCheckingSession(false); setIsWakingUp(false); }
-    }; verify();
+    };
+    verify();
   }, [token, isPublicView, authHeaders]);
 
   useEffect(() => {
     if (showRecentBills && token && !isPublicView) {
       const fetchRecent = async () => {
         setLoadingRecent(true);
-        try { const limit = recentDateFilter === "ALL" ? 50 : 500; const response = await axios.get(`${API}/bills/recent?limit=${limit}&branch_filter=${recentBranchFilter}&search=${encodeURIComponent(billSearchQuery)}`, { headers: authHeaders }); setRecentBillsList(response.data); } 
-        catch { toast.error("Failed to load recent bills."); } finally { setLoadingRecent(false); }
-      }; const timer = setTimeout(fetchRecent, 300); return () => clearTimeout(timer);
+        try {
+          const limit = recentDateFilter === "ALL" ? 50 : 500;
+          const response = await axios.get(`${API}/bills/recent?limit=${limit}&branch_filter=${recentBranchFilter}&search=${encodeURIComponent(billSearchQuery)}`, { headers: authHeaders });
+          setRecentBillsList(response.data);
+        } catch { toast.error("Failed to load recent bills."); } 
+        finally { setLoadingRecent(false); }
+      };
+      const timer = setTimeout(fetchRecent, 300); return () => clearTimeout(timer);
     }
   }, [showRecentBills, token, isPublicView, billSearchQuery, recentBranchFilter, recentDateFilter, authHeaders]); 
 
   const filteredRecentBills = useMemo(() => {
     return (recentBillsList || []).filter(bill => {
       if (recentModeFilter !== "ALL" && bill.mode !== recentModeFilter) return false;
-      if (recentDateFilter === "THIS_MONTH") { const billMonth = new Date(bill.date).getMonth(); const billYear = new Date(bill.date).getFullYear(); const now = new Date(); if (billMonth !== now.getMonth() || billYear !== now.getFullYear()) return false; } 
-      else if (recentDateFilter === "LAST_MONTH") { const billDateObj = new Date(bill.date); const now = new Date(); const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1); if (billDateObj.getMonth() !== lastMonth.getMonth() || billDateObj.getFullYear() !== lastMonth.getFullYear()) return false; } 
-      else if (recentDateFilter === "CUSTOM") { if (customStartDate && bill.date < customStartDate) return false; if (customEndDate && bill.date > customEndDate) return false; }
+      if (recentDateFilter === "THIS_MONTH") {
+        const billMonth = new Date(bill.date).getMonth(); const billYear = new Date(bill.date).getFullYear(); const now = new Date();
+        if (billMonth !== now.getMonth() || billYear !== now.getFullYear()) return false;
+      } 
+      else if (recentDateFilter === "LAST_MONTH") {
+        const billDateObj = new Date(bill.date); const now = new Date(); const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        if (billDateObj.getMonth() !== lastMonth.getMonth() || billDateObj.getFullYear() !== lastMonth.getFullYear()) return false;
+      } 
+      else if (recentDateFilter === "CUSTOM") {
+        if (customStartDate && bill.date < customStartDate) return false;
+        if (customEndDate && bill.date > customEndDate) return false;
+      }
       return true;
     });
   }, [recentBillsList, recentModeFilter, recentDateFilter, customStartDate, customEndDate]);
@@ -288,82 +376,195 @@ export default function App() {
   const handleBulkDownload = async () => {
     if ((filteredRecentBills || []).length === 0) { toast.error("No bills to download!"); return; }
     if ((filteredRecentBills || []).length > 20) { if (!window.confirm(`Generate PDF with ${filteredRecentBills.length} pages? This might take a minute.`)) return; }
-    setIsBulkDownloading(true); toast.info(`Generating PDF for ${filteredRecentBills.length} bills...`); const wasCompact = isCompactView; if (wasCompact) setIsCompactView(false); await new Promise(resolve => setTimeout(resolve, 800));
+    setIsBulkDownloading(true); toast.info(`Generating PDF for ${filteredRecentBills.length} bills...`);
+    const wasCompact = isCompactView; if (wasCompact) setIsCompactView(false);
+    await new Promise(resolve => setTimeout(resolve, 800));
+
     try {
-      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" }); const pageWidth = pdf.internal.pageSize.getWidth();
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+
       for (let i = 0; i < filteredRecentBills.length; i++) {
-        const bill = filteredRecentBills[i]; const node = document.getElementById(`bulk-bill-${bill.document_number}`); if (!node) continue;
+        const bill = filteredRecentBills[i];
+        const node = document.getElementById(`bulk-bill-${bill.document_number}`);
+        if (!node) continue;
         node.style.display = "block"; node.style.width = "800px"; node.style.minWidth = "800px"; node.style.maxWidth = "800px";
-        const canvas = await html2canvas(node, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#ffffff", onclone: (clonedDoc) => { const clonedNode = clonedDoc.getElementById(`bulk-bill-${bill.document_number}`); if (clonedNode) { clonedNode.style.width = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.padding = "20px"; const images = clonedNode.getElementsByTagName('img'); for (let img of images) img.crossOrigin = "anonymous"; } } });
-        node.style.display = "none"; const imgData = canvas.toDataURL("image/png", 1.0); const pageHeight = (canvas.height * pageWidth) / canvas.width; if (i > 0) pdf.addPage(); pdf.addImage(imgData, "PNG", 0, 0, pageWidth, pageHeight);
+        const canvas = await html2canvas(node, { 
+          scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#ffffff", 
+          onclone: (clonedDoc) => {
+            const clonedNode = clonedDoc.getElementById(`bulk-bill-${bill.document_number}`);
+            if (clonedNode) {
+              clonedNode.style.width = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.padding = "20px";
+              const images = clonedNode.getElementsByTagName('img'); for (let img of images) img.crossOrigin = "anonymous";
+            }
+          }
+        });
+        node.style.display = "none";
+        const imgData = canvas.toDataURL("image/png", 1.0);
+        const pageHeight = (canvas.height * pageWidth) / canvas.width;
+        if (i > 0) pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, 0, pageWidth, pageHeight);
       }
       pdf.save(`Jalaram_Bills_Export_${today()}.pdf`); toast.success("Bulk PDF Downloaded!");
     } catch (error) { toast.error("Error generating bulk PDF."); } finally { setIsBulkDownloading(false); if (wasCompact) setIsCompactView(true); }
   };
 
-  const fetchLedgerHistory = async () => { try { const res = await axios.get(`${API}/settings/ledger/logs?branch_id=${globalBranchId}`, { headers: authHeaders }); setLedgerLogs(res.data); } catch { toast.error("Failed to load ledger history."); } };
+  const fetchLedgerHistory = async () => {
+    try { const res = await axios.get(`${API}/settings/ledger/logs?branch_id=${globalBranchId}`, { headers: authHeaders }); setLedgerLogs(res.data); } catch { toast.error("Failed to load ledger history."); }
+  };
 
   useEffect(() => {
     if (showLedger && token && !isPublicView) {
       const fetchLedger = async () => {
-        setLedgerLoading(true); try { await loadSettings(); const res = await axios.get(`${API}/bills/today?date=${today()}&branch_id=${globalBranchId}`, { headers: authHeaders }); setTodayBills(res.data); await fetchLedgerHistory(); } catch { toast.error("Failed to load today's ledger."); } finally { setLedgerLoading(false); }
-      }; fetchLedger();
+        setLedgerLoading(true);
+        try { await loadSettings(); const res = await axios.get(`${API}/bills/today?date=${today()}&branch_id=${globalBranchId}`, { headers: authHeaders }); setTodayBills(res.data); await fetchLedgerHistory(); } 
+        catch { toast.error("Failed to load today's ledger."); } finally { setLedgerLoading(false); }
+      };
+      fetchLedger();
     }
   }, [showLedger, token, isPublicView, globalBranchId, authHeaders]);
 
-  useEffect(() => { if (showSettings && token && !isPublicView) { const fetchStorageStats = async () => { try { const res = await axios.get(`${API}/system/storage`, { headers: authHeaders }); setStorageStats(res.data); } catch { console.error("Failed to load stats"); } }; fetchStorageStats(); } }, [showSettings, token, isPublicView, authHeaders]);
+  useEffect(() => {
+    if (showSettings && token && !isPublicView) {
+      const fetchStorageStats = async () => { try { const res = await axios.get(`${API}/system/storage`, { headers: authHeaders }); setStorageStats(res.data); } catch { console.error("Failed to load storage stats"); } };
+      fetchStorageStats();
+    }
+  }, [showSettings, token, isPublicView, authHeaders]);
 
   const loadSettings = async () => {
-    const response = await axios.get(`${API}/settings`, { headers: authHeaders }); const savedLogo = localStorage.getItem("jj_logo_data_url"); const savedAboutQr = localStorage.getItem("jj_about_qr_data_url"); let dbData = response.data || {}; if (!dbData.branches) dbData.branches = defaultSettings.branches;
+    const response = await axios.get(`${API}/settings`, { headers: authHeaders });
+    const savedLogo = localStorage.getItem("jj_logo_data_url");
+    const savedAboutQr = localStorage.getItem("jj_about_qr_data_url");
+    let dbData = response.data || {};
+    if (!dbData.branches) dbData.branches = defaultSettings.branches;
     let localFonts = []; const localFontsRaw = localStorage.getItem("jj_custom_fonts"); if (localFontsRaw) { try { localFonts = JSON.parse(localFontsRaw); } catch (e) {} }
+    
     const loadedShortcuts = dbData.shortcuts && dbData.shortcuts.length > 0 ? dbData.shortcuts : defaultSettings.shortcuts;
-    const newSettings = { ...defaultSettings, ...dbData, shortcuts: loadedShortcuts, logo_data_url: savedLogo || dbData.logo_data_url || "", about_qr_data_url: savedAboutQr || dbData.about_qr_data_url || STATIC_ABOUT_QR_URL, custom_fonts: dbData.custom_fonts || localFonts };
-    setSettings(newSettings); if (!(newSettings.branches || []).find(b => b.id === globalBranchId)) { setGlobalBranchId((newSettings.branches || [])[0].id); setBillBranchId((newSettings.branches || [])[0].id); }
+
+    const newSettings = { 
+        ...defaultSettings, 
+        ...dbData, 
+        shortcuts: loadedShortcuts,
+        logo_data_url: savedLogo || dbData.logo_data_url || "", 
+        about_qr_data_url: savedAboutQr || dbData.about_qr_data_url || STATIC_ABOUT_QR_URL, 
+        custom_fonts: dbData.custom_fonts || localFonts 
+    };
+    
+    setSettings(newSettings);
+    if (!(newSettings.branches || []).find(b => b.id === globalBranchId)) { setGlobalBranchId((newSettings.branches || [])[0].id); setBillBranchId((newSettings.branches || [])[0].id); }
   };
 
-  const updateShortcut = (index, field, value) => { const updated = [...(settings.shortcuts || [])]; updated[index][field] = value; setSettings(prev => ({ ...prev, shortcuts: updated })); };
-  const removeShortcut = (index) => { const updated = [...(settings.shortcuts || [])]; updated.splice(index, 1); setSettings(prev => ({ ...prev, shortcuts: updated })); };
-  const reserveNumber = async (activeMode, activeBranch) => { setIsNumberLoading(true); try { const response = await axios.get(`${API}/bills/next-number`, { headers: authHeaders, params: { mode: activeMode, branch_id: activeBranch } }); setDocumentNumber(response.data.document_number || ""); } finally { setIsNumberLoading(false); } };
-  const fetchCloudStatus = async () => { try { const response = await axios.get(`${API}/cloud/status`, { headers: authHeaders }); setCloudStatus(response.data); } catch { setCloudStatus({ provider: "supabase", enabled: false, mode: "status-unavailable" }); } };
+  const updateShortcut = (index, field, value) => {
+    const updated = [...(settings.shortcuts || [])];
+    updated[index][field] = value;
+    setSettings(prev => ({ ...prev, shortcuts: updated }));
+  };
 
-  useEffect(() => { if (isPublicView) return; const bootstrap = async () => { if (!token) return; try { await loadSettings(); await fetchCloudStatus(); await reserveNumber(mode, billBranchId); } catch { toast.error("Could not load billing settings."); } }; bootstrap(); }, [token, isPublicView]);
-  useEffect(() => { if (!token || isPublicView) return; const interval = setInterval(() => { fetchCloudStatus(); }, 30000); return () => clearInterval(interval); }, [token, isPublicView]);
+  const removeShortcut = (index) => {
+    const updated = [...(settings.shortcuts || [])];
+    updated.splice(index, 1);
+    setSettings(prev => ({ ...prev, shortcuts: updated }));
+  };
+
+  const reserveNumber = async (activeMode, activeBranch) => {
+    setIsNumberLoading(true);
+    try { const response = await axios.get(`${API}/bills/next-number`, { headers: authHeaders, params: { mode: activeMode, branch_id: activeBranch } }); setDocumentNumber(response.data.document_number || ""); } finally { setIsNumberLoading(false); }
+  };
+
+  const fetchCloudStatus = async () => {
+    try { const response = await axios.get(`${API}/cloud/status`, { headers: authHeaders }); setCloudStatus(response.data); } catch { setCloudStatus({ provider: "supabase", enabled: false, mode: "status-unavailable" }); }
+  };
 
   useEffect(() => {
-    if (!token || isPublicView) return; const query = customer.phone.trim().length >= 2 ? customer.phone.trim() : customer.name.trim(); if (query.length < 2) { setSuggestions([]); return; }
-    const timer = setTimeout(async () => { try { const response = await axios.get(`${API}/customers/suggest`, { headers: authHeaders, params: { query } }); setSuggestions(response.data || []); } catch { setSuggestions([]); } }, 250); return () => clearTimeout(timer);
+    if (isPublicView) return;
+    const bootstrap = async () => { if (!token) return; try { await loadSettings(); await fetchCloudStatus(); await reserveNumber(mode, billBranchId); } catch { toast.error("Could not load billing settings."); } };
+    bootstrap();
+  }, [token, isPublicView]);
+
+  useEffect(() => {
+    if (!token || isPublicView) return;
+    const interval = setInterval(() => { fetchCloudStatus(); }, 30000); return () => clearInterval(interval);
+  }, [token, isPublicView]);
+
+  useEffect(() => {
+    if (!token || isPublicView) return;
+    const query = customer.phone.trim().length >= 2 ? customer.phone.trim() : customer.name.trim();
+    if (query.length < 2) { setSuggestions([]); return; }
+    const timer = setTimeout(async () => {
+      try { const response = await axios.get(`${API}/customers/suggest`, { headers: authHeaders, params: { query } }); setSuggestions(response.data || []); } catch { setSuggestions([]); }
+    }, 250);
+    return () => clearTimeout(timer);
   }, [customer.phone, customer.name, token, isPublicView, authHeaders]);
 
   const computed = useMemo(() => {
-    const baseSilverRate = Number(settings.silver_rate_per_gram) || 0; const baseMCPerGram = Number(settings.making_charge_per_gram) || 0; const flatMCBelow5g = Number(settings.flat_mc_below_5g) || 0;
+    const baseSilverRate = Number(settings.silver_rate_per_gram) || 0;
+    const baseMCPerGram = Number(settings.making_charge_per_gram) || 0;
+    const flatMCBelow5g = Number(settings.flat_mc_below_5g) || 0;
+
     const mapped = (items || []).map((item, index) => {
-      const weight = num(item.weight); const quantity = Math.max(num(item.quantity || 1), 1); const silverRate = item.rate_override !== "" ? num(item.rate_override) : baseSilverRate;
-      let mcAmount = 0; if (item.mc_override !== "") { mcAmount = weight * num(item.mc_override); } else if (flatMCBelow5g > 0 && weight > 0 && weight < 5) { mcAmount = flatMCBelow5g; } else { mcAmount = weight * baseMCPerGram; }
-      const singleItemCost = (weight * silverRate) + mcAmount; const formulaAmount = mode === "estimate" ? singleItemCost * quantity : singleItemCost; const amount = item.amount_override !== "" ? num(item.amount_override) : formulaAmount;
-      const rateForPrint = mode === "estimate" ? (quantity > 0 ? amount / quantity : 0) : (weight > 0 ? amount / weight : 0);
-      const { rupees, paise } = splitAmount(amount); return { ...item, slNo: index + 1, rate: rateForPrint, quantity, amount, rupees, paise, weight };
+      const weight = num(item.weight);
+      const quantity = Math.max(num(item.quantity || 1), 1);
+      const silverRate = item.rate_override !== "" ? num(item.rate_override) : baseSilverRate;
+
+      let mcAmount = 0;
+      if (item.mc_override !== "") { 
+          mcAmount = weight * num(item.mc_override); 
+      } else if (flatMCBelow5g > 0 && weight > 0 && weight <= 5) { 
+          mcAmount = flatMCBelow5g;
+      } else { 
+          mcAmount = weight * baseMCPerGram; 
+      }
+
+      const singleItemCost = (weight * silverRate) + mcAmount;
+      const formulaAmount = mode === "estimate" ? singleItemCost * quantity : singleItemCost;
+      
+      const amount = item.amount_override !== "" ? num(item.amount_override) : formulaAmount;
+      
+      const rateForPrint = mode === "estimate" 
+          ? (quantity > 0 ? amount / quantity : 0) 
+          : (weight > 0 ? amount / weight : 0);
+
+      const { rupees, paise } = splitAmount(amount);
+      return { ...item, slNo: index + 1, rate: rateForPrint, quantity, amount, rupees, paise, weight };
     });
-    const subtotal = mapped.reduce((sum, row) => sum + row.amount, 0); const taxable = subtotal; const cgst = mode === "invoice" ? taxable * 0.015 : 0; const sgst = mode === "invoice" ? taxable * 0.015 : 0; const igst = 0; const gstApplied = mode === "invoice" ? cgst + sgst + igst : 0;
-    const mdr = paymentMethod === "Card" ? (taxable + gstApplied) * 0.02 : 0; const baseTotal = taxable + gstApplied + mdr - num(discount) - num(exchange); const autoRound = Math.round(baseTotal) - baseTotal; const roundOff = manualRoundOff === "" ? autoRound : num(manualRoundOff); const grandTotal = baseTotal + roundOff;
+
+    const subtotal = mapped.reduce((sum, row) => sum + row.amount, 0);
+    const taxable = subtotal;
+    const cgst = mode === "invoice" ? taxable * 0.015 : 0;
+    const sgst = mode === "invoice" ? taxable * 0.015 : 0; 
+    const igst = 0;
+    const gstApplied = mode === "invoice" ? cgst + sgst + igst : 0;
+    const mdr = paymentMethod === "Card" ? (taxable + gstApplied) * 0.02 : 0;
+    const baseTotal = taxable + gstApplied + mdr - num(discount) - num(exchange);
+    const autoRound = Math.round(baseTotal) - baseTotal;
+    const roundOff = manualRoundOff === "" ? autoRound : num(manualRoundOff);
+    const grandTotal = baseTotal + roundOff;
     return { items: mapped, baseSilverRate, subtotal, taxable, cgst, sgst, igst, mdr, roundOff, grandTotal };
   }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff]);
 
   const updateItem = (id, key, value) => { markDirty(); setItems((prev) => prev.map((item) => (item.id === id ? { ...item, [key]: value } : item))); };
+
   const checkIsBlank = () => { return !customer.name.trim() && !customer.phone.trim() && !customer.address.trim() && !(items || []).some(i => i.description.trim() || i.weight.trim() || i.amount_override.trim()) && (!discount || discount === "0") && (!exchange || exchange === "0") && !paymentMethod && !advanceMethod && !advanceAmount && !splitCash; };
 
   const clearBill = async (nextMode = mode, nextBranch = billBranchId) => {
-    setCurrentBillId(null); setEditingDocNumber(null); setItems([]); setCustomer({ id: "", name: "", phone: "", address: "", email: "" }); setSuggestions([]); setDiscount("0"); setExchange("0"); setManualRoundOff("");
+    setCurrentBillId(null); setEditingDocNumber(null); setItems([]); setCustomer({ id: "", name: "", phone: "", address: "", email: "" });
+    setSuggestions([]); setDiscount("0"); setExchange("0"); setManualRoundOff("");
     setTxType("sale"); setPaymentMethod(""); setSplitCash(""); setIsPaymentDone(false); setAdvanceAmount(""); setAdvanceMethod(""); setAdvanceSplitCash(""); setIsAdvancePaid(false); setBalanceMethod(""); setBalanceSplitCash(""); setIsBalancePaid(false); setNotes("");
     setBillDate(today()); setIsDirty(false); await reserveNumber(nextMode, nextBranch); goToBillTop();
   };
 
-  const handleNewBillClick = async () => { if (currentBillId && isDirty) { if (!window.confirm("⚠️ You have unsaved edits to this saved bill! Discard edits and start a new bill?")) return; } else if (!currentBillId && !checkIsBlank()) { if (!window.confirm("⚠️ You have entered data! Are you sure you want to discard it and start a blank new bill?")) return; } await clearBill(mode, billBranchId); };
+  const handleNewBillClick = async () => {
+    if (currentBillId && isDirty) { if (!window.confirm("⚠️ You have unsaved edits to this saved bill! Discard edits and start a new bill?")) return; } else if (!currentBillId && !checkIsBlank()) { if (!window.confirm("⚠️ You have entered data! Are you sure you want to discard it and start a blank new bill?")) return; }
+    await clearBill(mode, billBranchId);
+  };
 
   const loadBillForEditing = (bill) => {
     setCurrentBillId(bill.id); setEditingDocNumber(bill.document_number); setMode(bill.mode); setBillBranchId(bill.branch_id || (settings.branches || [])[0].id); setDocumentNumber(bill.document_number); setBillDate(bill.date || today());
     setCustomer({ id: bill.customer_id || bill.customer?.id || "", name: bill.customer_name || bill.customer?.name || "", phone: bill.customer_phone || bill.customer?.phone || "", address: bill.customer_address || bill.customer?.address || "", email: bill.customer_email || bill.customer?.email || "" });
     setTxType(bill.tx_type || "sale"); setPaymentMethod(bill.payment_method || ""); setSplitCash(bill.split_cash !== null && bill.split_cash !== undefined ? String(bill.split_cash) : ""); setIsPaymentDone(bill.is_payment_done || false); 
-    setAdvanceAmount(bill.advance_amount ? String(bill.advance_amount) : ""); setAdvanceMethod(bill.advance_method || ""); setAdvanceSplitCash(bill.advance_split_cash ? String(bill.advance_split_cash) : ""); setIsAdvancePaid(bill.is_advance_paid || false); setBalanceMethod(bill.balance_method || ""); setBalanceSplitCash(bill.balance_split_cash ? String(bill.balance_split_cash) : ""); setIsBalancePaid(bill.is_balance_paid || false); setNotes(bill.notes || ""); 
+    setAdvanceAmount(bill.advance_amount ? String(bill.advance_amount) : ""); setAdvanceMethod(bill.advance_method || ""); setAdvanceSplitCash(bill.advance_split_cash ? String(bill.advance_split_cash) : ""); setIsAdvancePaid(bill.is_advance_paid || false);
+    setBalanceMethod(bill.balance_method || ""); setBalanceSplitCash(bill.balance_split_cash ? String(bill.balance_split_cash) : ""); setIsBalancePaid(bill.is_balance_paid || false);
+    setNotes(bill.notes || ""); 
     setDiscount((bill.discount !== null && bill.discount !== undefined) ? String(bill.discount) : (bill.totals?.discount !== null && bill.totals?.discount !== undefined ? String(bill.totals.discount) : "0"));
     setExchange((bill.exchange !== null && bill.exchange !== undefined) ? String(bill.exchange) : (bill.totals?.exchange !== null && bill.totals?.exchange !== undefined ? String(bill.totals.exchange) : "0"));
     setManualRoundOff((bill.round_off !== null && bill.round_off !== undefined) ? String(bill.round_off) : ((bill.totals?.round_off !== null && bill.totals?.round_off !== undefined) ? String(bill.totals.round_off) : ""));
@@ -371,14 +572,51 @@ export default function App() {
     setItems(loadedItems.length > 0 ? loadedItems : []); setIsDirty(false); setShowRecentBills(false); setShowLedger(false); toast.success(`Loaded ${bill.document_number} for editing`); goToBillTop();
   };
 
-  const handleDeleteBill = async (bill) => { if (!window.confirm(`Are you sure you want to permanently delete ${bill.document_number}?`)) return; try { await axios.delete(`${API}/bills/${bill.document_number}`, { headers: authHeaders }); setRecentBillsList((prev) => prev.filter((b) => b.document_number !== bill.document_number)); if (currentBillId === bill.id) await clearBill(mode, billBranchId); toast.success(`${bill.document_number} deleted successfully.`); await loadSettings(); } catch { toast.error("Failed to delete the bill."); } };
-  const handleQuickPaymentToggle = async (bill) => { if (bill.tx_type === "booking" || bill.tx_type === "service") { toast.info("Please open the bill and click Edit to manage Booking/Service balances."); return; } const newStatus = !bill.is_payment_done; try { await axios.put(`${API}/bills/${bill.document_number}/toggle-payment`, { is_payment_done: newStatus }, { headers: authHeaders }); toast.success(`Payment marked as ${newStatus ? 'DONE ✅' : 'PENDING ⏳'}`); if (currentBillId === bill.id) { setIsPaymentDone(newStatus); } setRecentBillsList(prev => prev.map(b => b.document_number === bill.document_number ? { ...b, is_payment_done: newStatus } : b)); await loadSettings(); } catch { toast.error("Failed to update payment status."); } };
-  const handleResetCounter = async (resetMode) => { if (!window.confirm(`Are you SURE you want to restart the ${resetMode.toUpperCase()} counter for ${activeGlobalBranch.name} back to 0001?`)) return; try { await axios.post(`${API}/bills/reset-counter`, { mode: resetMode, branch_id: globalBranchId }, { headers: authHeaders }); toast.success(`${resetMode.toUpperCase()} counter for ${activeGlobalBranch.name} has been reset.`); if (mode === resetMode && billBranchId === globalBranchId) { await reserveNumber(mode, billBranchId); } } catch { toast.error(`Failed to reset the ${resetMode} counter.`); } };
-  const handleBackupBills = async () => { try { toast.info("Preparing backup file..."); const res = await axios.get(`${API}/bills/export`, { headers: authHeaders }); const dataStr = JSON.stringify(res.data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `Jalaram_Bills_Backup_${today()}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link); toast.success("Backup downloaded successfully!"); } catch { toast.error("Failed to download backup."); } };
-  const handleDeleteAllBills = async () => { if (!window.confirm("🚨 WARNING! This will permanently delete ALL bills. Have you downloaded your backup first?")) return; if (window.prompt("Type 'DELETE' to confirm wiping all bills:") !== "DELETE") { toast.error("Deletion cancelled."); return; } try { await axios.delete(`${API}/bills/all`, { headers: authHeaders }); toast.success("All bills wiped."); setRecentBillsList([]); const res = await axios.get(`${API}/system/storage`, { headers: authHeaders }); setStorageStats(res.data); } catch { toast.error("Failed to delete bills."); } };
-  const handleModeChange = async (nextMode) => { if (mode === nextMode) return; if (currentBillId) { try { const res = await axios.get(`${API}/bills/next-number?mode=${nextMode}&branch_id=${billBranchId}`, { headers: authHeaders }); setDocumentNumber(res.data.document_number); setMode(nextMode); markDirty(); toast.info(`Migrating to ${nextMode.toUpperCase()}`); } catch (err) { toast.error("Failed to fetch new number for migration."); } } else { if (!checkIsBlank()) { if (!window.confirm("⚠️ You have unsaved changes! Switching modes will clear the screen. Continue?")) return; } setMode(nextMode); await clearBill(nextMode, billBranchId); } };
+  const handleDeleteBill = async (bill) => {
+    if (!window.confirm(`Are you sure you want to permanently delete ${bill.document_number}?`)) return;
+    try { await axios.delete(`${API}/bills/${bill.document_number}`, { headers: authHeaders }); setRecentBillsList((prev) => prev.filter((b) => b.document_number !== bill.document_number)); if (currentBillId === bill.id) await clearBill(mode, billBranchId); toast.success(`${bill.document_number} deleted successfully.`); await loadSettings(); } 
+    catch { toast.error("Failed to delete the bill."); }
+  };
+
+  const handleQuickPaymentToggle = async (bill) => {
+    if (bill.tx_type === "booking" || bill.tx_type === "service") { toast.info("Please open the bill and click Edit to manage Booking/Service balances."); return; }
+    const newStatus = !bill.is_payment_done;
+    try { await axios.put(`${API}/bills/${bill.document_number}/toggle-payment`, { is_payment_done: newStatus }, { headers: authHeaders }); toast.success(`Payment marked as ${newStatus ? 'DONE ✅' : 'PENDING ⏳'}`); if (currentBillId === bill.id) { setIsPaymentDone(newStatus); } setRecentBillsList(prev => prev.map(b => b.document_number === bill.document_number ? { ...b, is_payment_done: newStatus } : b)); await loadSettings(); } 
+    catch { toast.error("Failed to update payment status."); }
+  };
+
+  const handleResetCounter = async (resetMode) => {
+    if (!window.confirm(`Are you SURE you want to restart the ${resetMode.toUpperCase()} counter for ${activeGlobalBranch.name} back to 0001?`)) return;
+    try { await axios.post(`${API}/bills/reset-counter`, { mode: resetMode, branch_id: globalBranchId }, { headers: authHeaders }); toast.success(`${resetMode.toUpperCase()} counter for ${activeGlobalBranch.name} has been reset.`); if (mode === resetMode && billBranchId === globalBranchId) { await reserveNumber(mode, billBranchId); } } 
+    catch { toast.error(`Failed to reset the ${resetMode} counter.`); }
+  };
+
+  const handleBackupBills = async () => {
+    try { toast.info("Preparing backup file..."); const res = await axios.get(`${API}/bills/export`, { headers: authHeaders }); const dataStr = JSON.stringify(res.data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `Jalaram_Bills_Backup_${today()}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link); toast.success("Backup downloaded successfully!"); } 
+    catch { toast.error("Failed to download backup."); }
+  };
+
+  const handleDeleteAllBills = async () => {
+    if (!window.confirm("🚨 WARNING! This will permanently delete ALL bills. Have you downloaded your backup first?")) return;
+    if (window.prompt("Type 'DELETE' to confirm wiping all bills:") !== "DELETE") { toast.error("Deletion cancelled."); return; }
+    try { await axios.delete(`${API}/bills/all`, { headers: authHeaders }); toast.success("All bills wiped. (Ledger balances remain intact)"); setRecentBillsList([]); const res = await axios.get(`${API}/system/storage`, { headers: authHeaders }); setStorageStats(res.data); } 
+    catch { toast.error("Failed to delete bills."); }
+  };
+
+  const handleModeChange = async (nextMode) => {
+    if (mode === nextMode) return;
+    if (currentBillId) { try { const res = await axios.get(`${API}/bills/next-number?mode=${nextMode}&branch_id=${billBranchId}`, { headers: authHeaders }); setDocumentNumber(res.data.document_number); setMode(nextMode); markDirty(); toast.info(`Migrating to ${nextMode.toUpperCase()}`); } catch (err) { toast.error("Failed to fetch new number for migration."); } } 
+    else { if (!checkIsBlank()) { if (!window.confirm("⚠️ You have unsaved changes! Switching modes will clear the screen. Continue?")) return; } setMode(nextMode); await clearBill(nextMode, billBranchId); }
+  };
+
   const handleGlobalBranchChange = async (nextBranchId) => { setGlobalBranchId(nextBranchId); if (!currentBillId && checkIsBlank()) { setBillBranchId(nextBranchId); await reserveNumber(mode, nextBranchId); } };
-  const handleLogin = async (event) => { event.preventDefault(); setLoggingIn(true); try { const response = await axios.post(`${API}/auth/login`, { passcode }, { timeout: 15000 }); localStorage.setItem("jj_auth_token", response.data.access_token); setToken(response.data.access_token); setPasscode(""); toast.success("Logged in successfully"); } catch (error) { if (error?.response?.status === 401) { toast.error("Wrong passcode."); } else { toast.error("Server is waking up. Please wait 15-20 seconds and try again."); } } finally { setLoggingIn(false); } };
+
+  const handleLogin = async (event) => {
+    event.preventDefault(); setLoggingIn(true);
+    try { const response = await axios.post(`${API}/auth/login`, { passcode }, { timeout: 15000 }); localStorage.setItem("jj_auth_token", response.data.access_token); setToken(response.data.access_token); setPasscode(""); toast.success("Logged in successfully"); } 
+    catch (error) { if (error?.response?.status === 401) { toast.error("Wrong passcode."); } else { toast.error("Server is waking up. Please wait 15-20 seconds and try again."); } } finally { setLoggingIn(false); }
+  };
+
   const handleLogout = () => { localStorage.removeItem("jj_auth_token"); setToken(""); };
 
   const optimizeImageDataUrl = async (file) => { const reader = new FileReader(); const original = await new Promise((resolve, reject) => { reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); }); const image = new Image(); await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; image.src = original; }); const ratio = Math.min(420 / image.width, 420 / image.height, 1); const targetWidth = Math.round(image.width * ratio); const targetHeight = Math.round(image.height * ratio); const canvas = document.createElement("canvas"); canvas.width = targetWidth; canvas.height = targetHeight; const context = canvas.getContext("2d"); context.drawImage(image, 0, 0, targetWidth, targetHeight); return canvas.toDataURL("image/png", 0.92); };
@@ -398,19 +636,28 @@ export default function App() {
     } catch (error) { toast.error("Ledger update failed."); } finally { setSubmittingLog(false); }
   };
 
-  const saveBalances = async () => { try { const payload = { branch_id: globalBranchId, cash_balance: num(manualCash), estimate_bank_balance: num(manualEstBank), invoice_bank_balance: num(manualInvBank) }; await axios.put(`${API}/settings/balances`, payload, { headers: authHeaders }); setSettings(prev => { const updatedBranches = (prev.branches || []).map(b => b.id === globalBranchId ? { ...b, ...payload } : b); return { ...prev, branches: updatedBranches }; }); setEditingBalances(false); toast.success(`Ledger balances for ${activeGlobalBranch.name} manually updated!`); } catch { toast.error("Failed to update balances."); } };
+  const saveBalances = async () => {
+    try { const payload = { branch_id: globalBranchId, cash_balance: num(manualCash), estimate_bank_balance: num(manualEstBank), invoice_bank_balance: num(manualInvBank) }; await axios.put(`${API}/settings/balances`, payload, { headers: authHeaders }); setSettings(prev => { const updatedBranches = (prev.branches || []).map(b => b.id === globalBranchId ? { ...b, ...payload } : b); return { ...prev, branches: updatedBranches }; }); setEditingBalances(false); toast.success(`Ledger balances for ${activeGlobalBranch.name} manually updated!`); } 
+    catch { toast.error("Failed to update balances."); }
+  };
 
   const saveBill = async () => {
     if (txType === "sale" && !paymentMethod) { toast.error("Please select a payment method."); return; }
     if ((txType === "booking" || txType === "service")) { if (isAdvancePaid && !advanceMethod) { toast.error("Please select a method for the Advance payment."); return; } if (isBalancePaid && !balanceMethod) { toast.error("Please select a method for the Balance payment."); return; } }
+
     setSavingBill(true);
     try {
       const payload = {
-        mode, branch_id: billBranchId, document_number: documentNumber, date: billDate, customer_id: customer.id || null, customer_name: customer.name, customer_phone: customer.phone, customer_address: customer.address, customer_email: customer.email,
-        tx_type: txType, payment_method: paymentMethod, is_payment_done: isPaymentDone, split_cash: num(splitCash), split_upi: Math.max(0, computed.grandTotal - num(splitCash)), advance_amount: num(advanceAmount), advance_method: advanceMethod, advance_split_cash: num(advanceSplitCash), is_advance_paid: isAdvancePaid, balance_method: balanceMethod, balance_split_cash: num(balanceSplitCash), is_balance_paid: isBalancePaid, discount: num(discount), exchange: num(exchange), round_off: manualRoundOff === "" ? null : num(manualRoundOff), notes,
+        mode, branch_id: billBranchId, document_number: documentNumber, date: billDate, 
+        customer_id: customer.id || null, customer_name: customer.name, customer_phone: customer.phone, customer_address: customer.address, customer_email: customer.email,
+        tx_type: txType, payment_method: paymentMethod, is_payment_done: isPaymentDone, split_cash: num(splitCash), split_upi: Math.max(0, computed.grandTotal - num(splitCash)),
+        advance_amount: num(advanceAmount), advance_method: advanceMethod, advance_split_cash: num(advanceSplitCash), is_advance_paid: isAdvancePaid,
+        balance_method: balanceMethod, balance_split_cash: num(balanceSplitCash), is_balance_paid: isBalancePaid,
+        discount: num(discount), exchange: num(exchange), round_off: manualRoundOff === "" ? null : num(manualRoundOff), notes,
         items: computed.items.map((item) => ({ description: item.description, hsn: item.hsn, weight: num(item.weight), quantity: num(item.quantity), mc_override: item.mc_override === "" ? null : num(item.mc_override), rate_override: item.rate_override === "" ? null : num(item.rate_override), amount_override: item.amount_override === "" ? null : num(item.amount_override), rate: item.rate, amount: item.amount, sl_no: item.slNo })),
         totals: { grand_total: computed.grandTotal, subtotal: computed.subtotal, taxable_amount: computed.taxable, cgst: computed.cgst, sgst: computed.sgst, igst: computed.igst, mdr: computed.mdr, discount: num(discount), exchange: num(exchange), round_off: manualRoundOff === "" ? null : num(manualRoundOff) }
       };
+
       if (currentBillId) { await axios.put(`${API}/bills/update-by-id/${currentBillId}`, payload, { headers: authHeaders }); toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} updated & migrated successfully.`); setIsDirty(false); setEditingDocNumber(documentNumber); } 
       else { const res = await axios.post(`${API}/bills/save`, payload, { headers: authHeaders }); toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} saved successfully.`); setIsDirty(false); setCurrentBillId(res.data.id); setEditingDocNumber(res.data.document_number); setDocumentNumber(res.data.document_number); }
       await loadSettings(); await fetchLedgerHistory();
@@ -420,16 +667,28 @@ export default function App() {
   const downloadPdf = async (elementId, filename) => {
     toast.info("Preparing PDF..."); const node = document.getElementById(elementId); if (!node) return;
     try {
-      const canvas = await html2canvas(node, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#ffffff", windowWidth: 1024, onclone: (clonedDoc) => { const clonedNode = clonedDoc.getElementById(elementId); if (clonedNode) { clonedNode.style.width = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.position = "absolute"; clonedNode.style.top = "0"; clonedNode.style.left = "0"; clonedNode.style.margin = "0"; clonedNode.style.padding = "20px"; clonedNode.style.boxSizing = "border-box"; const images = clonedNode.getElementsByTagName('img'); for (let img of images) img.crossOrigin = "anonymous"; } } });
+      const canvas = await html2canvas(node, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#ffffff", windowWidth: 1024,
+        onclone: (clonedDoc) => {
+          const clonedNode = clonedDoc.getElementById(elementId);
+          if (clonedNode) { 
+             clonedNode.style.width = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.position = "absolute"; clonedNode.style.top = "0"; clonedNode.style.left = "0"; clonedNode.style.margin = "0"; clonedNode.style.padding = "20px"; clonedNode.style.boxSizing = "border-box";
+             const images = clonedNode.getElementsByTagName('img'); for (let img of images) img.crossOrigin = "anonymous"; 
+          }
+        }
+      });
       const imageData = canvas.toDataURL("image/png", 1.0); const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" }); const pageWidth = pdf.internal.pageSize.getWidth(); const pageHeight = (canvas.height * pageWidth) / canvas.width;
-      pdf.addImage(imageData, "PNG", 0, 0, pageWidth, pageHeight); pdf.save(`${filename}.pdf`); toast.success("PDF Downloaded Successfully");
+      pdf.addImage(imageData, "PNG", 0, 0, pageWidth, pageHeight); 
+      
+      pdf.save(`${filename}.pdf`); 
+      toast.success("PDF Downloaded Successfully");
     } catch (error) { toast.error("Failed to download PDF."); }
   };
 
   const shareWhatsApp = () => { const link = `${window.location.origin}/?view=${documentNumber}`; const cleanName = customer.name ? customer.name.trim() : "Customer"; const text = `Hello ${cleanName},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`; let cleanedPhone = customer.phone.replace(/\D/g, ""); if (cleanedPhone.length === 10) cleanedPhone = `91${cleanedPhone}`; window.location.href = `https://wa.me/${cleanedPhone}?text=${encodeURIComponent(text)}`; };
   const shareEmail = () => { const link = `${window.location.origin}/?view=${documentNumber}`; const cleanName = customer.name ? customer.name.trim() : "Customer"; const subject = `${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber}`; const body = `Dear ${cleanName},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`; window.location.href = `mailto:${customer.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; };
+  
   const goToBillTop = () => { document.getElementById("bill-print-root")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
-  const handleWifiClick = () => { navigator.clipboard.writeText("12345678").then(() => { toast.success("✅ Password '12345678' Copied! Connect to 'JalaramJewellers Unlimited'.", { duration: 6000 }); }).catch(() => { toast.info("Wi-Fi: JalaramJewellers Unlimited | Pass: 12345678", { duration: 6000 }); }); };
+  const handleWifiClick = () => { navigator.clipboard.writeText("12345678").then(() => { toast.success("✅ Password '12345678' Copied! Go to settings and connect to 'JalaramJewellers Unlimited'.", { duration: 6000 }); }).catch(() => { toast.info("Wi-Fi: JalaramJewellers Unlimited | Pass: 12345678", { duration: 6000 }); }); };
 
   const todaysTotalCash = (todayBills || []).filter(b => b.is_payment_done).reduce((sum, b) => sum + (b.payment_method === 'Cash' ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_cash) : 0), 0);
   const todaysTotalEstBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'estimate').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
@@ -437,61 +696,196 @@ export default function App() {
 
   const publicComputed = useMemo(() => {
     if (!publicBill || !publicSettings) return { items: [], taxable: 0, cgst: 0, sgst: 0, igst: 0, mdr: 0, roundOff: 0, grandTotal: 0, discount: 0, exchange: 0 };
-    const baseSilverRate = Number(publicSettings.silver_rate_per_gram) || 0; const baseMCPerGram = Number(publicSettings.making_charge_per_gram) || 0; const flatMCBelow5g = Number(publicSettings.flat_mc_below_5g) || 0;
+    const baseSilverRate = Number(publicSettings.silver_rate_per_gram) || 0; 
+    const baseMCPerGram = Number(publicSettings.making_charge_per_gram) || 0; 
+    const flatMCBelow5g = Number(publicSettings.flat_mc_below_5g) || 0;
+
     const mapped = (publicBill.items || []).map((item, index) => {
-      const weight = num(item.weight); const quantity = Math.max(num(item.quantity || 1), 1); const silverRate = (item.rate_override !== undefined && item.rate_override !== null && item.rate_override !== "") ? num(item.rate_override) : baseSilverRate;
-      let mcAmount = 0; if (item.mc_override !== undefined && item.mc_override !== null && item.mc_override !== "") { mcAmount = weight * num(item.mc_override); } else if (flatMCBelow5g > 0 && weight > 0 && weight < 5) { mcAmount = flatMCBelow5g; } else { mcAmount = weight * baseMCPerGram; }
-      const singleItemCost = (weight * silverRate) + mcAmount; const formulaAmount = publicBill.mode === "estimate" ? singleItemCost * quantity : singleItemCost; const amount = (item.amount !== undefined && item.amount !== null && item.amount !== "") ? num(item.amount) : (item.amount_override ? num(item.amount_override) : formulaAmount);
-      const { rupees, paise } = splitAmount(amount); const rateForPrint = publicBill.mode === "estimate" ? (quantity > 0 ? amount / quantity : 0) : (weight > 0 ? amount / weight : 0);
+      const weight = num(item.weight); const quantity = Math.max(num(item.quantity || 1), 1);
+      const silverRate = (item.rate_override !== undefined && item.rate_override !== null && item.rate_override !== "") ? num(item.rate_override) : baseSilverRate;
+      
+      let mcAmount = 0;
+      if (item.mc_override !== undefined && item.mc_override !== null && item.mc_override !== "") { mcAmount = weight * num(item.mc_override); } 
+      else if (flatMCBelow5g > 0 && weight > 0 && weight <= 5) { mcAmount = flatMCBelow5g; } 
+      else { mcAmount = weight * baseMCPerGram; }
+
+      const singleItemCost = (weight * silverRate) + mcAmount;
+      const formulaAmount = publicBill.mode === "estimate" ? singleItemCost * quantity : singleItemCost;
+      
+      const amount = (item.amount !== undefined && item.amount !== null && item.amount !== "") ? num(item.amount) : (item.amount_override ? num(item.amount_override) : formulaAmount);
+      const { rupees, paise } = splitAmount(amount);
+      
+      const rateForPrint = publicBill.mode === "estimate" 
+          ? (quantity > 0 ? amount / quantity : 0) 
+          : (weight > 0 ? amount / weight : 0);
+      
       return { ...item, sl_no: item.sl_no || (index + 1), rate: rateForPrint, amount, rupees, paise, weight, quantity };
     });
-    const subtotal = mapped.reduce((sum, row) => sum + row.amount, 0); const taxable = subtotal; const cgst = publicBill.mode === "invoice" ? taxable * 0.015 : 0; const sgst = publicBill.mode === "invoice" ? taxable * 0.015 : 0; const igst = 0; const gstApplied = publicBill.mode === "invoice" ? cgst + sgst + igst : 0;
-    const discount = num(publicBill.discount || publicBill.totals?.discount || 0); const exchange = num(publicBill.exchange || publicBill.totals?.exchange || 0); const mdr = publicBill.payment_method === "Card" ? (taxable + gstApplied) * 0.02 : 0; const baseTotal = taxable + gstApplied + mdr - discount - exchange; const autoRound = Math.round(baseTotal) - baseTotal;
-    const roundOff = publicBill.round_off !== undefined && publicBill.round_off !== null ? num(publicBill.round_off) : (publicBill.totals?.round_off !== undefined && publicBill.totals?.round_off !== null ? num(publicBill.totals?.round_off) : autoRound); const grandTotal = publicBill.totals?.grand_total !== undefined && publicBill.totals?.grand_total !== null ? num(publicBill.totals.grand_total) : (baseTotal + roundOff);
-    return { items: mapped, taxable: publicBill.totals?.taxable_amount || publicBill.totals?.subtotal || taxable, cgst: publicBill.totals?.cgst ?? cgst, sgst: publicBill.totals?.sgst ?? sgst, igst: publicBill.totals?.igst ?? igst, mdr: publicBill.totals?.mdr ?? mdr, roundOff, grandTotal, discount, exchange };
+
+    const subtotal = mapped.reduce((sum, row) => sum + row.amount, 0); const taxable = subtotal;
+    const cgst = publicBill.mode === "invoice" ? taxable * 0.015 : 0; const sgst = publicBill.mode === "invoice" ? taxable * 0.015 : 0; const igst = 0;
+    const gstApplied = publicBill.mode === "invoice" ? cgst + sgst + igst : 0;
+    const discount = num(publicBill.discount || publicBill.totals?.discount || 0); const exchange = num(publicBill.exchange || publicBill.totals?.exchange || 0);
+    const mdr = publicBill.payment_method === "Card" ? (taxable + gstApplied) * 0.02 : 0;
+    const baseTotal = taxable + gstApplied + mdr - discount - exchange; const autoRound = Math.round(baseTotal) - baseTotal;
+    const roundOff = publicBill.round_off !== undefined && publicBill.round_off !== null ? num(publicBill.round_off) : (publicBill.totals?.round_off !== undefined && publicBill.totals?.round_off !== null ? num(publicBill.totals?.round_off) : autoRound);
+    const grandTotal = publicBill.totals?.grand_total !== undefined && publicBill.totals?.grand_total !== null ? num(publicBill.totals.grand_total) : (baseTotal + roundOff);
+
+    return { 
+      items: mapped, taxable: publicBill.totals?.taxable_amount || publicBill.totals?.subtotal || taxable, 
+      cgst: publicBill.totals?.cgst ?? cgst, sgst: publicBill.totals?.sgst ?? sgst, igst: publicBill.totals?.igst ?? igst, 
+      mdr: publicBill.totals?.mdr ?? mdr, roundOff, grandTotal, discount, exchange 
+    };
   }, [publicBill, publicSettings]);
 
-  const getUpiAmount = () => { if (txType === "sale") return paymentMethod === "Split" ? Math.max(0, computed.grandTotal - num(splitCash)) : computed.grandTotal; if (!isAdvancePaid && (advanceMethod === "UPI" || advanceMethod === "Split")) return advanceMethod === "Split" ? Math.max(0, num(advanceAmount) - num(advanceSplitCash)) : num(advanceAmount); if (isAdvancePaid && !isBalancePaid && (balanceMethod === "UPI" || balanceMethod === "Split")) { const bal = Math.max(0, computed.grandTotal - num(advanceAmount)); return balanceMethod === "Split" ? Math.max(0, bal - num(balanceSplitCash)) : bal; } return 0; };
-  const upiAmountToPay = getUpiAmount(); const showDashboardUpi = upiAmountToPay > 0; const upiId = mode === "invoice" ? activeBillBranch.invoice_upi_id : activeBillBranch.estimate_upi_id; const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
+  const getUpiAmount = () => {
+      if (txType === "sale") return paymentMethod === "Split" ? Math.max(0, computed.grandTotal - num(splitCash)) : computed.grandTotal;
+      if (!isAdvancePaid && (advanceMethod === "UPI" || advanceMethod === "Split")) return advanceMethod === "Split" ? Math.max(0, num(advanceAmount) - num(advanceSplitCash)) : num(advanceAmount);
+      if (isAdvancePaid && !isBalancePaid && (balanceMethod === "UPI" || balanceMethod === "Split")) { const bal = Math.max(0, computed.grandTotal - num(advanceAmount)); return balanceMethod === "Split" ? Math.max(0, bal - num(balanceSplitCash)) : bal; }
+      return 0;
+  };
+  const upiAmountToPay = getUpiAmount(); const showDashboardUpi = upiAmountToPay > 0;
+  const upiId = mode === "invoice" ? activeBillBranch.invoice_upi_id : activeBillBranch.estimate_upi_id;
+  const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
   
+  // --- PUBLIC VIEW ---
   if (isPublicView) {
-    if (publicLoading) return <div className="loading-screen">Loading your bill...</div>; if (publicBill === "NOT_FOUND" || !publicBill) return <div className="loading-screen">Bill not found or has been deleted.</div>;
-    let publicUpiAmt = 0; const isSale = publicBill.tx_type === "sale" || !publicBill.tx_type;
-    if (isSale) { publicUpiAmt = publicBill.payment_method === "Split" ? num(publicBill.split_upi) : publicComputed.grandTotal; } else { if (!publicBill.is_advance_paid && (publicBill.advance_method === "UPI" || publicBill.advance_method === "Split")) { publicUpiAmt = publicBill.advance_method === "Split" ? Math.max(0, num(publicBill.advance_amount) - num(publicBill.advance_split_cash)) : num(publicBill.advance_amount); } else if (publicBill.is_advance_paid && !publicBill.is_balance_paid && (publicBill.balance_method === "UPI" || publicBill.balance_method === "Split")) { const bal = Math.max(0, publicComputed.grandTotal - num(publicBill.advance_amount)); publicUpiAmt = publicBill.balance_method === "Split" ? Math.max(0, bal - num(publicBill.balance_split_cash)) : bal; } }
-    const showPublicUpi = publicUpiAmt > 0 && !(isSale ? publicBill.is_payment_done : publicBill.is_balance_paid); const pbBranch = (publicSettings?.branches || []).find(b => b.id === publicBill.branch_id) || (publicSettings?.branches || [])[0] || defaultSettings.branches[0]; const publicUpiId = publicBill.mode === "invoice" ? pbBranch.invoice_upi_id : pbBranch.estimate_upi_id; const publicUpiUri = `upi://pay?pa=${publicUpiId}&pn=${encodeURIComponent(publicSettings?.shop_name)}&am=${money(publicUpiAmt)}&cu=INR&tn=Bill_${publicBill.document_number}`;
+    if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
+    if (publicBill === "NOT_FOUND" || !publicBill) return <div className="loading-screen">Bill not found or has been deleted.</div>;
+
+    let publicUpiAmt = 0;
+    const isSale = publicBill.tx_type === "sale" || !publicBill.tx_type;
+    
+    if (isSale) { 
+        publicUpiAmt = publicBill.payment_method === "Split" ? num(publicBill.split_upi) : publicComputed.grandTotal; 
+    } else {
+        if (!publicBill.is_advance_paid && (publicBill.advance_method === "UPI" || publicBill.advance_method === "Split")) { 
+            publicUpiAmt = publicBill.advance_method === "Split" ? Math.max(0, num(publicBill.advance_amount) - num(publicBill.advance_split_cash)) : num(publicBill.advance_amount); 
+        } else if (publicBill.is_advance_paid && !publicBill.is_balance_paid && (publicBill.balance_method === "UPI" || publicBill.balance_method === "Split")) { 
+            const bal = Math.max(0, publicComputed.grandTotal - num(publicBill.advance_amount)); 
+            publicUpiAmt = publicBill.balance_method === "Split" ? Math.max(0, bal - num(publicBill.balance_split_cash)) : bal; 
+        }
+    }
+    
+    const showPublicUpi = publicUpiAmt > 0 && !(isSale ? publicBill.is_payment_done : publicBill.is_balance_paid);
+    const pbBranch = (publicSettings?.branches || []).find(b => b.id === publicBill.branch_id) || (publicSettings?.branches || [])[0] || defaultSettings.branches[0];
+    const publicUpiId = publicBill.mode === "invoice" ? pbBranch.invoice_upi_id : pbBranch.estimate_upi_id;
+    const publicUpiUri = `upi://pay?pa=${publicUpiId}&pn=${encodeURIComponent(publicSettings?.shop_name)}&am=${money(publicUpiAmt)}&cu=INR&tn=Bill_${publicBill.document_number}`;
+
     return (
       <div className="billing-app" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px' }}>
         <Toaster position="bottom-right" />
-        {!(isSale ? publicBill.is_payment_done : publicBill.is_balance_paid) && (<div className="no-print" onClick={handleWifiClick} style={{ width: "100%", maxWidth: "800px", backgroundColor: "#eff6ff", border: "2px solid #3b82f6", borderRadius: "8px", padding: "12px", marginBottom: "20px", display: "flex", justifyContent: "center", alignItems: "center", gap: "10px", color: "#1d4ed8", fontWeight: "bold", cursor: "pointer", boxShadow: "0 4px 6px rgba(0,0,0,0.1)" }}><Wifi size={20} /> Slow Internet? Tap here for Free Shop Wi-Fi</div>)}
-        <div className="no-print" style={{ marginBottom: '20px', display: 'flex', gap: '15px' }}><Button onClick={() => downloadPdf("public-bill-root", publicBill.document_number)}>Download PDF</Button><Button variant="outline" onClick={() => window.print()}>Print Bill</Button></div>
+        {!(isSale ? publicBill.is_payment_done : publicBill.is_balance_paid) && (
+          <div className="no-print" onClick={handleWifiClick} style={{ width: "100%", maxWidth: "800px", backgroundColor: "#eff6ff", border: "2px solid #3b82f6", borderRadius: "8px", padding: "12px", marginBottom: "20px", display: "flex", justifyContent: "center", alignItems: "center", gap: "10px", color: "#1d4ed8", fontWeight: "bold", cursor: "pointer", boxShadow: "0 4px 6px rgba(0,0,0,0.1)" }}>
+            <Wifi size={20} /> Slow Internet? Tap here for Free Shop Wi-Fi
+          </div>
+        )}
+        {showFeedbackModal && (
+          <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
+            <div style={{ backgroundColor: "white", padding: "30px", borderRadius: "16px", width: "100%", maxWidth: "380px", textAlign: "center", boxShadow: "0 10px 25px rgba(0,0,0,0.2)" }}>
+              <h3 style={{ marginTop: 0, marginBottom: "8px", color: "#0f172a" }}>Leave a Review!</h3>
+              <p style={{ fontSize: "0.9rem", color: "#64748b", marginBottom: "20px" }}>Which branch did you visit today?</p>
+              {(publicSettings?.branches || []).map(b => (
+                <a key={b.id} href={b.map_url !== "#" ? b.map_url : "#"} target="_blank" rel="noopener noreferrer" style={{ display: "block", padding: "14px", backgroundColor: b.map_url !== "#" ? "#facc15" : "#e2e8f0", color: b.map_url !== "#" ? "#854d0e" : "#475569", textDecoration: "none", borderRadius: "10px", marginBottom: "12px", fontWeight: "bold", fontSize: "1.1rem" }}>⭐ {b.name}</a>
+              ))}
+              <Button variant="ghost" onClick={() => setShowFeedbackModal(false)} style={{ width: "100%", color: "#64748b", marginTop: "10px" }}>Cancel</Button>
+            </div>
+          </div>
+        )}
+        <div className="no-print" style={{ marginBottom: '20px', display: 'flex', gap: '15px' }}>
+          <Button onClick={() => downloadPdf("public-bill-root", publicBill.document_number)}>Download PDF</Button>
+          <Button variant="outline" onClick={() => window.print()}>Print Bill</Button>
+        </div>
+
         <section id="public-bill-root" className="bill-sheet" style={{ "--print-scale-factor": 1, position: 'relative', zIndex: 1 }}>
           {(isSale ? publicBill.is_payment_done : publicBill.is_balance_paid) && <div className="watermark-done">FULLY PAID</div>}
+
           <div className="bill-header">
-            <div className="logo-area">{publicSettings?.logo_data_url ? <img src={publicSettings.logo_data_url} alt="Shop Logo" className="shop-logo" crossOrigin="anonymous" /> : <div className="shop-logo-fallback">JJ</div>}<div style={{ width: "100%", textAlign: publicSettings?.shop_name_align || "center" }}><h2 className="sheet-shop-title" style={{ fontFamily: publicSettings?.shop_name_font || "sans-serif", color: publicSettings?.shop_name_color || "#000", fontSize: `${publicSettings?.shop_name_size}px`, margin: 0 }}>{publicSettings?.shop_name}</h2></div><div style={{ width: "100%", textAlign: publicSettings?.tagline_align || "center" }}><p className="sheet-tagline" style={{ fontFamily: publicSettings?.tagline_font || "sans-serif", color: publicSettings?.tagline_color || "#475569", fontSize: `${publicSettings?.tagline_size}px`, margin: "5px 0" }}>{publicSettings?.tagline}</p></div></div>
+            <div className="logo-area">
+              {publicSettings?.logo_data_url ? <img src={publicSettings.logo_data_url} alt="Shop Logo" className="shop-logo" crossOrigin="anonymous" /> : <div className="shop-logo-fallback">JJ</div>}
+              <div style={{ width: "100%", textAlign: publicSettings?.shop_name_align || "center" }}>
+                <h2 className="sheet-shop-title" style={{ fontFamily: publicSettings?.shop_name_font || "sans-serif", color: publicSettings?.shop_name_color || "#000", fontSize: `${publicSettings?.shop_name_size}px`, margin: 0 }}>{publicSettings?.shop_name}</h2>
+              </div>
+              <div style={{ width: "100%", textAlign: publicSettings?.tagline_align || "center" }}>
+                <p className="sheet-tagline" style={{ fontFamily: publicSettings?.tagline_font || "sans-serif", color: publicSettings?.tagline_color || "#475569", fontSize: `${publicSettings?.tagline_size}px`, margin: "5px 0" }}>{publicSettings?.tagline}</p>
+              </div>
+            </div>
+
             <div className="contact-area">
-              <div className="contact-address" style={{ fontFamily: publicSettings?.address_font || "sans-serif", display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '8px', alignItems: publicSettings?.address_align === 'left' ? 'flex-start' : publicSettings?.address_align === 'right' ? 'flex-end' : 'center', textAlign: publicSettings?.address_align || "center" }}><a href={pbBranch.map_url !== "#" ? pbBranch.map_url : "#"} target="_blank" rel="noopener noreferrer" style={{ color: publicSettings?.address_color || "#475569", fontSize: `${publicSettings?.address_size || 14}px`, textDecoration: 'none' }}>{pbBranch.address}</a></div>
-              <div style={{ width: "100%", textAlign: publicSettings?.phone_align || "center", fontFamily: publicSettings?.phone_font || "sans-serif", fontSize: `${publicSettings?.phone_size || 13}px`, marginBottom: "4px" }}>{(publicSettings?.phone_numbers || []).join(" | ")}</div>
-              <div style={{ width: "100%", textAlign: publicSettings?.email_align || "center", fontFamily: publicSettings?.email_font || "sans-serif", fontSize: `${publicSettings?.email_size || 13}px`, marginBottom: "4px" }}><a href={`mailto:${publicSettings?.email}`} style={{ color: publicSettings?.email_color || "#475569", textDecoration: 'none' }}>{publicSettings?.email}</a></div>
+              <div className="contact-address" style={{ fontFamily: publicSettings?.address_font || "sans-serif", display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '8px', alignItems: publicSettings?.address_align === 'left' ? 'flex-start' : publicSettings?.address_align === 'right' ? 'flex-end' : 'center', textAlign: publicSettings?.address_align || "center" }}>
+                  <a href={pbBranch.map_url !== "#" ? pbBranch.map_url : "#"} target="_blank" rel="noopener noreferrer" style={{ color: publicSettings?.address_color || "#475569", fontSize: `${publicSettings?.address_size || 14}px`, textDecoration: 'none' }}>{pbBranch.address}</a>
+              </div>
+              <div style={{ width: "100%", textAlign: publicSettings?.phone_align || "center", fontFamily: publicSettings?.phone_font || "sans-serif", fontSize: `${publicSettings?.phone_size || 13}px`, marginBottom: "4px" }}>
+                {(publicSettings?.phone_numbers || []).join(" | ")}
+              </div>
+              <div style={{ width: "100%", textAlign: publicSettings?.email_align || "center", fontFamily: publicSettings?.email_font || "sans-serif", fontSize: `${publicSettings?.email_size || 13}px`, marginBottom: "4px" }}>
+                <a href={`mailto:${publicSettings?.email}`} style={{ color: publicSettings?.email_color || "#475569", textDecoration: 'none' }}>{publicSettings?.email}</a>
+              </div>
               {publicBill.mode === "invoice" && pbBranch.gstin && <p style={{ margin: "4px 0", textAlign: "center", fontWeight: "bold" }}>GSTIN: {pbBranch.gstin}</p>}
             </div>
           </div>
+
           <div className="sheet-banner">{publicBill.tx_type === "booking" ? "BOOKING RECEIPT" : publicBill.tx_type === "service" ? "SERVICE ORDER" : publicBill.mode === "invoice" ? "TAX INVOICE" : "ESTIMATE"}</div>
-          <div className="meta-grid"><p><strong>{publicBill.mode === "invoice" ? "Invoice No" : "Estimate No"}:</strong> {publicBill.document_number}</p><p><strong>Date:</strong> {publicBill.date}</p></div>
-          <div className="customer-box"><p><strong>Name:</strong> {publicBill.customer_name || publicBill.customer?.name || "-"}</p><p><strong>Address:</strong> {publicBill.customer_address || publicBill.customer?.address || "-"}</p><p><strong>Phone:</strong> {publicBill.customer_phone || publicBill.customer?.phone || "-"}</p></div>
+
+          <div className="meta-grid">
+            <p><strong>{publicBill.mode === "invoice" ? "Invoice No" : "Estimate No"}:</strong> {publicBill.document_number}</p>
+            <p><strong>Date:</strong> {publicBill.date}</p>
+          </div>
+
+          <div className="customer-box">
+            <p><strong>Name:</strong> {publicBill.customer_name || publicBill.customer?.name || "-"}</p>
+            <p><strong>Address:</strong> {publicBill.customer_address || publicBill.customer?.address || "-"}</p>
+            <p><strong>Phone:</strong> {publicBill.customer_phone || publicBill.customer?.phone || "-"}</p>
+          </div>
+
           <BillTable mode={publicBill.mode} items={publicComputed.items} />
+
           <div className="sheet-bottom-stack">
             <div className="totals">
               <div className="totals-row"><span>{publicBill.mode === "invoice" ? "Taxable Amt." : "TOTAL"}</span><strong>₹{money(publicComputed.taxable)}</strong></div>
-              {publicBill.mode === "invoice" ? (<><div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(publicComputed.cgst)}</strong></div><div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(publicComputed.sgst)}</strong></div><div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(publicComputed.igst)}</strong></div></>) : (<><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(publicComputed.discount)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(publicComputed.exchange)}</strong></div></>)}
-              <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(publicComputed.mdr)}</strong></div><div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(publicComputed.roundOff)}</strong></div><div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(publicComputed.grandTotal)}</strong></div>
-              {publicBill.tx_type && publicBill.tx_type !== "sale" && (<><div className="totals-row" style={{ marginTop: "10px", color: "#16a34a" }}><span>ADVANCE RECEIVED</span><strong>₹{money(publicBill.advance_amount)}</strong></div><div className="totals-row" style={{ color: "#dc2626" }}><span>BALANCE DUE</span><strong>₹{money(Math.max(0, publicComputed.grandTotal - num(publicBill.advance_amount)))}</strong></div></>)}
-              {showPublicUpi && (<div className="payment-qr-box"><p className="scan-title">Scan Here For Payment</p><img src={`https://quickchart.io/qr?text=${encodeURIComponent(publicUpiUri)}&size=220`} alt="Dynamic payment QR" className="upi-qr" crossOrigin="anonymous" /><p className="upi-id">UPI: {publicUpiId}</p></div>)}
+              {publicBill.mode === "invoice" ? (
+                <>
+                  <div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(publicComputed.cgst)}</strong></div><div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(publicComputed.sgst)}</strong></div><div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(publicComputed.igst)}</strong></div>
+                </>
+              ) : (
+                <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(publicComputed.discount)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(publicComputed.exchange)}</strong></div></>
+              )}
+              <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(publicComputed.mdr)}</strong></div>
+              <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(publicComputed.roundOff)}</strong></div>
+              <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(publicComputed.grandTotal)}</strong></div>
+
+              {publicBill.tx_type && publicBill.tx_type !== "sale" && (
+                <>
+                  <div className="totals-row" style={{ marginTop: "10px", color: "#16a34a" }}><span>ADVANCE RECEIVED</span><strong>₹{money(publicBill.advance_amount)}</strong></div>
+                  <div className="totals-row" style={{ color: "#dc2626" }}><span>BALANCE DUE</span><strong>₹{money(Math.max(0, publicComputed.grandTotal - num(publicBill.advance_amount)))}</strong></div>
+                </>
+              )}
+
+              {showPublicUpi && (
+                <div className="payment-qr-box">
+                  <p className="scan-title">Scan Here For Payment</p>
+                  <img src={`https://quickchart.io/qr?text=${encodeURIComponent(publicUpiUri)}&size=220`} alt="Dynamic payment QR" className="upi-qr" crossOrigin="anonymous" />
+                  <p className="upi-id">UPI: {publicUpiId}</p>
+                </div>
+              )}
             </div>
+
             <ConnectWithUs phoneLink={(publicSettings?.phone_numbers || [])[0]} />
+
             {publicBill.mode === "invoice" ? (
-              <div className="declaration"><p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p></div>
+              <div className="declaration">
+                <p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p>
+                <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                  <div onClick={() => { if(pbBranch.map_url && pbBranch.map_url !== "#") window.open(pbBranch.map_url, "_blank"); else toast.info("Feedback link not set for this branch yet!"); }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
+                </div>
+              </div>
             ) : (
-              <div className="policies"><p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></div>
+              <div className="policies">
+                <p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul>
+                <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                  <div onClick={() => { if(pbBranch.map_url && pbBranch.map_url !== "#") window.open(pbBranch.map_url, "_blank"); else toast.info("Feedback link not set for this branch yet!"); }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
+                </div>
+              </div>
             )}
           </div>
           <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
@@ -500,19 +894,66 @@ export default function App() {
     );
   }
 
-  if (checkingSession) { return (<div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}><div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#0f172a' }}>Loading billing dashboard...</div>{isWakingUp && (<div style={{ marginTop: '20px', textAlign: 'center', padding: '15px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', maxWidth: '320px' }}><p style={{ margin: '0 0 15px 0', fontSize: '0.9rem', color: '#64748b' }}>The database server is currently waking up from sleep mode. This usually takes about <strong>30 to 60 seconds</strong>.</p><Button variant="outline" onClick={() => { localStorage.clear(); window.location.reload(); }} style={{ width: '100%', borderColor: '#ef4444', color: '#ef4444' }}>Force Quit & Clear Session</Button></div>)}</div>); }
-  if (!token) { return (<div className="login-shell"><Toaster position="bottom-right" /><form className="login-card" onSubmit={handleLogin}><h1 className="login-title">Jalaram Jewellers</h1><p className="login-subtitle">Enter passcode to access billing panel</p><Input type="password" value={passcode} onChange={(e) => setPasscode(e.target.value)} placeholder="Enter passcode" /><Button type="submit" disabled={loggingIn}>{loggingIn ? "Checking..." : "Login"}</Button></form></div>); }
+  if (checkingSession) {
+    return (
+      <div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#0f172a' }}>Loading billing dashboard...</div>
+        {isWakingUp && (
+          <div style={{ marginTop: '20px', textAlign: 'center', padding: '15px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', maxWidth: '320px' }}>
+            <p style={{ margin: '0 0 15px 0', fontSize: '0.9rem', color: '#64748b' }}>The database server is currently waking up from sleep mode. This usually takes about <strong>30 to 60 seconds</strong>.</p>
+            <Button variant="outline" onClick={() => { localStorage.clear(); window.location.reload(); }} style={{ width: '100%', borderColor: '#ef4444', color: '#ef4444' }}>Force Quit & Clear Session</Button>
+          </div>
+        )}
+      </div>
+    );
+  }
 
-  // FIX: Pure React inline styles replacing the `<style>` tag to prevent Virtual Keyboard resizing crashes
-  const isWide = windowWidth >= 600;
+  if (!token) {
+    return (
+      <div className="login-shell">
+        <Toaster position="bottom-right" />
+        <form className="login-card" onSubmit={handleLogin}>
+          <h1 className="login-title">Jalaram Jewellers</h1>
+          <p className="login-subtitle">Enter passcode to access billing panel</p>
+          <Input type="password" value={passcode} onChange={(e) => setPasscode(e.target.value)} placeholder="Enter passcode" />
+          <Button type="submit" disabled={loggingIn}>{loggingIn ? "Checking..." : "Login"}</Button>
+        </form>
+      </div>
+    );
+  }
+
+  // Safe Inline Styles for Split Screen (No <style> tags to crash the DOM!)
+  const isWide = windowWidth >= 650;
+  
   const containerStyle = {
-    display: "flex", flexDirection: isWide ? "row" : "column", height: isWide ? "calc(100vh - 85px)" : "auto", overflow: isWide ? "hidden" : "visible", gap: "20px", padding: "15px", maxWidth: "1600px", margin: "0 auto", boxSizing: "border-box", alignItems: "flex-start"
+    display: "flex", 
+    flexDirection: isWide ? "row" : "column", 
+    height: isWide ? "calc(100vh - 85px)" : "auto", 
+    overflow: isWide ? "hidden" : "visible", 
+    gap: "20px", 
+    padding: "15px", 
+    maxWidth: "1600px", 
+    margin: "0 auto", 
+    boxSizing: "border-box", 
+    alignItems: "flex-start"
   };
+  
   const leftPaneStyle = {
-    flex: 1.2, height: isWide ? "100%" : "auto", overflowY: isWide ? "auto" : "visible", paddingRight: isWide ? "10px" : "0", width: "100%"
+    flex: 1.2, 
+    height: isWide ? "100%" : "auto", 
+    overflowY: isWide ? "auto" : "visible", 
+    paddingRight: isWide ? "10px" : "0", 
+    width: "100%"
   };
+  
   const rightPaneStyle = {
-    flex: 1, height: isWide ? "100%" : "auto", overflowY: isWide ? "auto" : "visible", paddingLeft: isWide ? "10px" : "0", paddingRight: "5px", paddingBottom: isWide ? "50px" : "0", width: "100%"
+    flex: 1, 
+    height: isWide ? "100%" : "auto", 
+    overflowY: isWide ? "auto" : "visible", 
+    paddingLeft: isWide ? "10px" : "0", 
+    paddingRight: "5px", 
+    paddingBottom: isWide ? "50px" : "0", 
+    width: "100%"
   };
 
   return (
@@ -563,6 +1004,7 @@ export default function App() {
       </header>
 
       <main style={containerStyle}>
+        
         <div style={leftPaneStyle}>
           <section id="bill-print-root" className="bill-sheet" style={{ margin: 0, "--print-scale-factor": (printScale / 100).toFixed(3), zIndex: 1 }}>
             {(txType === "sale" ? isPaymentDone : isBalancePaid) && <div className="watermark-done">FULLY PAID</div>}
@@ -830,12 +1272,4 @@ export default function App() {
       {showAbout && (
         <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "500px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
           <div className="drawer-header"><h3>About This App</h3><Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowAbout(false)}><ArrowLeft className="drawer-back-icon" /><span>Back</span></Button></div>
-          <div className="cloud-note" style={{ marginTop: "15px", padding: "0 15px", boxSizing: "border-box" }}>
-            <h4>Cloud Database Setup</h4><ol><li>Create Supabase project and get project URL + service role key.</li><li>Add them in backend <code>SUPABASE_URL</code> and <code>SUPABASE_SERVICE_ROLE_KEY</code>.</li><li>Create <code>customers</code> and <code>number_counters</code> tables as in README.</li></ol>
-            <p className="cloud-status-text">Cloud status: {cloudStatus.enabled ? "Connected" : "Placeholder mode"} ({cloudStatus.mode})</p>
-          </div>
-        </section>
-      )}
-    </div>
-  );
-}
+          <div className="cloud-note" style={{ marginTop:
