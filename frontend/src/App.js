@@ -25,7 +25,11 @@ const defaultSettings = {
   email_color: "#475569", email_size: 13, email_font: "sans-serif", email_align: "center",
   silver_rate_per_gram: 240, making_charge_per_gram: 15, flat_mc_below_5g: 150, default_hsn: "7113",
   formula_note: "Line total = Weight x (Silver rate per gram + Making charge per gram)", logo_data_url: "", about_qr_data_url: STATIC_ABOUT_QR_URL, custom_fonts: [],
-  enter_as_tab: true, // NEW: Default setting for Enter-to-jump
+  enter_as_tab: true, 
+  shortcuts: [
+    { id: "s1", key: "s", ctrl: true, shift: false, action: "save_bill" },
+    { id: "s2", key: "n", ctrl: true, shift: false, action: "new_bill" }
+  ],
   branches: [
     { id: "B1", name: "Branch 1 (Old Town)", address: "Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2", map_url: "https://g.page/r/CVvnomQZn7zxEBE/review", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", gstin: "21AAUFJ1925F1ZH", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 },
     { id: "B2", name: "Branch 2 (Unit-2)", address: "Branch - 2 : Shop No.14, BMC Market Complex, Market Building, Near Petrol Pump, Unit-2, BBSR-9", map_url: "#", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", gstin: "21AAUFJ1925F1ZH", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 }
@@ -54,18 +58,7 @@ const ConnectWithUs = ({ phoneLink, instaLink = "https://www.instagram.com/jalar
   </div>
 );
 
-const UpiAppsRow = ({ upiUri }) => (
-  <div style={{ marginTop: "20px" }}>
-    <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Or select your app directly:</p>
-    <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
-      <a href={upiUri.replace("upi://pay", "phonepe://pay")} style={{ padding: "8px 16px", backgroundColor: "#5f259f", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>PhonePe</a>
-      <a href={upiUri.replace("upi://pay", "tez://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#1a73e8", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>G-Pay</a>
-      <a href={upiUri.replace("upi://pay", "paytmmp://pay")} style={{ padding: "8px 16px", backgroundColor: "#00baf2", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>Paytm</a>
-      <a href={upiUri.replace("upi://pay", "credpay://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#212121", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>CRED</a>
-    </div>
-  </div>
-);
-
+// FIX: Table forces pure mathematical recalculation so it NEVER prints a wrong rate visual
 const BillTable = ({ mode, items }) => (
   <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
     <thead>
@@ -90,15 +83,22 @@ const BillTable = ({ mode, items }) => (
       )}
     </thead>
     <tbody>
-      {items.map((item, idx) => (
-        <tr key={idx}>
-          {mode === "invoice" ? (
-            <><td>{item.sl_no || item.slNo}</td><td>{item.description || "-"}</td><td>{item.hsn || "-"}</td><td>{money(item.weight)}</td><td>{money(item.rate)}</td><td>{item.rupees}.{item.paise}</td></>
-          ) : (
-            <><td>{item.sl_no || item.slNo}</td><td>{item.description || "-"}</td><td>{money(item.weight)}</td><td>{money(item.rate)}</td><td>{item.rupees}</td><td>{item.paise}</td></>
-          )}
-        </tr>
-      ))}
+      {items.map((item, idx) => {
+        // Bulletproof dynamic display rate calculation for print
+        const displayRate = mode === "estimate" 
+            ? (num(item.quantity) > 0 ? num(item.amount) / num(item.quantity) : 0)
+            : (num(item.weight) > 0 ? num(item.amount) / num(item.weight) : 0);
+
+        return (
+          <tr key={idx}>
+            {mode === "invoice" ? (
+              <><td>{item.sl_no || item.slNo}</td><td>{item.description || "-"}</td><td>{item.hsn || "-"}</td><td>{money(item.weight)}</td><td>{money(displayRate)}</td><td>{item.rupees}.{item.paise}</td></>
+            ) : (
+              <><td>{item.sl_no || item.slNo}</td><td>{item.description || "-"}</td><td>{money(item.weight)}</td><td>{money(item.quantity)} x {money(displayRate)}</td><td>{item.rupees}</td><td>{item.paise}</td></>
+            )}
+          </tr>
+        );
+      })}
     </tbody>
   </table>
 );
@@ -120,7 +120,6 @@ const DesignSettingRow = ({ title, fieldPrefix, settings, setSettings }) => (
 
 // --- MAIN APP ---
 export default function App() {
-  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [isCompactView, setIsCompactView] = useState(window.innerWidth <= 520);
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
@@ -210,38 +209,40 @@ export default function App() {
   const activeGlobalBranch = (settings.branches || []).find(b => b.id === globalBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
   const activeBillBranch = (settings.branches || []).find(b => b.id === billBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
 
-  // FIX: Global Keyboard Shortcuts & "Enter-to-Tab" System
+  // FIX: Custom ShortCut Builder & Listener
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Open Settings: Ctrl + Shift + S
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 's') {
-        e.preventDefault(); setShowSettings(true); return;
-      }
-      // Save Bill: Ctrl + S
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-        e.preventDefault(); document.getElementById("save-bill-btn")?.click(); return;
-      }
-      // New Bill: Ctrl + N
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
-        e.preventDefault(); document.getElementById("new-bill-btn")?.click(); return;
-      }
-      // Enter-to-Jump functionality
+      const active = document.activeElement;
+
+      // 1. Enter-to-Jump functionality
       if ((settings.enter_as_tab ?? true) && e.key === 'Enter') {
-        const active = document.activeElement;
-        // Intercept ONLY on input fields and dropdowns, allowing buttons/textareas to work normally
         if (active && (active.tagName === 'INPUT' || active.tagName === 'SELECT') && active.type !== 'submit') {
           e.preventDefault();
           const focusable = Array.from(document.querySelectorAll('input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])'));
           const index = focusable.indexOf(active);
-          if (index > -1 && index < focusable.length - 1) {
-            focusable[index + 1].focus();
-          }
+          if (index > -1 && index < focusable.length - 1) focusable[index + 1].focus();
+          return;
         }
+      }
+
+      // 2. Custom Configured Shortcuts
+      const matchedSc = (settings.shortcuts || []).find(sc => 
+        sc.key && e.key.toLowerCase() === sc.key.toLowerCase() && 
+        !!sc.ctrl === (e.ctrlKey || e.metaKey) && 
+        !!sc.shift === e.shiftKey
+      );
+
+      if (matchedSc) {
+        e.preventDefault();
+        if (matchedSc.action === 'save_bill') document.getElementById('save-bill-btn')?.click();
+        if (matchedSc.action === 'new_bill') document.getElementById('new-bill-btn')?.click();
+        if (matchedSc.action === 'open_settings') setShowSettings(true);
+        if (matchedSc.action === 'add_item') document.getElementById('add-item-btn')?.click();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [settings.enter_as_tab]); // Dynamically update if the setting changes
+  }, [settings.shortcuts, settings.enter_as_tab]);
 
   useEffect(() => {
     if (settings.custom_fonts && settings.custom_fonts.length > 0) {
@@ -285,10 +286,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const handleResize = () => {
-      setIsCompactView(window.innerWidth <= 520);
-      setWindowWidth(window.innerWidth);
-    };
+    const handleResize = () => setIsCompactView(window.innerWidth <= 520);
     window.addEventListener("resize", handleResize); return () => window.removeEventListener("resize", handleResize);
   }, []);
 
@@ -413,9 +411,33 @@ export default function App() {
     let dbData = response.data || {};
     if (!dbData.branches) dbData.branches = defaultSettings.branches;
     let localFonts = []; const localFontsRaw = localStorage.getItem("jj_custom_fonts"); if (localFontsRaw) { try { localFonts = JSON.parse(localFontsRaw); } catch (e) {} }
-    const newSettings = { enter_as_tab: true, ...defaultSettings, ...dbData, logo_data_url: savedLogo || dbData.logo_data_url || "", about_qr_data_url: savedAboutQr || dbData.about_qr_data_url || STATIC_ABOUT_QR_URL, custom_fonts: dbData.custom_fonts || localFonts };
+    
+    // Merge dynamically loaded shortcuts or fallback to defaults
+    const loadedShortcuts = dbData.shortcuts && dbData.shortcuts.length > 0 ? dbData.shortcuts : defaultSettings.shortcuts;
+
+    const newSettings = { 
+        ...defaultSettings, 
+        ...dbData, 
+        shortcuts: loadedShortcuts,
+        logo_data_url: savedLogo || dbData.logo_data_url || "", 
+        about_qr_data_url: savedAboutQr || dbData.about_qr_data_url || STATIC_ABOUT_QR_URL, 
+        custom_fonts: dbData.custom_fonts || localFonts 
+    };
+    
     setSettings(newSettings);
     if (!(newSettings.branches || []).find(b => b.id === globalBranchId)) { setGlobalBranchId((newSettings.branches || [])[0].id); setBillBranchId((newSettings.branches || [])[0].id); }
+  };
+
+  const updateShortcut = (index, field, value) => {
+    const updated = [...(settings.shortcuts || [])];
+    updated[index][field] = value;
+    setSettings(prev => ({ ...prev, shortcuts: updated }));
+  };
+
+  const removeShortcut = (index) => {
+    const updated = [...(settings.shortcuts || [])];
+    updated.splice(index, 1);
+    setSettings(prev => ({ ...prev, shortcuts: updated }));
   };
 
   const reserveNumber = async (activeMode, activeBranch) => {
@@ -472,6 +494,7 @@ export default function App() {
       
       const amount = item.amount_override !== "" ? num(item.amount_override) : formulaAmount;
       
+      // Calculate true print rate dynamically to safeguard against database mismatches
       const rateForPrint = mode === "estimate" 
           ? (quantity > 0 ? amount / quantity : 0) 
           : (weight > 0 ? amount / weight : 0);
@@ -667,7 +690,9 @@ export default function App() {
       const amount = (item.amount !== undefined && item.amount !== null && item.amount !== "") ? num(item.amount) : (item.amount_override ? num(item.amount_override) : formulaAmount);
       const { rupees, paise } = splitAmount(amount);
       
-      const rateForPrint = weight > 0 ? (amount / quantity) / weight : 0;
+      const rateForPrint = publicBill.mode === "estimate" 
+          ? (quantity > 0 ? amount / quantity : 0) 
+          : (weight > 0 ? amount / weight : 0);
       
       return { ...item, sl_no: item.sl_no || (index + 1), rate: rateForPrint, amount, rupees, paise, weight, quantity };
     });
@@ -697,8 +722,7 @@ export default function App() {
   const upiAmountToPay = getUpiAmount(); const showDashboardUpi = upiAmountToPay > 0;
   const upiId = mode === "invoice" ? activeBillBranch.invoice_upi_id : activeBillBranch.estimate_upi_id;
   const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
-  const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
-
+  
   // --- PUBLIC VIEW ---
   if (isPublicView) {
     if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
@@ -812,6 +836,7 @@ export default function App() {
                 </>
               )}
 
+              {/* FIX: Removed all buttons, leaving only the clean QR code for public view */}
               {showPublicUpi && (
                 <div className="payment-qr-box">
                   <p className="scan-title">Scan Here For Payment (₹{money(publicUpiAmt)})</p>
@@ -875,6 +900,19 @@ export default function App() {
 
   return (
     <div className="billing-app">
+      {/* PURE CSS Layout to strictly force Dual-Panes on Landscape devices without buggy JS tracking */}
+      <style>{`
+        @media (min-width: 768px) {
+          .dual-pane-container { display: flex; flex-direction: row; height: calc(100vh - 75px); overflow: hidden; gap: 20px; padding: 15px; max-width: 1600px; margin: 0 auto; box-sizing: border-box; }
+          .dual-pane-left { flex: 1.3 1 400px; height: 100%; overflow-y: auto; padding-right: 15px; }
+          .dual-pane-right { flex: 1 1 350px; height: 100%; overflow-y: auto; padding-left: 5px; padding-right: 5px; padding-bottom: 50px; }
+        }
+        @media (max-width: 767px) {
+          .dual-pane-container { display: flex; flex-direction: column; gap: 20px; padding: 15px; box-sizing: border-box; }
+          .dual-pane-left, .dual-pane-right { width: 100%; overflow: visible; }
+        }
+      `}</style>
+
       <Toaster position="bottom-right" />
 
       <div style={{ position: "absolute", top: "-9999px", left: "-9999px", opacity: 0, pointerEvents: "none" }}>
@@ -972,12 +1010,12 @@ export default function App() {
         </div>
       </header>
 
-      {/* FIX: Independent Dual-Scroll zones for Table / Phone Landscape */}
-      <main style={{ display: "flex", flexDirection: windowWidth >= 750 ? "row" : "column", gap: "20px", alignItems: "flex-start", padding: "15px", maxWidth: "1600px", margin: "0 auto", height: windowWidth >= 750 ? "calc(100vh - 80px)" : "auto", overflow: "hidden" }}>
+      {/* Dual Pane Layout wrapper */}
+      <main className="dual-pane-container">
         
-        {/* LEFT SIDE: Bill Preview Scroll Zone */}
-        <div className="no-print-scroll-wrapper" style={{ flex: windowWidth >= 750 ? "1.2 1 400px" : "1 1 100%", width: "100%", height: "100%", overflowY: windowWidth >= 750 ? "auto" : "visible", paddingBottom: windowWidth >= 750 ? "50px" : "0" }}>
-          <section id="bill-print-root" className="bill-sheet" style={{ width: "100%", margin: 0, "--print-scale-factor": (printScale / 100).toFixed(3) }}>
+        {/* LEFT SIDE: Independent Bill Preview Scroll Pane */}
+        <div className="dual-pane-left">
+          <section id="bill-print-root" className="bill-sheet" style={{ margin: 0, "--print-scale-factor": (printScale / 100).toFixed(3), zIndex: 1 }}>
             {(txType === "sale" ? isPaymentDone : isBalancePaid) && <div className="watermark-done">FULLY PAID</div>}
             <div className="bill-header">
               <div className="logo-area">
@@ -1018,9 +1056,9 @@ export default function App() {
             </div>
 
             {items.length > 0 ? (
-              <BillTable mode={mode} items={computed.items} />
+               <BillTable mode={mode} items={computed.items} />
             ) : (
-              <div style={{ textAlign: "center", padding: "30px", border: "1px dashed #cbd5e1", margin: "20px 0", color: "#94a3b8" }}>Add items to see them on the bill</div>
+               <div style={{ textAlign: "center", padding: "30px", border: "1px dashed #cbd5e1", margin: "20px 0", color: "#94a3b8" }}>Add items to see them on the bill</div>
             )}
 
             <div className="sheet-bottom-stack">
@@ -1071,8 +1109,8 @@ export default function App() {
           </section>
         </div>
 
-        {/* RIGHT SIDE: Data Entry Scroll Zone */}
-        <aside className="controls no-print" style={{ flex: windowWidth >= 750 ? "1 1 350px" : "1 1 100%", width: "100%", height: windowWidth >= 750 ? "100%" : "auto", overflowY: windowWidth >= 750 ? "auto" : "visible", margin: 0, paddingRight: windowWidth >= 750 ? "10px" : "0", paddingBottom: windowWidth >= 750 ? "50px" : "0" }}>
+        {/* RIGHT SIDE: Independent Data Entry Scroll Pane */}
+        <aside className="controls no-print dual-pane-right">
           <div className="control-card">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
                 <h3 style={{ margin: 0 }}>Bill Details</h3>
@@ -1120,7 +1158,7 @@ export default function App() {
                 <Button type="button" variant="outline" onClick={() => { setItems((prev) => prev.filter((row) => row.id !== item.id)); markDirty(); }}>Remove</Button>
               </div>
             ))}
-            <Button type="button" onClick={() => { setItems((prev) => [...prev, createItem(settings.default_hsn)]); markDirty(); }} style={{ width: "100%", border: "2px dashed #94a3b8", backgroundColor: "#f8fafc", color: "#334155" }}>+ Add Item</Button>
+            <Button id="add-item-btn" type="button" onClick={() => { setItems((prev) => [...prev, createItem(settings.default_hsn)]); markDirty(); }} style={{ width: "100%", border: "2px dashed #94a3b8", backgroundColor: "#f8fafc", color: "#334155" }}>+ Add Item</Button>
           </div>
 
           <div className="control-card">
@@ -1438,14 +1476,28 @@ export default function App() {
                   <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Formula Note (Prints on bill)</label><Input value={settings.formula_note || ""} onChange={(e) => setSettings((prev) => ({ ...prev, formula_note: e.target.value }))} />
                 </div>
 
-                {/* FIX: Keyboard Shortcuts Box added to Settings tab */}
+                {/* FIX: Add New Custom Shortcuts Module */}
                 <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
-                  <h4 style={{ margin: "0 0 10px 0" }}>⌨️ Keyboard Shortcuts</h4>
-                  <p style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "10px", lineHeight: "1.6" }}>
-                    <strong>Ctrl + S:</strong> Save/Update Bill <br/>
-                    <strong>Ctrl + N:</strong> Start New Bill <br/>
-                    <strong>Ctrl + Shift + S:</strong> Open Settings
-                  </p>
+                  <h4 style={{ margin: "0 0 10px 0", display: "flex", justifyContent: "space-between" }}>⌨️ Custom Keyboard Shortcuts</h4>
+                  
+                  <div style={{ marginBottom: "15px" }}>
+                    {(settings.shortcuts || []).map((sc, index) => (
+                      <div key={sc.id} style={{ display: "flex", gap: "5px", marginBottom: "8px", alignItems: "center", flexWrap: "wrap", padding: "8px", backgroundColor: "white", borderRadius: "6px", border: "1px solid #cbd5e1" }}>
+                        <select value={sc.action} onChange={e => updateShortcut(index, 'action', e.target.value)} style={{ padding: "4px", borderRadius: "4px", border: "1px solid #cbd5e1", fontSize: "0.8rem" }}>
+                          <option value="save_bill">Save Bill</option>
+                          <option value="new_bill">New Bill</option>
+                          <option value="add_item">Add Item</option>
+                          <option value="open_settings">Open Settings</option>
+                        </select>
+                        <label style={{ fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "2px" }}><input type="checkbox" checked={sc.ctrl} onChange={e => updateShortcut(index, 'ctrl', e.target.checked)} /> Ctrl</label>
+                        <label style={{ fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "2px" }}><input type="checkbox" checked={sc.shift} onChange={e => updateShortcut(index, 'shift', e.target.checked)} /> Shift</label>
+                        <Input style={{ width: "40px", padding: "4px", textAlign: "center", height: "28px" }} maxLength={1} value={sc.key} onChange={e => updateShortcut(index, 'key', e.target.value.toLowerCase())} placeholder="Key" />
+                        <Button variant="outline" size="sm" onClick={() => removeShortcut(index)} style={{ height: "28px", padding: "0 8px", color: "red", borderColor: "red" }}>X</Button>
+                      </div>
+                    ))}
+                    <Button size="sm" variant="outline" onClick={() => setSettings(prev => ({ ...prev, shortcuts: [...(prev.shortcuts || []), { id: Date.now(), action: 'save_bill', ctrl: false, shift: false, key: '' }] }))} style={{ width: "100%", borderStyle: "dashed" }}>+ Add New Shortcut Command</Button>
+                  </div>
+
                   <label style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "0.85rem", cursor: "pointer", backgroundColor: "white", padding: "8px", border: "1px solid #cbd5e1", borderRadius: "6px" }}>
                     <input type="checkbox" checked={settings.enter_as_tab ?? true} onChange={(e) => setSettings(prev => ({ ...prev, enter_as_tab: e.target.checked }))} style={{ cursor: "pointer" }} />
                     <strong>Use 'Enter' / 'Return' key to jump to next input box</strong>
