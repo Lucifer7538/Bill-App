@@ -64,11 +64,11 @@ const BillTable = ({ mode, items }) => (
       {mode === "invoice" ? (
         <tr>
           <th style={{ width: "8%" }}>Sl. No.</th>
-          <th style={{ width: "30%" }}>DESCRIPTION</th>
+          <th style={{ width: "32%" }}>DESCRIPTION</th>
           <th style={{ width: "10%" }}>HSN</th>
-          <th style={{ width: "14%", whiteSpace: "normal" }}>WEIGHT (g)</th>
-          <th style={{ width: "18%", whiteSpace: "normal" }}>RATE Rs.</th>
-          <th style={{ width: "20%", whiteSpace: "normal" }}>AMOUNT</th>
+          <th style={{ width: "16%", whiteSpace: "normal" }}>WEIGHT (g)</th>
+          <th style={{ width: "16%", whiteSpace: "normal" }}>RATE Rs.</th>
+          <th style={{ width: "18%", whiteSpace: "normal" }}>AMOUNT</th>
         </tr>
       ) : (
         <tr>
@@ -116,7 +116,6 @@ const DesignSettingRow = ({ title, fieldPrefix, settings, setSettings }) => (
   </div>
 );
 
-// --- MAIN APP ---
 export default function App() {
   const [isCompactView, setIsCompactView] = useState(window.innerWidth <= 520);
   const [isDirty, setIsDirty] = useState(false);
@@ -207,10 +206,10 @@ export default function App() {
   const activeGlobalBranch = (settings.branches || []).find(b => b.id === globalBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
   const activeBillBranch = (settings.branches || []).find(b => b.id === billBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
 
-  // FIX: Added protection against virtual keyboard crashes (undefined e.key)
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (!e || !e.key) return; // Strict safety net for mobile keyboards
+      // Prevents crash from virtual keyboards emitting unidentified strings
+      if (!e || typeof e.key !== 'string') return;
 
       const active = document.activeElement;
 
@@ -242,6 +241,8 @@ export default function App() {
           case 'jump_customer': document.getElementById('jump-customer-name')?.focus(); break;
           case 'jump_phone': document.getElementById('jump-customer-phone')?.focus(); break;
           case 'jump_items': document.getElementById('jump-item-desc')?.focus(); break;
+          case 'jump_weight': document.getElementById('jump-weight')?.focus(); break;
+          case 'jump_rate': document.getElementById('jump-rate')?.focus(); break;
           case 'jump_discount': document.getElementById('jump-discount')?.focus(); break;
           case 'jump_payment': document.getElementById('jump-payment-method')?.focus(); break;
           default: break;
@@ -906,12 +907,12 @@ export default function App() {
   return (
     <div className="billing-app">
       <style>{`
-        @media (min-width: 768px) {
-          .dual-pane-container { display: flex; flex-direction: row; height: calc(100vh - 75px); overflow: hidden; gap: 20px; padding: 15px; max-width: 1600px; margin: 0 auto; box-sizing: border-box; }
-          .dual-pane-left { flex: 1.3 1 400px; height: 100%; overflow-y: auto; padding-right: 15px; }
-          .dual-pane-right { flex: 1 1 350px; height: 100%; overflow-y: auto; padding-left: 5px; padding-right: 5px; padding-bottom: 50px; }
+        @media (min-width: 600px) {
+          .dual-pane-container { display: flex; flex-direction: row; height: calc(100vh - 85px); overflow: hidden; gap: 20px; padding: 15px; max-width: 1600px; margin: 0 auto; box-sizing: border-box; align-items: flex-start; }
+          .dual-pane-left { flex: 1.2; height: 100%; overflow-y: auto; padding-right: 10px; }
+          .dual-pane-right { flex: 1; height: 100%; overflow-y: auto; padding-left: 10px; padding-right: 5px; padding-bottom: 50px; }
         }
-        @media (max-width: 767px) {
+        @media (max-width: 599px) {
           .dual-pane-container { display: flex; flex-direction: column; gap: 20px; padding: 15px; box-sizing: border-box; }
           .dual-pane-left, .dual-pane-right { width: 100%; overflow: visible; }
         }
@@ -1151,10 +1152,10 @@ export default function App() {
               <div key={item.id} className="item-row-editor">
                 <Input id={index === 0 ? "jump-item-desc" : undefined} value={item.description} onChange={(e) => updateItem(item.id, "description", e.target.value)} placeholder="Description" />
                 <Input value={item.hsn} onChange={(e) => updateItem(item.id, "hsn", e.target.value)} placeholder="HSN" />
-                <Input value={item.weight} onChange={(e) => updateItem(item.id, "weight", e.target.value)} placeholder="Weight" />
+                <Input id={index === 0 ? "jump-weight" : undefined} value={item.weight} onChange={(e) => updateItem(item.id, "weight", e.target.value)} placeholder="Weight" />
                 <Input value={item.quantity} onChange={(e) => updateItem(item.id, "quantity", e.target.value)} placeholder="Qty" />
                 <Input value={item.mc_override} onChange={(e) => updateItem(item.id, "mc_override", e.target.value)} placeholder="Custom MC ₹/g" />
-                <Input value={item.rate_override} onChange={(e) => updateItem(item.id, "rate_override", e.target.value)} placeholder="Custom Silver Rate" />
+                <Input id={index === 0 ? "jump-rate" : undefined} value={item.rate_override} onChange={(e) => updateItem(item.id, "rate_override", e.target.value)} placeholder="Custom Silver Rate" />
                 <Input value={item.amount_override} onChange={(e) => updateItem(item.id, "amount_override", e.target.value)} placeholder="Fixed Amount ₹" />
                 <Button type="button" variant="outline" onClick={() => { setItems((prev) => prev.filter((row) => row.id !== item.id)); markDirty(); }}>Remove</Button>
               </div>
@@ -1491,6 +1492,8 @@ export default function App() {
                           <option value="jump_customer">Jump to: Customer Name</option>
                           <option value="jump_phone">Jump to: Phone Number</option>
                           <option value="jump_items">Jump to: Item Details</option>
+                          <option value="jump_weight">Jump to: Item Weight</option>
+                          <option value="jump_rate">Jump to: Custom Silver Rate</option>
                           <option value="jump_discount">Jump to: Discount Box</option>
                           <option value="jump_payment">Jump to: Payment Method</option>
                         </select>
