@@ -71,21 +71,21 @@ const BillTable = ({ mode, items }) => (
       {mode === "invoice" ? (
         <tr>
           <th style={{ width: "8%" }}>Sl. No.</th>
-          <th style={{ width: "38%" }}>DESCRIPTION</th>
+          {/* FIX: Rebalanced widths and allowed all headers to wrap cleanly to fix the visual bug */}
+          <th style={{ width: "32%" }}>DESCRIPTION</th>
           <th style={{ width: "10%" }}>HSN</th>
-          <th style={{ width: "14%", whiteSpace: "nowrap" }}>WEIGHT (g)</th>
-          {/* FIX: Set wrap to normal to prevent RATE Rs text overlap */}
-          <th style={{ width: "15%", whiteSpace: "normal" }}>RATE Rs.</th>
-          <th style={{ width: "15%", whiteSpace: "normal" }}>AMOUNT</th>
+          <th style={{ width: "16%", whiteSpace: "normal" }}>WEIGHT (g)</th>
+          <th style={{ width: "16%", whiteSpace: "normal" }}>RATE Rs.</th>
+          <th style={{ width: "18%", whiteSpace: "normal" }}>AMOUNT</th>
         </tr>
       ) : (
         <tr>
           <th style={{ width: "8%" }}>Sl. No.</th>
-          <th style={{ width: "40%" }}>Particulars</th>
-          <th style={{ width: "14%", whiteSpace: "nowrap" }}>Weight</th>
-          <th style={{ width: "18%", whiteSpace: "nowrap" }}>Qty x Rate</th>
-          <th style={{ width: "12%", whiteSpace: "nowrap" }}>Rs.</th>
-          <th style={{ width: "8%", whiteSpace: "nowrap" }}>Ps.</th>
+          <th style={{ width: "36%" }}>Particulars</th>
+          <th style={{ width: "16%", whiteSpace: "normal" }}>Weight</th>
+          <th style={{ width: "20%", whiteSpace: "normal" }}>Qty x Rate</th>
+          <th style={{ width: "12%", whiteSpace: "normal" }}>Rs.</th>
+          <th style={{ width: "8%", whiteSpace: "normal" }}>Ps.</th>
         </tr>
       )}
     </thead>
@@ -120,6 +120,8 @@ const DesignSettingRow = ({ title, fieldPrefix, settings, setSettings }) => (
 
 // --- MAIN APP ---
 export default function App() {
+  // FIX: Dynamic Live Tracking of Window Width for precise layout breaking
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [isCompactView, setIsCompactView] = useState(window.innerWidth <= 520);
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
@@ -147,7 +149,6 @@ export default function App() {
   const [isNumberLoading, setIsNumberLoading] = useState(false);
   const [billDate, setBillDate] = useState(today());
 
-  // FIX: Start with 0 items. You have to click "Add Item" to add one!
   const [customer, setCustomer] = useState({ id: "", name: "", phone: "", address: "", email: "" });
   const [suggestions, setSuggestions] = useState([]);
   const [items, setItems] = useState([]);
@@ -210,26 +211,16 @@ export default function App() {
   const activeGlobalBranch = (settings.branches || []).find(b => b.id === globalBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
   const activeBillBranch = (settings.branches || []).find(b => b.id === billBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
 
-  // FIX: Global Keyboard Shortcuts Listener!
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Open Settings: Ctrl + Shift + S
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        setShowSettings(true);
-        return;
+        e.preventDefault(); setShowSettings(true); return;
       }
-      // Save Bill: Ctrl + S
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-        e.preventDefault();
-        document.getElementById("save-bill-btn")?.click();
-        return;
+        e.preventDefault(); document.getElementById("save-bill-btn")?.click(); return;
       }
-      // New Bill: Ctrl + N
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
-        e.preventDefault();
-        document.getElementById("new-bill-btn")?.click();
-        return;
+        e.preventDefault(); document.getElementById("new-bill-btn")?.click(); return;
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -277,8 +268,12 @@ export default function App() {
     }
   }, []);
 
+  // FIX: Live window width tracking added to the resize listener
   useEffect(() => {
-    const handleResize = () => setIsCompactView(window.innerWidth <= 520);
+    const handleResize = () => {
+      setIsCompactView(window.innerWidth <= 520);
+      setWindowWidth(window.innerWidth);
+    };
     window.addEventListener("resize", handleResize); return () => window.removeEventListener("resize", handleResize);
   }, []);
 
@@ -439,7 +434,6 @@ export default function App() {
   }, [customer.phone, customer.name, token, isPublicView, authHeaders]);
 
   const computed = useMemo(() => {
-    // FIX: Strong Number parsing for mathematical integrity
     const baseSilverRate = Number(settings.silver_rate_per_gram) || 0;
     const baseMCPerGram = Number(settings.making_charge_per_gram) || 0;
     const flatMCBelow5g = Number(settings.flat_mc_below_5g) || 0;
@@ -453,7 +447,7 @@ export default function App() {
       if (item.mc_override !== "") { 
           mcAmount = weight * num(item.mc_override); 
       } else if (flatMCBelow5g > 0 && weight > 0 && weight <= 5) { 
-          mcAmount = flatMCBelow5g; // FIX: Flat MC definitively applies <= 5g
+          mcAmount = flatMCBelow5g;
       } else { 
           mcAmount = weight * baseMCPerGram; 
       }
@@ -463,7 +457,6 @@ export default function App() {
       
       const amount = item.amount_override !== "" ? num(item.amount_override) : formulaAmount;
       
-      // FIX: Ensure rate displays cleanly without mathematically confusing the customer
       const rateForPrint = mode === "estimate" 
           ? (quantity > 0 ? amount / quantity : 0) 
           : (weight > 0 ? amount / weight : 0);
@@ -623,7 +616,6 @@ export default function App() {
       const imageData = canvas.toDataURL("image/png", 1.0); const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" }); const pageWidth = pdf.internal.pageSize.getWidth(); const pageHeight = (canvas.height * pageWidth) / canvas.width;
       pdf.addImage(imageData, "PNG", 0, 0, pageWidth, pageHeight); 
       
-      // FIX: Stripped out broken iOS ObjectURL handling to prevent about:blank screen.
       pdf.save(`${filename}.pdf`); 
       toast.success("PDF Downloaded Successfully");
     } catch (error) { toast.error("Failed to download PDF."); }
@@ -967,11 +959,11 @@ export default function App() {
         </div>
       </header>
 
-      {/* FIX: New responsive flexbox split-screen layout for Tablet/PC views */}
+      {/* FIX: Improved responsive Flexbox Layout for Mobile Landscape & Tablets */}
       <main style={{ display: "flex", flexWrap: "wrap", gap: "20px", alignItems: "flex-start", padding: "15px", maxWidth: "1600px", margin: "0 auto" }}>
         
         {/* LEFT SIDE: Bill Preview */}
-        <section id="bill-print-root" className="bill-sheet" style={{ flex: "1.5 1 600px", minWidth: "350px", position: window.innerWidth > 900 ? "sticky" : "relative", top: window.innerWidth > 900 ? "20px" : "auto", margin: 0, "--print-scale-factor": (printScale / 100).toFixed(3), zIndex: 1 }}>
+        <section id="bill-print-root" className="bill-sheet" style={{ flex: "1.5 1 400px", minWidth: "320px", position: windowWidth > 750 ? "sticky" : "relative", top: windowWidth > 750 ? "20px" : "auto", margin: 0, "--print-scale-factor": (printScale / 100).toFixed(3), zIndex: 1 }}>
           {(txType === "sale" ? isPaymentDone : isBalancePaid) && <div className="watermark-done">FULLY PAID</div>}
           <div className="bill-header">
             <div className="logo-area">
@@ -1065,7 +1057,7 @@ export default function App() {
         </section>
 
         {/* RIGHT SIDE: Data Entry Controls */}
-        <aside className="controls no-print" style={{ flex: "1 1 400px", minWidth: "300px", margin: 0 }}>
+        <aside className="controls no-print" style={{ flex: "1 1 350px", minWidth: "300px", margin: 0 }}>
           <div className="control-card">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
                 <h3 style={{ margin: 0 }}>Bill Details</h3>
@@ -1113,7 +1105,6 @@ export default function App() {
                 <Button type="button" variant="outline" onClick={() => { setItems((prev) => prev.filter((row) => row.id !== item.id)); markDirty(); }}>Remove</Button>
               </div>
             ))}
-            {/* FIX: Explicitly click to add items instead of generating blanks on load */}
             <Button type="button" onClick={() => { setItems((prev) => [...prev, createItem(settings.default_hsn)]); markDirty(); }} style={{ width: "100%", border: "2px dashed #94a3b8", backgroundColor: "#f8fafc", color: "#334155" }}>+ Add Item</Button>
           </div>
 
