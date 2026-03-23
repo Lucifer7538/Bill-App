@@ -45,9 +45,20 @@ const BillTable = ({ mode, items }) => (
   </table>
 );
 
+const DesignSettingRow = ({ title, fieldPrefix, settings, setSettings }) => (
+  <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
+    <h4 style={{ margin: "0 0 10px 0" }}>{title}</h4>
+    {fieldPrefix !== "address" && (<Input value={Array.isArray(settings[fieldPrefix]) ? settings[fieldPrefix].join(", ") : settings[fieldPrefix] || ""} onChange={(e) => setSettings((prev) => ({ ...prev, [fieldPrefix]: fieldPrefix === 'phone_numbers' ? e.target.value.split(",").map(i=>i.trim()).filter(Boolean) : e.target.value }))} placeholder={title} style={{ marginBottom: "10px", width: "100%", boxSizing: "border-box" }} />)}
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", width: "100%" }}>
+      <input type="color" value={settings[`${fieldPrefix}_color`] || "#000000"} onChange={(e) => setSettings((prev) => ({ ...prev, [`${fieldPrefix}_color`]: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px", flexShrink: 0 }} title="Color" />
+      <Input type="number" min="8" max="60" value={settings[`${fieldPrefix}_size`] || 14} onChange={(e) => setSettings((prev) => ({ ...prev, [`${fieldPrefix}_size`]: Number(e.target.value) }))} style={{ width: "70px", padding: "0 5px", textAlign: "center", flexShrink: 0 }} title="Font Size (px)" />
+      <select value={settings[`${fieldPrefix}_font`] || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, [`${fieldPrefix}_font`]: e.target.value }))} style={{ flex: "1 1 120px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "120px" }}><FontSelectOptions customFonts={settings.custom_fonts || []} /></select>
+      <select value={settings[`${fieldPrefix}_align`] || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, [`${fieldPrefix}_align`]: e.target.value }))} style={{ flex: "1 1 80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "80px" }}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select>
+    </div>
+  </div>
+);
+
 export default function App() {
-  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
-  const [isCompactView, setIsCompactView] = useState(window.innerWidth <= 520);
   const [isDirty, setIsDirty] = useState(false); const markDirty = () => setIsDirty(true);
   const [isPublicView, setIsPublicView] = useState(false); const [publicBill, setPublicBill] = useState(null); const [publicSettings, setPublicSettings] = useState(null); const [publicLoading, setPublicLoading] = useState(false);
   const [passcode, setPasscode] = useState(""); const [token, setToken] = useState(localStorage.getItem("jj_auth_token") || ""); const [checkingSession, setCheckingSession] = useState(Boolean(token)); const [loggingIn, setLoggingIn] = useState(false);
@@ -69,30 +80,31 @@ export default function App() {
   const activeGlobalBranch = settings.branches?.find(b => b.id === globalBranchId) || settings.branches?.[0] || defaultSettings.branches[0];
   const activeBillBranch = settings.branches?.find(b => b.id === billBranchId) || settings.branches?.[0] || defaultSettings.branches[0];
 
+  // FIX: Isolated the CSS injection completely out of the React DOM render to stop iOS WebKit Keyboard crashes
+  useEffect(() => {
+    if (!document.getElementById('jj-safe-layout')) {
+      const s = document.createElement('style'); s.id = 'jj-safe-layout';
+      s.innerHTML = `@media(min-width:750px){.dual-pane-container{display:flex;flex-direction:row;height:calc(100vh - 85px);overflow:hidden;gap:20px;padding:15px;max-width:1600px;margin:0 auto;box-sizing:border-box;align-items:flex-start;}.dual-pane-left{flex:1.2;height:100%;overflow-y:auto;padding-right:10px;width:100%;}.dual-pane-right{flex:1;height:100%;overflow-y:auto;padding-left:10px;padding-bottom:50px;width:100%;}}@media(max-width:749px){.dual-pane-container{display:flex;flex-direction:column;gap:20px;padding:15px;box-sizing:border-box;}.dual-pane-left,.dual-pane-right{width:100%;overflow:visible;}}`;
+      document.head.appendChild(s);
+    }
+  }, []);
+
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (!e || typeof e.key !== 'string') return; const active = document.activeElement;
-      if ((settings.enter_as_tab ?? true) && e.key === 'Enter' && active && (active.tagName === 'INPUT' || active.tagName === 'SELECT') && active.type !== 'submit') {
-        e.preventDefault(); const focusable = Array.from(document.querySelectorAll('input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])'));
-        const index = focusable.indexOf(active); if (index > -1 && index < focusable.length - 1) focusable[index + 1].focus(); return;
+      if (!e || typeof e.key !== 'string') return; 
+      const active = document.activeElement;
+      if ((settings.enter_as_tab ?? true) && e.key === 'Enter' && active && ['INPUT','SELECT'].includes(active.tagName) && active.type !== 'submit') {
+        e.preventDefault(); const f = Array.from(document.querySelectorAll('input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])'));
+        const idx = f.indexOf(active); if (idx > -1 && idx < f.length - 1) f[idx + 1].focus(); return;
       }
-      const matchedSc = (settings.shortcuts || []).find(sc => sc && sc.key && typeof e.key === 'string' && e.key.toLowerCase() === String(sc.key).toLowerCase() && !!sc.ctrl === (e.ctrlKey || e.metaKey) && !!sc.shift === e.shiftKey);
-      if (matchedSc) {
-        e.preventDefault();
-        switch(matchedSc.action) {
-          case 'save_bill': document.getElementById('save-bill-btn')?.click(); break;
-          case 'new_bill': document.getElementById('new-bill-btn')?.click(); break;
-          case 'add_item': document.getElementById('add-item-btn')?.click(); break;
-          case 'open_settings': setShowSettings(true); break;
-          case 'jump_customer': document.getElementById('jump-customer-name')?.focus(); break;
-          case 'jump_phone': document.getElementById('jump-customer-phone')?.focus(); break;
-          case 'jump_items': document.getElementById('jump-item-desc')?.focus(); break;
-          case 'jump_weight': document.getElementById('jump-weight')?.focus(); break;
-          case 'jump_rate': document.getElementById('jump-rate')?.focus(); break;
-          case 'jump_discount': document.getElementById('jump-discount')?.focus(); break;
-          case 'jump_payment': document.getElementById('jump-payment-method')?.focus(); break;
-          default: break;
-        }
+      const sc = (settings.shortcuts || []).find(s => s?.key && e.key.toLowerCase() === s.key.toLowerCase() && !!s.ctrl === (e.ctrlKey||e.metaKey) && !!s.shift === e.shiftKey);
+      if (sc) {
+        e.preventDefault(); const act = sc.action;
+        if(act==='save_bill') document.getElementById('save-bill-btn')?.click();
+        else if(act==='new_bill') document.getElementById('new-bill-btn')?.click();
+        else if(act==='add_item') document.getElementById('add-item-btn')?.click();
+        else if(act==='open_settings') setShowSettings(true);
+        else if(act.startsWith('jump-')) document.getElementById(act)?.focus();
       }
     };
     window.addEventListener('keydown', handleKeyDown); return () => window.removeEventListener('keydown', handleKeyDown);
@@ -100,7 +112,7 @@ export default function App() {
 
   useEffect(() => { if (settings.custom_fonts) settings.custom_fonts.forEach(f => registerFont(f.name, f.dataUrl)); }, [settings.custom_fonts]);
   useEffect(() => { const params = new URLSearchParams(window.location.search); const viewDoc = params.get("view"); if (viewDoc) { setIsPublicView(true); setPublicLoading(true); axios.get(`${API}/bills/public/${viewDoc}`).then(res => { setPublicBill(res.data.bill); const s = { ...defaultSettings, ...res.data.settings }; if (s.custom_fonts) s.custom_fonts.forEach(f => registerFont(f.name, f.dataUrl)); setPublicSettings(s); }).catch(() => setPublicBill("NOT_FOUND")).finally(() => setPublicLoading(false)); } }, []);
-  useEffect(() => { const handleResize = () => { setIsCompactView(window.innerWidth <= 520); setWindowWidth(window.innerWidth); }; window.addEventListener("resize", handleResize); return () => window.removeEventListener("resize", handleResize); }, []);
+  useEffect(() => { const handleEsc = (event) => { if (event.key !== "Escape") return; setShowSettings(false); setShowAbout(false); setShowRecentBills(false); setShowLedger(false); setShowFeedbackModal(false); }; window.addEventListener("keydown", handleEsc); return () => window.removeEventListener("keydown", handleEsc); }, []);
   useEffect(() => { localStorage.setItem("jj_print_scale", String(clampPrintScale(printScale))); }, [printScale]);
   useEffect(() => { if (!isPublicView && token) { axios.get(`${API}/auth/verify`, { headers: authHeaders }).catch(() => { localStorage.removeItem("jj_auth_token"); setToken(""); }).finally(() => setCheckingSession(false)); } }, [token, isPublicView, authHeaders]);
   useEffect(() => { if (showRecentBills && token && !isPublicView) { axios.get(`${API}/bills/recent?limit=500&branch_filter=ALL`, { headers: authHeaders }).then(res => setRecentBillsList(res.data)).catch(() => toast.error("Failed to load")); } }, [showRecentBills, token, isPublicView, authHeaders]);
@@ -141,33 +153,23 @@ export default function App() {
   const getUpiAmount = () => { if (txType === "sale") return paymentMethod === "Split" ? Math.max(0, computed.grandTotal - num(splitCash)) : computed.grandTotal; if (!isAdvancePaid && (advanceMethod === "UPI" || advanceMethod === "Split")) return advanceMethod === "Split" ? Math.max(0, num(advanceAmount) - num(advanceSplitCash)) : num(advanceAmount); if (isAdvancePaid && !isBalancePaid && (balanceMethod === "UPI" || balanceMethod === "Split")) return balanceMethod === "Split" ? Math.max(0, Math.max(0, computed.grandTotal - num(advanceAmount)) - num(balanceSplitCash)) : Math.max(0, computed.grandTotal - num(advanceAmount)); return 0; };
   const upiAmt = getUpiAmount(); const upiId = mode === "invoice" ? activeBillBranch.invoice_upi_id : activeBillBranch.estimate_upi_id; const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmt)}&cu=INR&tn=Bill_${documentNumber}`;
 
-  if (isPublicView) {
-    if (publicLoading) return <div className="loading-screen">Loading...</div>; if (!publicBill) return <div className="loading-screen">Not Found</div>;
-    const publicSettingsObj = publicSettings || defaultSettings;
-    const pbBranch = publicSettingsObj.branches?.find(b => b.id === publicBill.branch_id) || publicSettingsObj.branches?.[0] || defaultSettings.branches[0];
-    const isSale = publicBill.tx_type === "sale" || !publicBill.tx_type;
-    const gTotal = num(publicBill.totals?.grand_total || 0);
-    let pUpiAmt = 0;
-    if (isSale) { pUpiAmt = publicBill.payment_method === "Split" ? num(publicBill.split_upi) : gTotal; } else { if (!publicBill.is_advance_paid && (publicBill.advance_method === "UPI" || publicBill.advance_method === "Split")) { pUpiAmt = publicBill.advance_method === "Split" ? Math.max(0, num(publicBill.advance_amount) - num(publicBill.advance_split_cash)) : num(publicBill.advance_amount); } else if (publicBill.is_advance_paid && !publicBill.is_balance_paid && (publicBill.balance_method === "UPI" || publicBill.balance_method === "Split")) { const bal = Math.max(0, gTotal - num(publicBill.advance_amount)); pUpiAmt = publicBill.balance_method === "Split" ? Math.max(0, bal - num(publicBill.balance_split_cash)) : bal; } }
-    const sUpi = pUpiAmt > 0 && !(isSale ? publicBill.is_payment_done : publicBill.is_balance_paid);
-    const pUpiId = publicBill.mode === "invoice" ? pbBranch.invoice_upi_id : pbBranch.estimate_upi_id;
-    const pUpiUri = `upi://pay?pa=${pUpiId}&pn=${encodeURIComponent(publicSettingsObj.shop_name)}&am=${money(pUpiAmt)}&cu=INR&tn=Bill_${publicBill.document_number}`;
-
+  if (isPublicView && publicBill) {
     return (
       <div className="billing-app" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px' }}>
         <section id="public-bill-root" className="bill-sheet" style={{ "--print-scale-factor": 1, position: 'relative', zIndex: 1 }}>
           <div className="bill-header">
-            <div className="logo-area">{publicSettingsObj.logo_data_url && <img src={publicSettingsObj.logo_data_url} alt="Logo" className="shop-logo" crossOrigin="anonymous" />}<h2 className="sheet-shop-title">{publicSettingsObj.shop_name}</h2><p className="sheet-tagline">{publicSettingsObj.tagline}</p></div>
-            <div className="contact-area"><div className="contact-address">{pbBranch.address}</div><div>{publicSettingsObj.phone_numbers?.join(" | ")}</div></div>
+            <div className="logo-area">{publicSettings?.logo_data_url && <img src={publicSettings.logo_data_url} alt="Logo" className="shop-logo" crossOrigin="anonymous" />}<h2 className="sheet-shop-title">{publicSettings?.shop_name}</h2><p className="sheet-tagline">{publicSettings?.tagline}</p></div>
+            <div className="contact-area"><div className="contact-address">{publicSettings?.branches?.[0]?.address}</div><div>{publicSettings?.phone_numbers?.join(" | ")}</div></div>
           </div>
           <div className="sheet-banner">{publicBill.mode === "invoice" ? "TAX INVOICE" : "ESTIMATE"}</div>
           <div className="meta-grid"><p><strong>No:</strong> {publicBill.document_number}</p><p><strong>Date:</strong> {publicBill.date}</p></div>
           <div className="customer-box"><p><strong>Name:</strong> {publicBill.customer_name || "-"}</p><p><strong>Address:</strong> {publicBill.customer_address || "-"}</p><p><strong>Phone:</strong> {publicBill.customer_phone || "-"}</p></div>
           <BillTable mode={publicBill.mode} items={publicBill.items || []} />
           <div className="sheet-bottom-stack">
-            <div className="totals"><div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(gTotal)}</strong></div></div>
-            {sUpi && (<div className="payment-qr-box"><p className="scan-title">Scan Here For Payment</p><img src={`https://quickchart.io/qr?text=${encodeURIComponent(pUpiUri)}&size=220`} alt="QR Code" className="upi-qr" crossOrigin="anonymous" /></div>)}
-            <ConnectWithUs phoneLink={publicSettingsObj.phone_numbers?.[0]} />
+            <div className="totals">
+              <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(publicBill.totals?.grand_total || 0)}</strong></div>
+            </div>
+            <ConnectWithUs phoneLink={publicSettings?.phone_numbers?.[0]} />
           </div>
         </section>
       </div>
@@ -179,10 +181,6 @@ export default function App() {
 
   return (
     <div className="billing-app">
-      <style dangerouslySetInnerHTML={{ __html: `
-        @media (min-width: 600px) { .dual-pane-container { display: flex; flex-direction: row; height: calc(100vh - 85px); overflow: hidden; gap: 20px; padding: 15px; max-width: 1600px; margin: 0 auto; box-sizing: border-box; align-items: flex-start; } .dual-pane-left { flex: 1.2; height: 100%; overflow-y: auto; padding-right: 10px; width: 100%; } .dual-pane-right { flex: 1; height: 100%; overflow-y: auto; padding-left: 10px; padding-bottom: 50px; width: 100%; } }
-        @media (max-width: 599px) { .dual-pane-container { display: flex; flex-direction: column; gap: 20px; padding: 15px; box-sizing: border-box; } .dual-pane-left, .dual-pane-right { width: 100%; overflow: visible; } }
-      `}} />
       <Toaster position="bottom-right" />
       
       <header className="top-bar no-print">
@@ -256,7 +254,7 @@ export default function App() {
               <div style={{ marginTop: '15px' }}>
                 <select id="jump-payment-method" value={paymentMethod} onChange={e => { setPaymentMethod(e.target.value); markDirty(); }} className="native-select"><option value="" disabled>Select Method</option><option value="Cash">Cash</option><option value="UPI">UPI</option><option value="Split">Split</option></select>
                 {paymentMethod === "Split" && (<div style={{ display: "flex", gap: "10px", marginTop: "10px" }}><Input inputMode="decimal" value={splitCash} onChange={e => { setSplitCash(e.target.value); markDirty(); }} placeholder="Cash Received" /><Input value={`UPI: ₹${money(Math.max(0, computed.grandTotal - num(splitCash)))}`} disabled /></div>)}
-                <div style={{ marginTop: "15px", padding: "12px", backgroundColor: isPaymentDone ? "#dcfce7" : "#fef3c7", border: `1.5px solid ${isPaymentDone ? "#22c55e" : "#f59e0b"}`, borderRadius: "8px", display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} onClick={() => { setIsPaymentDone(!isPaymentDone); markDirty(); }}><input type="checkbox" checked={isPaymentDone} onChange={e => { setIsPaymentDone(e.target.checked); markDirty(); }} style={{ width: "20px", height: "20px", cursor: "pointer" }} /><strong style={{ color: isPaymentDone ? "#166534" : "#b45309" }}>{isPaymentDone ? "✅ PAYMENT DONE" : "⏳ PENDING"}</strong></div>
+                <div style={{ marginTop: "15px", padding: "12px", backgroundColor: isPaymentDone ? "#dcfce7" : "#fef3c7", border: `1.5px solid ${isPaymentDone ? "#22c55e" : "#f59e0b"}`, borderRadius: "8px", display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} onClick={() => { setIsPaymentDone(!isPaymentDone); markDirty(); }}><input type="checkbox" checked={isPaymentDone} onChange={e => { setIsPaymentDone(e.target.checked); markDirty(); }} style={{ width: "20px", height: "20px", cursor: "pointer" }} /><strong style={{ color: isPaymentDone ? "#166534" : "#b45309" }}>{isPaymentDone ? "✅ PAYMENT DONE" : "⏳ PAYMENT PENDING"}</strong></div>
               </div>
             )}
           </div>
@@ -280,12 +278,12 @@ export default function App() {
             {settingsTab === "technical" && (
               <div className="settings-technical-tab" style={{ width: "100%" }}>
                 <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
-                  <h4 style={{ margin: "0 0 10px 0" }}>⌨️ Custom Keyboard Shortcuts</h4>
+                  <h4 style={{ margin: "0 0 10px 0", display: "flex", justifyContent: "space-between" }}>⌨️ Custom Keyboard Shortcuts</h4>
                   <div style={{ marginBottom: "15px" }}>
                     {(settings.shortcuts || []).map((sc, index) => (
                       <div key={sc.id} style={{ display: "flex", gap: "5px", marginBottom: "8px", alignItems: "center", flexWrap: "wrap", padding: "8px", backgroundColor: "white", borderRadius: "6px", border: "1px solid #cbd5e1" }}>
                         <select value={sc.action} onChange={e => updateShortcut(index, 'action', e.target.value)} style={{ padding: "4px", borderRadius: "4px", border: "1px solid #cbd5e1", fontSize: "0.8rem" }}>
-                          <option value="save_bill">Save Bill</option><option value="new_bill">New Bill</option><option value="add_item">Add Item Line</option><option value="open_settings">Open Settings</option><option value="jump_customer">Jump to: Customer Name</option><option value="jump_phone">Jump to: Phone Number</option><option value="jump_items">Jump to: Item Details</option><option value="jump_weight">Jump to: Item Weight</option><option value="jump_rate">Jump to: Custom Silver Rate</option><option value="jump_discount">Jump to: Discount</option><option value="jump_payment">Jump to: Payment Method</option>
+                          <option value="save_bill">Save Bill</option><option value="new_bill">New Bill</option><option value="add_item">Add Item Line</option><option value="open_settings">Open Settings</option><option value="jump-customer-name">Jump to: Customer Name</option><option value="jump-customer-phone">Jump to: Phone Number</option><option value="jump-item-desc">Jump to: Item Details</option><option value="jump-weight">Jump to: Item Weight</option><option value="jump-rate">Jump to: Custom Silver Rate</option><option value="jump-discount">Jump to: Discount</option><option value="jump-payment-method">Jump to: Payment Method</option>
                         </select>
                         <label style={{ fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "2px" }}><input type="checkbox" checked={sc.ctrl} onChange={e => updateShortcut(index, 'ctrl', e.target.checked)} /> Ctrl</label>
                         <label style={{ fontSize: "0.8rem", display: "flex", alignItems: "center", gap: "2px" }}><input type="checkbox" checked={sc.shift} onChange={e => updateShortcut(index, 'shift', e.target.checked)} /> Shift</label>
