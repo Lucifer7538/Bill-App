@@ -53,25 +53,12 @@ const ConnectWithUs = ({ phoneLink, instaLink = "https://www.instagram.com/jalar
   </div>
 );
 
-const UpiAppsRow = ({ upiUri }) => (
-  <div style={{ marginTop: "20px" }}>
-    <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Or select your app directly:</p>
-    <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
-      <a href={upiUri.replace("upi://pay", "phonepe://pay")} style={{ padding: "8px 16px", backgroundColor: "#5f259f", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>PhonePe</a>
-      <a href={upiUri.replace("upi://pay", "tez://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#1a73e8", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>G-Pay</a>
-      <a href={upiUri.replace("upi://pay", "paytmmp://pay")} style={{ padding: "8px 16px", backgroundColor: "#00baf2", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>Paytm</a>
-      <a href={upiUri.replace("upi://pay", "credpay://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#212121", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>CRED</a>
-    </div>
-  </div>
-);
-
 const BillTable = ({ mode, items }) => (
   <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
     <thead>
       {mode === "invoice" ? (
         <tr>
           <th style={{ width: "8%" }}>Sl. No.</th>
-          {/* FIX: Rebalanced widths and allowed all headers to wrap cleanly to fix the visual bug */}
           <th style={{ width: "32%" }}>DESCRIPTION</th>
           <th style={{ width: "10%" }}>HSN</th>
           <th style={{ width: "16%", whiteSpace: "normal" }}>WEIGHT (g)</th>
@@ -81,9 +68,10 @@ const BillTable = ({ mode, items }) => (
       ) : (
         <tr>
           <th style={{ width: "8%" }}>Sl. No.</th>
-          <th style={{ width: "36%" }}>Particulars</th>
+          <th style={{ width: "38%" }}>Particulars</th>
           <th style={{ width: "16%", whiteSpace: "normal" }}>Weight</th>
-          <th style={{ width: "20%", whiteSpace: "normal" }}>Qty x Rate</th>
+          {/* FIX: Column renamed to properly reflect Rate display */}
+          <th style={{ width: "18%", whiteSpace: "normal" }}>RATE Rs.</th>
           <th style={{ width: "12%", whiteSpace: "normal" }}>Rs.</th>
           <th style={{ width: "8%", whiteSpace: "normal" }}>Ps.</th>
         </tr>
@@ -95,7 +83,8 @@ const BillTable = ({ mode, items }) => (
           {mode === "invoice" ? (
             <><td>{item.sl_no || item.slNo}</td><td>{item.description || "-"}</td><td>{item.hsn || "-"}</td><td>{money(item.weight)}</td><td>{money(item.rate)}</td><td>{item.rupees}.{item.paise}</td></>
           ) : (
-            <><td>{item.sl_no || item.slNo}</td><td>{item.description || "-"}</td><td>{money(item.weight)}</td><td>{money(item.quantity)} x {money(item.rate)}</td><td>{item.rupees}</td><td>{item.paise}</td></>
+            /* FIX: Only pure Rate math is printed in the table cell now */
+            <><td>{item.sl_no || item.slNo}</td><td>{item.description || "-"}</td><td>{money(item.weight)}</td><td>{money(item.rate)}</td><td>{item.rupees}</td><td>{item.paise}</td></>
           )}
         </tr>
       ))}
@@ -120,7 +109,6 @@ const DesignSettingRow = ({ title, fieldPrefix, settings, setSettings }) => (
 
 // --- MAIN APP ---
 export default function App() {
-  // FIX: Dynamic Live Tracking of Window Width for precise layout breaking
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   const [isCompactView, setIsCompactView] = useState(window.innerWidth <= 520);
   const [isDirty, setIsDirty] = useState(false);
@@ -268,7 +256,6 @@ export default function App() {
     }
   }, []);
 
-  // FIX: Live window width tracking added to the resize listener
   useEffect(() => {
     const handleResize = () => {
       setIsCompactView(window.innerWidth <= 520);
@@ -457,9 +444,8 @@ export default function App() {
       
       const amount = item.amount_override !== "" ? num(item.amount_override) : formulaAmount;
       
-      const rateForPrint = mode === "estimate" 
-          ? (quantity > 0 ? amount / quantity : 0) 
-          : (weight > 0 ? amount / weight : 0);
+      // FIX: Calculate True Rate per Gram to resolve confusion
+      const rateForPrint = weight > 0 ? (amount / quantity) / weight : 0;
 
       const { rupees, paise } = splitAmount(amount);
       return { ...item, slNo: index + 1, rate: rateForPrint, quantity, amount, rupees, paise, weight };
@@ -652,9 +638,7 @@ export default function App() {
       const amount = (item.amount !== undefined && item.amount !== null && item.amount !== "") ? num(item.amount) : (item.amount_override ? num(item.amount_override) : formulaAmount);
       const { rupees, paise } = splitAmount(amount);
       
-      const rateForPrint = publicBill.mode === "estimate" 
-          ? (quantity > 0 ? amount / quantity : 0) 
-          : (weight > 0 ? amount / weight : 0);
+      const rateForPrint = weight > 0 ? (amount / quantity) / weight : 0;
       
       return { ...item, sl_no: item.sl_no || (index + 1), rate: rateForPrint, amount, rupees, paise, weight, quantity };
     });
@@ -799,11 +783,12 @@ export default function App() {
                 </>
               )}
 
+              {/* FIX: Removed App buttons. Dynamic QR Code strictly renders. */}
               {showPublicUpi && (
                 <div className="payment-qr-box">
-                  <p className="scan-title" style={{ marginBottom: "15px" }}>Click Below to Pay ₹{money(publicUpiAmt)}</p>
-                  <a href={publicUpiUri} style={{ display: "block", padding: "12px 20px", backgroundColor: "#16a34a", color: "white", textDecoration: "none", fontWeight: "bold", borderRadius: "8px", textAlign: "center", boxShadow: "0 4px 6px rgba(0,0,0,0.1)" }}>📱 Pay ₹{money(publicUpiAmt)} via Any UPI App</a>
-                  <UpiAppsRow upiUri={publicUpiUri} />
+                  <p className="scan-title">Scan Here For Payment (₹{money(publicUpiAmt)})</p>
+                  <img src={`https://quickchart.io/qr?text=${encodeURIComponent(publicUpiUri)}&size=220`} alt="Dynamic payment QR" className="upi-qr" crossOrigin="anonymous" />
+                  <p className="upi-id">UPI: {publicUpiId}</p>
                 </div>
               )}
             </div>
@@ -959,11 +944,11 @@ export default function App() {
         </div>
       </header>
 
-      {/* FIX: Improved responsive Flexbox Layout for Mobile Landscape & Tablets */}
-      <main style={{ display: "flex", flexWrap: "wrap", gap: "20px", alignItems: "flex-start", padding: "15px", maxWidth: "1600px", margin: "0 auto" }}>
+      {/* FIX: Improved flex layout using active window tracking. Guaranteed to trigger split-screen when horizontal! */}
+      <main style={{ display: "flex", flexDirection: windowWidth >= 700 ? "row" : "column", gap: "20px", alignItems: "flex-start", padding: "15px", maxWidth: "1600px", margin: "0 auto" }}>
         
         {/* LEFT SIDE: Bill Preview */}
-        <section id="bill-print-root" className="bill-sheet" style={{ flex: "1.5 1 400px", minWidth: "320px", position: windowWidth > 750 ? "sticky" : "relative", top: windowWidth > 750 ? "20px" : "auto", margin: 0, "--print-scale-factor": (printScale / 100).toFixed(3), zIndex: 1 }}>
+        <section id="bill-print-root" className="bill-sheet" style={{ width: windowWidth >= 700 ? "calc(55% - 10px)" : "100%", position: windowWidth >= 700 ? "sticky" : "relative", top: windowWidth >= 700 ? "20px" : "auto", margin: 0, "--print-scale-factor": (printScale / 100).toFixed(3), zIndex: 1 }}>
           {(txType === "sale" ? isPaymentDone : isBalancePaid) && <div className="watermark-done">FULLY PAID</div>}
           <div className="bill-header">
             <div className="logo-area">
@@ -1057,7 +1042,7 @@ export default function App() {
         </section>
 
         {/* RIGHT SIDE: Data Entry Controls */}
-        <aside className="controls no-print" style={{ flex: "1 1 350px", minWidth: "300px", margin: 0 }}>
+        <aside className="controls no-print" style={{ width: windowWidth >= 700 ? "calc(45% - 10px)" : "100%", margin: 0 }}>
           <div className="control-card">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
                 <h3 style={{ margin: 0 }}>Bill Details</h3>
