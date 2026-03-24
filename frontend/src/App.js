@@ -779,7 +779,6 @@ export default function App() {
                 </>
               )}
 
-              {/* Dynamic QR specifically implemented here, buttons removed */}
               {showPublicUpi && (
                 <div className="payment-qr-box" style={{ textAlign: "center", marginTop: "15px" }}>
                   <p className="scan-title" style={{ marginBottom: "15px", fontWeight: "bold" }}>Scan Here to Pay ₹{money(publicUpiAmt)}</p>
@@ -1172,4 +1171,105 @@ export default function App() {
                   {paymentMethod === "Split" && (
                     <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
                       <Input value={splitCash} onChange={(e) => { setSplitCash(e.target.value); markDirty(); }} placeholder="Cash Received ₹" />
-                      <Input value={`UPI: ₹${money(Math.max(0, computed.grandTotal - num(splitCash)))}`} disabled style
+                      <Input value={`UPI: ₹${money(Math.max(0, computed.grandTotal - num(splitCash)))}`} disabled style={{ fontWeight: "bold", backgroundColor: "#f1f5f9" }} />
+                    </div>
+                  )}
+                  <div style={{ marginTop: "15px", display: "flex", alignItems: "center", gap: "10px" }}>
+                     <input type="checkbox" id="paymentDone" checked={isPaymentDone} onChange={(e) => { setIsPaymentDone(e.target.checked); markDirty(); }} style={{ width: "18px", height: "18px", cursor: "pointer" }} />
+                     <label htmlFor="paymentDone" style={{ fontWeight: "bold", cursor: "pointer", color: isPaymentDone ? "#16a34a" : "#475569" }}>{isPaymentDone ? "Payment Received ✅" : "Mark as Paid"}</label>
+                  </div>
+                </div>
+              )}
+
+              {txType !== "sale" && (
+                 <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                    <label className="select-label">Advance Payment</label>
+                    <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+                       <Input value={advanceAmount} onChange={(e) => { setAdvanceAmount(e.target.value); markDirty(); }} placeholder="Advance ₹" />
+                       <select value={advanceMethod} onChange={(e) => { setAdvanceMethod(e.target.value); markDirty(); }} className="native-select">
+                          <option value="">Method</option><option value="Cash">Cash</option><option value="UPI">UPI</option><option value="Card">Card</option><option value="Split">Split</option>
+                       </select>
+                    </div>
+                    {advanceMethod === "Split" && (
+                       <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+                          <Input value={advanceSplitCash} onChange={(e) => { setAdvanceSplitCash(e.target.value); markDirty(); }} placeholder="Cash ₹" />
+                          <Input value={`UPI: ₹${money(Math.max(0, num(advanceAmount) - num(advanceSplitCash)))}`} disabled />
+                       </div>
+                    )}
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "15px" }}>
+                       <input type="checkbox" id="advancePaid" checked={isAdvancePaid} onChange={(e) => { setIsAdvancePaid(e.target.checked); markDirty(); }} style={{ width: "18px", height: "18px" }} />
+                       <label htmlFor="advancePaid">Advance Received</label>
+                    </div>
+
+                    <label className="select-label">Balance Payment</label>
+                    <select value={balanceMethod} onChange={(e) => { setBalanceMethod(e.target.value); markDirty(); }} className="native-select" style={{ marginBottom: "10px" }}>
+                       <option value="">Method</option><option value="Cash">Cash</option><option value="UPI">UPI</option><option value="Card">Card</option><option value="Split">Split</option>
+                    </select>
+                    {balanceMethod === "Split" && (
+                       <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+                          <Input value={balanceSplitCash} onChange={(e) => { setBalanceSplitCash(e.target.value); markDirty(); }} placeholder="Cash ₹" />
+                          <Input value={`UPI: ₹${money(Math.max(0, (computed.grandTotal - num(advanceAmount)) - num(balanceSplitCash)))}`} disabled />
+                       </div>
+                    )}
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                       <input type="checkbox" id="balancePaid" checked={isBalancePaid} onChange={(e) => { setIsBalancePaid(e.target.checked); markDirty(); }} style={{ width: "18px", height: "18px" }} />
+                       <label htmlFor="balancePaid">Balance Received</label>
+                    </div>
+                 </div>
+              )}
+              
+              <div style={{ marginTop: "15px" }}>
+                <label className="select-label">Notes / Remarks</label>
+                <textarea value={notes} onChange={(e) => { setNotes(e.target.value); markDirty(); }} placeholder="Additional notes..." style={{ width: "100%", padding: "10px", borderRadius: "6px", border: "1px solid #cbd5e1", minHeight: "80px", fontFamily: "inherit" }} />
+              </div>
+            </div>
+            
+            <div className="control-card">
+               <h3>System Actions</h3>
+               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <Button variant="outline" onClick={() => setShowSettings(true)}><Building2 size={16} style={{marginRight: "8px"}}/> Open Settings</Button>
+                  <Button variant="outline" onClick={() => setShowRecentBills(true)}><History size={16} style={{marginRight: "8px"}}/> Recent Bills</Button>
+               </div>
+            </div>
+
+          </div>
+        </aside>
+      </main>
+
+      {/* Fallback Modals */}
+      {showSettings && (
+         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", justifyContent: "center", alignItems: "center" }}>
+            <div style={{ background: "white", padding: "30px", borderRadius: "12px", width: "90%", maxWidth: "500px" }}>
+               <h2>Settings</h2>
+               <p>Settings panel is simplified for this deployment fix.</p>
+               <div style={{ display: "flex", gap: "10px", marginTop: "20px" }}>
+                 <Button onClick={saveSettings}>Save Settings</Button>
+                 <Button variant="outline" onClick={() => setShowSettings(false)}>Close</Button>
+               </div>
+            </div>
+         </div>
+      )}
+
+      {showRecentBills && (
+         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", justifyContent: "center", alignItems: "center" }}>
+            <div style={{ background: "white", padding: "30px", borderRadius: "12px", width: "90%", maxWidth: "500px" }}>
+               <h2>Recent Bills</h2>
+               <p>Recent bills view is simplified for this deployment fix.</p>
+               <Button variant="outline" onClick={() => setShowRecentBills(false)} style={{ marginTop: "20px" }}>Close</Button>
+            </div>
+         </div>
+      )}
+
+      {showLedger && (
+         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", justifyContent: "center", alignItems: "center" }}>
+            <div style={{ background: "white", padding: "30px", borderRadius: "12px", width: "90%", maxWidth: "500px" }}>
+               <h2>Cashbook & Ledger</h2>
+               <p>Ledger view is simplified for this deployment fix.</p>
+               <Button variant="outline" onClick={() => setShowLedger(false)} style={{ marginTop: "20px" }}>Close</Button>
+            </div>
+         </div>
+      )}
+
+    </div>
+  );
+}
