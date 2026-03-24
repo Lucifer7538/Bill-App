@@ -1207,17 +1207,4 @@ export default function App() {
                     <div style={{ flex: "1 1 150px" }}><label className="select-label">{logType === "add" ? "To Vault" : "From Vault"}</label><select value={logSourceVault} onChange={(e) => setLogSourceVault(e.target.value)} className="native-select"><option value="cash">Cash Drawer</option><option value="estimate_bank">Estimate Bank</option><option value="invoice_bank">GST Bank</option></select></div>
                     {logType === "exchange" && (<div style={{ flex: "1 1 150px" }}><label className="select-label">To Vault</label><select value={logTargetVault} onChange={(e) => setLogTargetVault(e.target.value)} className="native-select"><option value="cash">Cash Drawer</option><option value="estimate_bank">Estimate Bank</option><option value="invoice_bank">GST Bank</option></select></div>)}
                   </div>
-                  <label className="select-label">Reason / Remark</label><Input placeholder="e.g. Paid for Lunch, Transfer to Bank..." value={logReason} onChange={(e) => setLogReason(e.target.value)} style={{ marginBottom: "15px" }} />
-                  <div style={{ display: "flex", gap: "10px" }}><Button variant="outline" onClick={() => setShowLogForm(false)} style={{ flex: 1 }}>Cancel</Button><Button onClick={submitLedgerLog} disabled={submittingLog} style={{ flex: 2, backgroundColor: "#16a34a" }}>{submittingLog ? "Saving..." : "Save Transaction"}</Button></div>
-                </div>
-              )}
-            </div>
-
-            <div style={{ marginBottom: "30px" }}>
-              <h4 style={{ margin: "0 0 15px 0", fontSize: "1.1rem", color: "#1e293b" }}>Today's Bill Collections ({today()})</h4>
-              {ledgerLoading ? (<p>Calculating today's sales...</p>) : (
-                <div style={{ display: "flex", flexDirection: "column", gap: "10px", backgroundColor: "#f8fafc", padding: "15px", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", borderBottom: "1px solid #e2e8f0", paddingBottom: "8px" }}><span style={{ color: "#475569" }}>Physical Cash Collected:</span><strong style={{ color: "#d97706" }}>+ ₹{money(todaysTotalCash)}</strong></div>
-                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", borderBottom: "1px solid #e2e8f0", paddingBottom: "8px" }}><span style={{ color: "#475569" }}>Estimate Bank Collected:</span><strong style={{ color: "#2563eb" }}>+ ₹{money(todaysTotalEstBank)}</strong></div>
-                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap" }}><span style={{ color: "#475569" }}>GST Bank Collected:</span><strong style={{ color: "#dc2626" }}>+ ₹{money(todaysTotalInvBank)}</strong></div>
-                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", marginTop: "10px", paddingTop: "10px", borderTop: "2px solid #cbd5e1" }}><span style={{ fontWeight: "bold", fontSize: "1.1rem" }}>Total Day Sales:</span><strong style={{ fontSize:
+                  <label className="select-label">Reason / Remark</label><Input placeholder="e.g. Paid for Lunch, Transfer to Bank..." value={logReason} onChange={(e) => setLogReason(e.target.value)} style={{ marginBottom: "15px"
