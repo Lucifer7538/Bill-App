@@ -12,6 +12,19 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL ? BACKEND_URL.replace(/\/$/, '') : ""}/api`;
 const STATIC_ABOUT_QR_URL = process.env.REACT_APP_ABOUT_QR_URL;
 
+const AVAILABLE_ACTIONS = [
+  { id: "save", label: "Save Bill" },
+  { id: "new", label: "New Bill" },
+  { id: "whatsapp", label: "Share via WhatsApp" },
+  { id: "email", label: "Share via Email" },
+  { id: "pdf", label: "Download PDF" },
+  { id: "print", label: "Print Bill" },
+  { id: "ledger", label: "Open Daily Ledger" },
+  { id: "recent", label: "Open Recent Bills" },
+  { id: "settings", label: "Open Settings" },
+  { id: "add_item", label: "Add Item Row" }
+];
+
 const createItem = (defaultHsn = "") => ({
   id: `${Date.now()}-${Math.random()}`, description: "", hsn: defaultHsn, weight: "", quantity: "1", rate_override: "", amount_override: "", mc_override: ""
 });
@@ -25,7 +38,11 @@ const defaultSettings = {
   email_color: "#475569", email_size: 13, email_font: "sans-serif", email_align: "center",
   silver_rate_per_gram: 240, making_charge_per_gram: 15, flat_mc_below_5g: 150, default_hsn: "7113",
   formula_note: "Line total = Weight x (Silver rate per gram + Making charge per gram)", logo_data_url: "", about_qr_data_url: STATIC_ABOUT_QR_URL, custom_fonts: [],
-  shortcuts: { save: "ctrl+s", new: "ctrl+n", whatsapp: "ctrl+w" },
+  shortcuts: [
+    { action: "save", key: "ctrl+s" },
+    { action: "new", key: "ctrl+n" },
+    { action: "whatsapp", key: "ctrl+w" }
+  ],
   branches: [
     { id: "B1", name: "Branch 1 (Old Town)", address: "Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2", map_url: "https://g.page/r/CVvnomQZn7zxEBE/review", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", gstin: "21AAUFJ1925F1ZH", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 },
     { id: "B2", name: "Branch 2 (Unit-2)", address: "Branch - 2 : Shop No.14, BMC Market Complex, Market Building, Near Petrol Pump, Unit-2, BBSR-9", map_url: "#", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", gstin: "21AAUFJ1925F1ZH", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 }
@@ -363,8 +380,15 @@ export default function App() {
     const savedAboutQr = localStorage.getItem("jj_about_qr_data_url");
     let dbData = response.data || {};
     if (!dbData.branches) dbData.branches = defaultSettings.branches;
+    
+    // Convert old shortcut object to new dynamic array format safely
+    let parsedShortcuts = dbData.shortcuts || defaultSettings.shortcuts;
+    if (parsedShortcuts && !Array.isArray(parsedShortcuts)) {
+      parsedShortcuts = Object.keys(parsedShortcuts).map(k => ({ action: k, key: parsedShortcuts[k] }));
+    }
+
     let localFonts = []; const localFontsRaw = localStorage.getItem("jj_custom_fonts"); if (localFontsRaw) { try { localFonts = JSON.parse(localFontsRaw); } catch (e) {} }
-    const newSettings = { ...defaultSettings, ...dbData, logo_data_url: savedLogo || dbData.logo_data_url || "", about_qr_data_url: savedAboutQr || dbData.about_qr_data_url || STATIC_ABOUT_QR_URL, custom_fonts: dbData.custom_fonts || localFonts };
+    const newSettings = { ...defaultSettings, ...dbData, shortcuts: parsedShortcuts, logo_data_url: savedLogo || dbData.logo_data_url || "", about_qr_data_url: savedAboutQr || dbData.about_qr_data_url || STATIC_ABOUT_QR_URL, custom_fonts: dbData.custom_fonts || localFonts };
     setSettings(newSettings);
     if (!(newSettings.branches || []).find(b => b.id === globalBranchId)) { setGlobalBranchId((newSettings.branches || [])[0].id); setBillBranchId((newSettings.branches || [])[0].id); }
     setItems((prev) => { if (prev.length === 1 && !prev[0].description && !prev[0].weight && !prev[0].hsn) return [{ ...prev[0], hsn: newSettings.default_hsn }]; return prev; });
@@ -638,38 +662,48 @@ export default function App() {
     if (isPublicView || !token) return;
 
     const handleKeyDown = (e) => {
+      // 1. Enter Key Navigation
       if (e.key === 'Enter' && e.target.tagName.toLowerCase() !== 'textarea') {
         e.preventDefault();
         const focusable = Array.from(document.querySelectorAll('input:not([disabled]), select:not([disabled]), button:not([disabled]), textarea:not([disabled])'))
           .filter(el => el.offsetParent !== null);
-        
         const index = focusable.indexOf(e.target);
-        if (index > -1 && index < focusable.length - 1) {
-          focusable[index + 1].focus();
-        }
+        if (index > -1 && index < focusable.length - 1) focusable[index + 1].focus();
         return;
       }
 
+      // 2. Custom Shortcuts Builder
       let keys = [];
       if (e.ctrlKey || e.metaKey) keys.push('ctrl');
       if (e.altKey) keys.push('alt');
       if (e.shiftKey) keys.push('shift');
-      
-      if (!['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
-        keys.push(e.key.toLowerCase());
-      }
+      if (!['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) keys.push(e.key.toLowerCase());
       
       const combo = keys.join('+');
-      const s = settings.shortcuts || defaultSettings.shortcuts;
+      const sList = Array.isArray(settings.shortcuts) ? settings.shortcuts : [];
+      const matchedShortcut = sList.find(s => s.key === combo);
 
-      if (combo === s.save) { e.preventDefault(); saveBill(); }
-      else if (combo === s.new) { e.preventDefault(); handleNewBillClick(); }
-      else if (combo === s.whatsapp) { e.preventDefault(); shareWhatsApp(); }
+      if (matchedShortcut) { 
+        e.preventDefault(); 
+        switch(matchedShortcut.action) {
+          case "save": saveBill(); break;
+          case "new": handleNewBillClick(); break;
+          case "whatsapp": shareWhatsApp(); break;
+          case "email": shareEmail(); break;
+          case "pdf": downloadPdf("bill-print-root", documentNumber || mode); break;
+          case "print": window.print(); break;
+          case "ledger": setShowLedger(true); break;
+          case "recent": setShowRecentBills(true); setBillSearchQuery(""); setRecentBranchFilter("ALL"); setRecentModeFilter("ALL"); setRecentDateFilter("ALL"); break;
+          case "settings": setShowSettings(true); break;
+          case "add_item": setItems((prev) => [...prev, createItem(settings.default_hsn)]); markDirty(); break;
+          default: break;
+        }
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [settings.shortcuts, isPublicView, token, saveBill, handleNewBillClick, shareWhatsApp]);
+  }, [settings.shortcuts, isPublicView, token, saveBill, handleNewBillClick, shareWhatsApp, shareEmail, documentNumber, mode, settings.default_hsn]);
 
   // --- PUBLIC VIEW ---
   if (isPublicView) {
@@ -1403,38 +1437,66 @@ export default function App() {
 
                 {/* ⌨️ KEYBOARD SHORTCUTS BOX */}
                 <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
-                  <h4 style={{ margin: "0 0 10px 0" }}>⌨️ Keyboard Shortcuts & Navigation</h4>
+                  <h4 style={{ margin: "0 0 10px 0" }}>⌨️ Custom Keyboard Shortcuts</h4>
                   <p style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "15px", marginTop: 0 }}>
-                    Use combinations like <strong>ctrl+s</strong>, <strong>alt+n</strong>, or <strong>ctrl+shift+w</strong>. <br/>
-                    <em>Note: Pressing <strong>Enter / Return</strong> will now automatically jump to the next input box.</em>
+                    Map keys (like <strong>ctrl+s</strong>, <strong>alt+n</strong>) to app functions.<br/>
+                    <em>Note: Pressing <strong>Enter</strong> automatically jumps to the next input box.</em>
                   </p>
                   
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
-                    <div style={{ flex: "1 1 150px" }}>
-                      <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Save Bill</label>
-                      <Input 
-                        value={settings.shortcuts?.save || ""} 
-                        onChange={(e) => setSettings(prev => ({...prev, shortcuts: {...prev.shortcuts, save: e.target.value.toLowerCase()}}))} 
-                        placeholder="e.g. ctrl+s" 
-                      />
+                  {(Array.isArray(settings.shortcuts) ? settings.shortcuts : []).map((sc, idx) => (
+                    <div key={idx} style={{ display: "flex", gap: "10px", marginBottom: "10px", alignItems: "flex-end", flexWrap: "wrap" }}>
+                      <div style={{ flex: "1 1 150px" }}>
+                        <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Action</label>
+                        <select 
+                          className="native-select" 
+                          value={sc.action} 
+                          onChange={(e) => {
+                            const newSc = [...settings.shortcuts];
+                            newSc[idx].action = e.target.value;
+                            setSettings(prev => ({...prev, shortcuts: newSc}));
+                            markDirty();
+                          }}
+                        >
+                          {AVAILABLE_ACTIONS.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ flex: "1 1 150px" }}>
+                        <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Key Combo</label>
+                        <Input 
+                          value={sc.key} 
+                          onChange={(e) => {
+                            const newSc = [...settings.shortcuts];
+                            newSc[idx].key = e.target.value.toLowerCase();
+                            setSettings(prev => ({...prev, shortcuts: newSc}));
+                            markDirty();
+                          }} 
+                          placeholder="e.g. ctrl+p" 
+                        />
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        onClick={() => {
+                          const newSc = settings.shortcuts.filter((_, i) => i !== idx);
+                          setSettings(prev => ({...prev, shortcuts: newSc}));
+                          markDirty();
+                        }} 
+                        style={{ borderColor: "#ef4444", color: "#ef4444", flexShrink: 0 }}
+                      >
+                        Remove
+                      </Button>
                     </div>
-                    <div style={{ flex: "1 1 150px" }}>
-                      <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>New Bill</label>
-                      <Input 
-                        value={settings.shortcuts?.new || ""} 
-                        onChange={(e) => setSettings(prev => ({...prev, shortcuts: {...prev.shortcuts, new: e.target.value.toLowerCase()}}))} 
-                        placeholder="e.g. ctrl+n" 
-                      />
-                    </div>
-                    <div style={{ flex: "1 1 150px" }}>
-                      <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>WhatsApp Link</label>
-                      <Input 
-                        value={settings.shortcuts?.whatsapp || ""} 
-                        onChange={(e) => setSettings(prev => ({...prev, shortcuts: {...prev.shortcuts, whatsapp: e.target.value.toLowerCase()}}))} 
-                        placeholder="e.g. ctrl+w" 
-                      />
-                    </div>
-                  </div>
+                  ))}
+                  
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setSettings(prev => ({...prev, shortcuts: [...(Array.isArray(prev.shortcuts) ? prev.shortcuts : []), { action: "save", key: "" }]}));
+                      markDirty();
+                    }} 
+                    style={{ marginTop: "5px", borderStyle: "dashed", width: "100%" }}
+                  >
+                    <Plus size={16} style={{marginRight: "5px"}} /> Add New Shortcut
+                  </Button>
                 </div>
 
                 <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
