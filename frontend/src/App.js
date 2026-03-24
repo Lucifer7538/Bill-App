@@ -338,6 +338,7 @@ export default function App() {
             const clonedNode = clonedDoc.getElementById(`bulk-bill-${bill.document_number}`);
             if (clonedNode) {
               clonedNode.style.width = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.padding = "20px";
+              clonedNode.style.height = "auto"; clonedNode.style.overflow = "visible"; // Added to fix clipping
               const images = clonedNode.getElementsByTagName('img'); for (let img of images) img.crossOrigin = "anonymous";
             }
           }
@@ -590,7 +591,10 @@ export default function App() {
         onclone: (clonedDoc) => {
           const clonedNode = clonedDoc.getElementById(elementId);
           if (clonedNode) { 
-             clonedNode.style.width = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.position = "absolute"; clonedNode.style.top = "0"; clonedNode.style.left = "0"; clonedNode.style.margin = "0"; clonedNode.style.padding = "20px"; clonedNode.style.boxSizing = "border-box";
+             clonedNode.style.width = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.minWidth = "800px"; 
+             clonedNode.style.position = "absolute"; clonedNode.style.top = "0"; clonedNode.style.left = "0"; 
+             clonedNode.style.margin = "0"; clonedNode.style.padding = "20px"; clonedNode.style.boxSizing = "border-box";
+             clonedNode.style.height = "auto"; clonedNode.style.overflow = "visible"; // Fix for PDF cropping
              const images = clonedNode.getElementsByTagName('img'); for (let img of images) img.crossOrigin = "anonymous"; 
           }
         }
@@ -731,6 +735,14 @@ export default function App() {
 
     return (
       <div className="billing-app" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px' }}>
+        <style>{`
+          @media print {
+            body, html { height: auto !important; overflow: visible !important; background-color: white !important; }
+            .main-layout { display: block !important; height: auto !important; overflow: visible !important; }
+            .bill-sheet { height: auto !important; overflow: visible !important; flex: none !important; width: 100% !important; max-width: 100% !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; border: none !important; }
+            .controls, .top-bar, .side-drawer, .no-print { display: none !important; }
+          }
+        `}</style>
         <Toaster position="bottom-right" />
         {!(isSale ? publicBill.is_payment_done : publicBill.is_balance_paid) && (
           <div className="no-print" onClick={handleWifiClick} style={{ width: "100%", maxWidth: "800px", backgroundColor: "#eff6ff", border: "2px solid #3b82f6", borderRadius: "8px", padding: "12px", marginBottom: "20px", display: "flex", justifyContent: "center", alignItems: "center", gap: "10px", color: "#1d4ed8", fontWeight: "bold", cursor: "pointer", boxShadow: "0 4px 6px rgba(0,0,0,0.1)" }}>
@@ -880,6 +892,14 @@ export default function App() {
 
   return (
     <div className="billing-app">
+      <style>{`
+        @media print {
+          body, html { height: auto !important; overflow: visible !important; background-color: white !important; }
+          .main-layout { display: block !important; height: auto !important; overflow: visible !important; }
+          .bill-sheet { height: auto !important; overflow: visible !important; flex: none !important; width: 100% !important; max-width: 100% !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; border: none !important; }
+          .controls, .top-bar, .side-drawer, .no-print { display: none !important; }
+        }
+      `}</style>
       <Toaster position="bottom-right" />
 
       <div style={{ position: "absolute", top: "-9999px", left: "-9999px", opacity: 0, pointerEvents: "none" }}>
