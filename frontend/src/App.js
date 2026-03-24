@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
@@ -16,18 +16,6 @@ const createItem = (defaultHsn = "") => ({
   id: `${Date.now()}-${Math.random()}`, description: "", hsn: defaultHsn, weight: "", quantity: "1", rate_override: "", amount_override: "", mc_override: ""
 });
 
-const SHORTCUT_OPTIONS = [
-  { value: "save_bill", label: "Save & Update Bill" },
-  { value: "new_bill", label: "New Blank Bill" },
-  { value: "whatsapp", label: "Share via WhatsApp" },
-  { value: "print", label: "Print Bill" },
-  { value: "download", label: "Download PDF" },
-  { value: "ledger", label: "Open Daily Ledger" },
-  { value: "recent", label: "Open Recent Bills" },
-  { value: "toggle_mode", label: "Toggle Invoice/Estimate" },
-  { value: "add_item", label: "Add Item Row" }
-];
-
 const defaultSettings = {
   shop_name: "Jalaram Jewellers", tagline: "The Silver Specialist", phone_numbers: ["+91 9583221115", "+91 9776177296", "+91 7538977527"], email: "jalaramjewellers26@gmail.com",
   shop_name_color: "#000000", shop_name_size: 26, shop_name_font: "sans-serif", shop_name_align: "center",
@@ -37,12 +25,7 @@ const defaultSettings = {
   email_color: "#475569", email_size: 13, email_font: "sans-serif", email_align: "center",
   silver_rate_per_gram: 240, making_charge_per_gram: 15, flat_mc_below_5g: 150, default_hsn: "7113",
   formula_note: "Line total = Weight x (Silver rate per gram + Making charge per gram)", logo_data_url: "", about_qr_data_url: STATIC_ABOUT_QR_URL, custom_fonts: [],
-  custom_shortcuts: [
-    { action: "save_bill", keys: "ctrl+s" },
-    { action: "new_bill", keys: "ctrl+n" },
-    { action: "whatsapp", keys: "ctrl+w" },
-    { action: "add_item", keys: "ctrl+i" }
-  ],
+  shortcuts: { save: "ctrl+s", new: "ctrl+n", whatsapp: "ctrl+w" },
   branches: [
     { id: "B1", name: "Branch 1 (Old Town)", address: "Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2", map_url: "https://g.page/r/CVvnomQZn7zxEBE/review", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", gstin: "21AAUFJ1925F1ZH", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 },
     { id: "B2", name: "Branch 2 (Unit-2)", address: "Branch - 2 : Shop No.14, BMC Market Complex, Market Building, Near Petrol Pump, Unit-2, BBSR-9", map_url: "#", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", gstin: "21AAUFJ1925F1ZH", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 }
@@ -123,9 +106,8 @@ const DesignSettingRow = ({ title, fieldPrefix, settings, setSettings }) => (
   </div>
 );
 
-// --- MAIN APP ---
 export default function App() {
-  const [isCompactView, setIsCompactView] = useState(window.innerWidth <= 850);
+  const [isCompactView, setIsCompactView] = useState(window.innerWidth <= 520);
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
   
@@ -257,7 +239,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const handleResize = () => setIsCompactView(window.innerWidth <= 850);
+    const handleResize = () => setIsCompactView(window.innerWidth <= 520);
     window.addEventListener("resize", handleResize); return () => window.removeEventListener("resize", handleResize);
   }, []);
 
@@ -282,68 +264,6 @@ export default function App() {
     };
     verify();
   }, [token, isPublicView, authHeaders]);
-
-  // --- KEYBOARD NAVIGATION & SHORTCUTS ENGINE ---
-  const actionMapRef = useRef({});
-  useEffect(() => {
-    actionMapRef.current = {
-      save_bill: saveBill,
-      new_bill: handleNewBillClick,
-      whatsapp: shareWhatsApp,
-      print: () => window.print(),
-      download: () => downloadPdf("bill-print-root", documentNumber || mode),
-      ledger: () => setShowLedger(true),
-      recent: () => { setShowRecentBills(true); setBillSearchQuery(""); setRecentBranchFilter("ALL"); setRecentModeFilter("ALL"); setRecentDateFilter("ALL"); },
-      toggle_mode: () => handleModeChange(mode === 'invoice' ? 'estimate' : 'invoice'),
-      add_item: () => { setItems((prev) => [...prev, createItem(settings.default_hsn)]); markDirty(); }
-    };
-  });
-
-  useEffect(() => {
-    if (isPublicView || !token) return; 
-
-    const handleKeyDown = (e) => {
-      // 1. ENTER TO NAVIGATE (Only on Tablets/Desktop to avoid mobile soft keyboard issues)
-      if (e.key === 'Enter' && window.innerWidth > 768) {
-        if (e.target.tagName.toLowerCase() === 'textarea') return; // Let textareas line break
-        if (e.target.tagName.toLowerCase() === 'button') return;   // Let buttons click normally
-        
-        e.preventDefault();
-        const focusable = Array.from(document.querySelectorAll('input:not([disabled]), select:not([disabled]), button:not([disabled]), textarea:not([disabled])'))
-          .filter(el => el.offsetParent !== null); // Visible elements only
-        
-        const index = focusable.indexOf(e.target);
-        if (index > -1 && index < focusable.length - 1) {
-          focusable[index + 1].focus();
-        }
-        return;
-      }
-
-      // 2. CUSTOM SHORTCUTS
-      let keys = [];
-      if (e.ctrlKey || e.metaKey) keys.push('ctrl');
-      if (e.altKey) keys.push('alt');
-      if (e.shiftKey) keys.push('shift');
-      
-      if (!['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
-        keys.push(e.key.toLowerCase());
-      }
-      
-      const combo = keys.join('+');
-      const shortcuts = settings.custom_shortcuts || defaultSettings.custom_shortcuts;
-      const matchedAction = shortcuts.find(sc => sc.keys === combo)?.action;
-
-      if (matchedAction && actionMapRef.current[matchedAction]) {
-        e.preventDefault(); 
-        actionMapRef.current[matchedAction]();
-        toast.success(`Shortcut Triggered: ${matchedAction.replace('_', ' ').toUpperCase()}`, {duration: 1500});
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isPublicView, token, settings.custom_shortcuts]);
-
 
   useEffect(() => {
     if (showRecentBills && token && !isPublicView) {
@@ -412,7 +332,7 @@ export default function App() {
         pdf.addImage(imgData, "PNG", 0, 0, pageWidth, pageHeight);
       }
       pdf.save(`Jalaram_Bills_Export_${today()}.pdf`); toast.success("Bulk PDF Downloaded!");
-    } catch (error) { toast.error("Error generating bulk PDF."); } finally { setIsBulkDownloading(false); if (wasCompact) setIsCompactView(window.innerWidth <= 850); }
+    } catch (error) { toast.error("Error generating bulk PDF."); } finally { setIsBulkDownloading(false); if (wasCompact) setIsCompactView(true); }
   };
 
   const fetchLedgerHistory = async () => {
@@ -463,12 +383,12 @@ export default function App() {
     if (isPublicView) return;
     const bootstrap = async () => { if (!token) return; try { await loadSettings(); await fetchCloudStatus(); await reserveNumber(mode, billBranchId); } catch { toast.error("Could not load billing settings."); } };
     bootstrap();
-  }, [token, isPublicView]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [token, isPublicView]);
 
   useEffect(() => {
     if (!token || isPublicView) return;
     const interval = setInterval(() => { fetchCloudStatus(); }, 30000); return () => clearInterval(interval);
-  }, [token, isPublicView]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [token, isPublicView]); 
 
   useEffect(() => {
     if (!token || isPublicView) return;
@@ -540,13 +460,7 @@ export default function App() {
     setTxType(bill.tx_type || "sale"); setPaymentMethod(bill.payment_method || ""); setSplitCash(bill.split_cash !== null && bill.split_cash !== undefined ? String(bill.split_cash) : ""); setIsPaymentDone(bill.is_payment_done || false); 
     setAdvanceAmount(bill.advance_amount ? String(bill.advance_amount) : ""); setAdvanceMethod(bill.advance_method || ""); setAdvanceSplitCash(bill.advance_split_cash ? String(bill.advance_split_cash) : ""); setIsAdvancePaid(bill.is_advance_paid || false);
     setBalanceMethod(bill.balance_method || ""); setBalanceSplitCash(bill.balance_split_cash ? String(bill.balance_split_cash) : ""); setIsBalancePaid(bill.is_balance_paid || false);
-    setNotes(bill.notes || ""); 
-    
-    // 🔥 FIX: Check both root and totals block for discount/exchange logic
-    setDiscount(bill.discount !== null && bill.discount !== undefined ? String(bill.discount) : (bill.totals?.discount ? String(bill.totals.discount) : "0")); 
-    setExchange(bill.exchange !== null && bill.exchange !== undefined ? String(bill.exchange) : (bill.totals?.exchange ? String(bill.totals.exchange) : "0")); 
-    
-    setManualRoundOff(bill.totals?.round_off !== null && bill.totals?.round_off !== undefined ? String(bill.totals.round_off) : "");
+    setNotes(bill.notes || ""); setDiscount(bill.discount ? String(bill.discount) : "0"); setExchange(bill.exchange ? String(bill.exchange) : "0"); setManualRoundOff(bill.totals?.round_off !== null && bill.totals?.round_off !== undefined ? String(bill.totals.round_off) : "");
     const loadedItems = (bill.items || []).map((item) => ({ id: `${Date.now()}-${Math.random()}`, description: item.description || "", hsn: item.hsn || "", weight: item.weight ? String(item.weight) : "", quantity: item.quantity ? String(item.quantity) : "1", mc_override: item.mc_override !== null && item.mc_override !== undefined ? String(item.mc_override) : "", rate_override: item.rate_override !== null && item.rate_override !== undefined ? String(item.rate_override) : "", amount_override: item.amount_override !== null && item.amount_override !== undefined ? String(item.amount_override) : "", }));
     setItems(loadedItems.length > 0 ? loadedItems : [createItem(settings.default_hsn)]); setIsDirty(false); setShowRecentBills(false); setShowLedger(false); toast.success(`Loaded ${bill.document_number} for editing`); goToBillTop();
   };
@@ -645,8 +559,7 @@ export default function App() {
   const downloadPdf = async (elementId, filename) => {
     if (isDownloadingPdf) return;
     setIsDownloadingPdf(true);
-    toast.info("Preparing PDF..."); 
-    const node = document.getElementById(elementId); 
+    toast.info("Preparing PDF..."); const node = document.getElementById(elementId); 
     if (!node) { setIsDownloadingPdf(false); return; }
     try {
       const canvas = await html2canvas(node, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#ffffff", windowWidth: 1024,
@@ -720,6 +633,44 @@ export default function App() {
   const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
   const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
 
+  // --- KEYBOARD NAVIGATION & SHORTCUTS ENGINE ---
+  useEffect(() => {
+    if (isPublicView || !token) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Enter' && e.target.tagName.toLowerCase() !== 'textarea') {
+        e.preventDefault();
+        const focusable = Array.from(document.querySelectorAll('input:not([disabled]), select:not([disabled]), button:not([disabled]), textarea:not([disabled])'))
+          .filter(el => el.offsetParent !== null);
+        
+        const index = focusable.indexOf(e.target);
+        if (index > -1 && index < focusable.length - 1) {
+          focusable[index + 1].focus();
+        }
+        return;
+      }
+
+      let keys = [];
+      if (e.ctrlKey || e.metaKey) keys.push('ctrl');
+      if (e.altKey) keys.push('alt');
+      if (e.shiftKey) keys.push('shift');
+      
+      if (!['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
+        keys.push(e.key.toLowerCase());
+      }
+      
+      const combo = keys.join('+');
+      const s = settings.shortcuts || defaultSettings.shortcuts;
+
+      if (combo === s.save) { e.preventDefault(); saveBill(); }
+      else if (combo === s.new) { e.preventDefault(); handleNewBillClick(); }
+      else if (combo === s.whatsapp) { e.preventDefault(); shareWhatsApp(); }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [settings.shortcuts, isPublicView, token, saveBill, handleNewBillClick, shareWhatsApp]);
+
   // --- PUBLIC VIEW ---
   if (isPublicView) {
     if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
@@ -752,8 +703,20 @@ export default function App() {
             <Wifi size={20} /> Slow Internet? Tap here for Free Shop Wi-Fi
           </div>
         )}
+        {showFeedbackModal && (
+          <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
+            <div style={{ backgroundColor: "white", padding: "30px", borderRadius: "16px", width: "100%", maxWidth: "380px", textAlign: "center", boxShadow: "0 10px 25px rgba(0,0,0,0.2)" }}>
+              <h3 style={{ marginTop: 0, marginBottom: "8px", color: "#0f172a" }}>Leave a Review!</h3>
+              <p style={{ fontSize: "0.9rem", color: "#64748b", marginBottom: "20px" }}>Which branch did you visit today?</p>
+              {(publicSettings?.branches || []).map(b => (
+                <a key={b.id} href={b.map_url !== "#" ? b.map_url : "#"} target="_blank" rel="noopener noreferrer" style={{ display: "block", padding: "14px", backgroundColor: b.map_url !== "#" ? "#facc15" : "#e2e8f0", color: b.map_url !== "#" ? "#854d0e" : "#475569", textDecoration: "none", borderRadius: "10px", marginBottom: "12px", fontWeight: "bold", fontSize: "1.1rem" }}>⭐ {b.name}</a>
+              ))}
+              <Button variant="ghost" onClick={() => setShowFeedbackModal(false)} style={{ width: "100%", color: "#64748b", marginTop: "10px" }}>Cancel</Button>
+            </div>
+          </div>
+        )}
         <div className="no-print" style={{ marginBottom: '20px', display: 'flex', gap: '15px' }}>
-          <Button onClick={() => downloadPdf("public-bill-root", publicBill.document_number)}>Download PDF</Button>
+          <Button onClick={() => downloadPdf("public-bill-root", publicBill.document_number)} disabled={isDownloadingPdf}>Download PDF</Button>
           <Button variant="outline" onClick={() => window.print()}>Print Bill</Button>
         </div>
 
@@ -781,7 +744,6 @@ export default function App() {
               <div style={{ width: "100%", textAlign: publicSettings?.email_align || "center", fontFamily: publicSettings?.email_font || "sans-serif", fontSize: `${publicSettings?.email_size || 13}px`, marginBottom: "4px" }}>
                 <a href={`mailto:${publicSettings?.email}`} style={{ color: publicSettings?.email_color || "#475569", textDecoration: 'none' }}>{publicSettings?.email}</a>
               </div>
-              {publicBill.mode === "invoice" && pbBranch.gstin && <p style={{ margin: "4px 0", textAlign: "center", fontWeight: "bold" }}>GSTIN: {pbBranch.gstin}</p>}
             </div>
           </div>
 
@@ -821,7 +783,6 @@ export default function App() {
                 </>
               )}
 
-              {/* 🔥 FIXED PUBLIC QR CODE */}
               {showPublicUpi && (
                 <div className="payment-qr-box" style={{ textAlign: "center", marginTop: "20px" }}>
                   <p className="scan-title" style={{ marginBottom: "15px", fontWeight: "bold" }}>Scan Here For Payment (₹{money(publicUpiAmt)})</p>
@@ -855,11 +816,16 @@ export default function App() {
     );
   }
 
-  // --- LOGIN SCREENS ---
   if (checkingSession) {
     return (
       <div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#0f172a' }}>Loading billing dashboard...</div>
+        {isWakingUp && (
+          <div style={{ marginTop: '20px', textAlign: 'center', padding: '15px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', maxWidth: '320px' }}>
+            <p style={{ margin: '0 0 15px 0', fontSize: '0.9rem', color: '#64748b' }}>The database server is currently waking up from sleep mode. This usually takes about <strong>30 to 60 seconds</strong>.</p>
+            <Button variant="outline" onClick={() => { localStorage.clear(); window.location.reload(); }} style={{ width: '100%', borderColor: '#ef4444', color: '#ef4444' }}>Force Quit & Clear Session</Button>
+          </div>
+        )}
       </div>
     );
   }
@@ -882,10 +848,10 @@ export default function App() {
     <div className="billing-app">
       <Toaster position="bottom-right" />
 
-      {/* INVISIBLE BULK PDF RENDERER (Unchanged) */}
       <div style={{ position: "absolute", top: "-9999px", left: "-9999px", opacity: 0, pointerEvents: "none" }}>
         {(filteredRecentBills || []).map(b => {
            const billBranch = (settings.branches || []).find(br => br.id === b.branch_id) || (settings.branches || [])[0] || defaultSettings.branches[0];
+           const bulkUpiAmountToPay = b.payment_method === "Split" ? num(b.split_upi) : (b.totals?.grand_total || 0);
            const printedItems = (b.items || []).map((item, index) => {
              const rate = (item.rate !== undefined && item.rate !== null) ? num(item.rate) : (item.rate_override ? num(item.rate_override) : 0);
              const amount = (item.amount !== undefined && item.amount !== null) ? num(item.amount) : (item.amount_override ? num(item.amount_override) : 0);
@@ -896,6 +862,7 @@ export default function App() {
            return (
              <section key={b.id} id={`bulk-bill-${b.document_number}`} className="bill-sheet" style={{ width: "800px", maxWidth: "800px", margin: 0, "--print-scale-factor": 1 }}>
                 {(b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) && <div className="watermark-done">FULLY PAID</div>}
+                
                 <div className="bill-header">
                   <div className="logo-area">
                     {settings.logo_data_url ? <img src={settings.logo_data_url} alt="Shop Logo" className="shop-logo" crossOrigin="anonymous" /> : <div className="shop-logo-fallback">JJ</div>}
@@ -913,18 +880,31 @@ export default function App() {
                     <div style={{ width: "100%", textAlign: settings.phone_align || "center", fontFamily: settings.phone_font || "sans-serif", fontSize: `${settings.phone_size || 13}px`, marginBottom: "4px" }}>
                       {(settings.phone_numbers || []).join(" | ")}
                     </div>
-                    {b.mode === "invoice" && billBranch.gstin && <p style={{ margin: "4px 0", textAlign: "center", fontWeight: "bold" }}>GSTIN: {billBranch.gstin}</p>}
                   </div>
                 </div>
+
                 <div className="sheet-banner">{b.tx_type === "booking" ? "BOOKING RECEIPT" : b.tx_type === "service" ? "SERVICE ORDER" : b.mode === "invoice" ? "TAX INVOICE" : "ESTIMATE"}</div>
-                <div className="meta-grid"><p><strong>{b.mode === "invoice" ? "Invoice No" : "Estimate No"}:</strong> {b.document_number}</p><p><strong>Date:</strong> {b.date}</p></div>
-                <div className="customer-box"><p><strong>Name:</strong> {b.customer_name || b.customer?.name || "-"}</p><p><strong>Address:</strong> {b.customer_address || b.customer?.address || "-"}</p><p><strong>Phone:</strong> {b.customer_phone || b.customer?.phone || "-"}</p></div>
+
+                <div className="meta-grid">
+                  <p><strong>{b.mode === "invoice" ? "Invoice No" : "Estimate No"}:</strong> {b.document_number}</p>
+                  <p><strong>Date:</strong> {b.date}</p>
+                </div>
+
+                <div className="customer-box">
+                  <p><strong>Name:</strong> {b.customer_name || b.customer?.name || "-"}</p>
+                  <p><strong>Address:</strong> {b.customer_address || b.customer?.address || "-"}</p>
+                  <p><strong>Phone:</strong> {b.customer_phone || b.customer?.phone || "-"}</p>
+                </div>
+
                 <BillTable mode={b.mode} items={printedItems} />
+
                 <div className="sheet-bottom-stack">
                   <div className="totals">
                     <div className="totals-row"><span>{b.mode === "invoice" ? "Taxable Amt." : "TOTAL"}</span><strong>₹{money(b.totals?.taxable_amount || b.totals?.subtotal || 0)}</strong></div>
                     {b.mode === "invoice" ? (
-                      <><div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(b.totals?.cgst || 0)}</strong></div><div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(b.totals?.sgst || 0)}</strong></div><div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(b.totals?.igst || 0)}</strong></div></>
+                      <>
+                        <div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(b.totals?.cgst || 0)}</strong></div><div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(b.totals?.sgst || 0)}</strong></div><div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(b.totals?.igst || 0)}</strong></div>
+                      </>
                     ) : (
                       <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(b.totals?.discount || 0)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(b.totals?.exchange || 0)}</strong></div></>
                     )}
@@ -962,10 +942,9 @@ export default function App() {
         </div>
       </header>
 
-      {/* 🔥 FIXED: Split Screen Layout for iPad/Laptop */}
-      <main className="main-layout" style={{ display: "flex", flexDirection: isCompactView ? "column" : "row", height: isCompactView ? "auto" : "calc(100vh - 70px)", overflow: "hidden" }}>
+      <main className="main-layout" style={{ display: "flex", flexDirection: isCompactView ? "column" : "row", height: "calc(100vh - 70px)", overflow: "hidden" }}>
         
-        <section id="bill-print-root" className="bill-sheet" style={{ flex: "1.5", overflowY: "auto", height: isCompactView ? "auto" : "100%", padding: "20px", "--print-scale-factor": (printScale / 100).toFixed(3), position: 'relative', zIndex: 1 }}>
+        <section id="bill-print-root" className="bill-sheet" style={{ flex: "1.5", overflowY: "auto", padding: "20px", height: "100%", "--print-scale-factor": (printScale / 100).toFixed(3), position: 'relative', zIndex: 1 }}>
           {(txType === "sale" ? isPaymentDone : isBalancePaid) && <div className="watermark-done">FULLY PAID</div>}
           <div className="bill-header">
             <div className="logo-area">
@@ -988,7 +967,6 @@ export default function App() {
               <div style={{ width: "100%", textAlign: settings.email_align || "center", fontFamily: settings.email_font || "sans-serif", fontSize: `${settings.email_size || 13}px`, marginBottom: "4px" }}>
                 <a href={`mailto:${settings.email}`} style={{ color: settings.email_color || "#475569", textDecoration: 'none' }}>{settings.email}</a>
               </div>
-              {mode === "invoice" && activeBillBranch.gstin && <p style={{ margin: "4px 0", textAlign: "center", fontWeight: "bold" }}>GSTIN: {activeBillBranch.gstin}</p>}
             </div>
           </div>
 
@@ -1054,7 +1032,7 @@ export default function App() {
           <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
         </section>
 
-        <aside className="controls no-print" style={{ flex: "1", overflowY: "auto", height: isCompactView ? "auto" : "100%", padding: "20px", borderLeft: isCompactView ? "none" : "2px solid #e2e8f0", backgroundColor: "#f8fafc" }}>
+        <aside className="controls no-print" style={{ flex: "1", overflowY: "auto", padding: "20px", height: "100%", borderLeft: isCompactView ? "none" : "2px solid #e2e8f0", backgroundColor: "#f8fafc" }}>
           <div className="control-card">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
                 <h3 style={{ margin: 0 }}>Bill Details</h3>
@@ -1188,7 +1166,7 @@ export default function App() {
             <Button onClick={saveBill} disabled={savingBill} style={{ backgroundColor: "#0f172a" }}>{savingBill ? "Saving..." : currentBillId ? `Update & Migrate (${editingDocNumber})` : "Save Bill"}</Button>
             <Button onClick={() => setShowLedger(true)} style={{ backgroundColor: "#16a34a", color: "white" }}>Daily Sales & Ledger</Button>
             <Button onClick={() => { setShowRecentBills(true); setBillSearchQuery(""); setRecentBranchFilter("ALL"); setRecentModeFilter("ALL"); setRecentDateFilter("ALL"); }} variant="outline">Recent Bills</Button>
-            <Button onClick={() => downloadPdf("bill-print-root", documentNumber || mode)} disabled={isDownloadingPdf}>{isDownloadingPdf ? "Saving PDF..." : "Download PDF"}</Button>
+            <Button onClick={() => downloadPdf("bill-print-root", documentNumber || mode)} disabled={isDownloadingPdf}>Download PDF</Button>
             <Button onClick={() => window.print()}>Print</Button>
             <Button onClick={shareWhatsApp}>WhatsApp Link</Button>
             <Button onClick={shareEmail}>Email Link</Button>
@@ -1270,4 +1248,243 @@ export default function App() {
 
             <div style={{ marginBottom: "30px" }}>
               <h4 style={{ margin: "0 0 15px 0", fontSize: "1.1rem", color: "#1e293b", display: "flex", alignItems: "center", gap: "8px" }}><History size={18} /> Ledger History (Expenses & Exchanges)</h4>
-              {(ledgerLogs || []).length === 0 ? (<p style
+              {(ledgerLogs || []).length === 0 ? (<p style={{ color: "#666", fontStyle: "italic" }}>No manual transactions logged yet.</p>) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {(ledgerLogs || []).map(log => (
+                    <div key={log.id} style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", backgroundColor: "white" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}><strong style={{ color: "#0f172a" }}>{log.reason}</strong><span style={{ fontSize: "0.75rem", color: "#94a3b8" }}>{new Date(log.date).toLocaleDateString()}</span></div>
+                      <div style={{ fontSize: "0.85rem", display: "flex", flexDirection: "column", gap: "2px" }}>
+                        {log.cash_change !== 0 && (<span style={{ color: log.cash_change > 0 ? "#16a34a" : "#dc2626" }}>Cash: {log.cash_change > 0 ? "+" : ""}₹{money(log.cash_change)}</span>)}
+                        {log.estimate_bank_change !== 0 && (<span style={{ color: log.estimate_bank_change > 0 ? "#16a34a" : "#dc2626" }}>Est Bank: {log.estimate_bank_change > 0 ? "+" : ""}₹{money(log.estimate_bank_change)}</span>)}
+                        {log.invoice_bank_change !== 0 && (<span style={{ color: log.invoice_bank_change > 0 ? "#16a34a" : "#dc2626" }}>GST Bank: {log.invoice_bank_change > 0 ? "+" : ""}₹{money(log.invoice_bank_change)}</span>)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            <div>
+              <h4 style={{ margin: "0 0 15px 0", fontSize: "1.1rem", color: "#1e293b" }}>Today's Bills</h4>
+              {ledgerLoading ? (<p>Loading bills...</p>) : (todayBills || []).length === 0 ? (<p style={{ color: "#666" }}>No bills generated today yet.</p>) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {(todayBills || []).map(b => (
+                    <div key={b.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px", border: "1px solid #e2e8f0", borderRadius: "6px", backgroundColor: "white" }}>
+                      <div>
+                        <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "4px" }}>
+                          <strong style={{ color: b.mode === 'invoice' ? "#dc2626" : "#2563eb" }}>{b.document_number}</strong>
+                          <span style={{ fontSize: "0.75rem", padding: "2px 6px", backgroundColor: (b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "#dcfce7" : "#fee2e2", color: (b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "#166534" : "#991b1b", borderRadius: "4px" }}>
+                            {(b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "Paid" : "Pending"}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: "0.85rem", color: "#475569" }}>{b.customer_name || b.customer?.name || "Unknown"} • {b.tx_type || "Sale"}</div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <strong style={{ fontSize: "1.1rem" }}>₹{money(b.totals?.grand_total || 0)}</strong>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* RECENT BILLS */}
+      {showRecentBills && (
+        <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "550px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
+          <div className="drawer-header" style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10, paddingBottom: "15px", borderBottom: "1px solid #e2e8f0" }}>
+            <h3>Recent Bills & Exports</h3>
+            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowRecentBills(false)}><ArrowLeft className="drawer-back-icon" /><span>Back</span></Button>
+          </div>
+
+          <div style={{ padding: "15px" }}>
+            <div style={{ marginBottom: "20px" }}>
+              <Button onClick={handleBulkDownload} disabled={isBulkDownloading || (filteredRecentBills || []).length === 0} style={{ width: "100%", backgroundColor: "#0f172a", height: "auto", padding: "10px", display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", justifyContent: "center", fontSize: "1rem", boxSizing: "border-box" }}>
+                {isBulkDownloading ? "Generating PDF... Please Wait" : <><Download size={18} /> Download {(filteredRecentBills || []).length} Bills as Single PDF</>}
+              </Button>
+            </div>
+
+            <div style={{ backgroundColor: "#f8fafc", padding: "15px", borderRadius: "8px", border: "1px solid #cbd5e1", marginBottom: "20px" }}>
+               <h4 style={{ margin: "0 0 10px 0", color: "#334155", fontSize: "0.9rem" }}>Filter Bills</h4>
+               <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "10px" }}>
+                 <div style={{ flex: "1 1 120px" }}><label style={{ fontSize: "0.75rem", color: "#64748b" }}>Branch</label><select value={recentBranchFilter} onChange={(e) => setRecentBranchFilter(e.target.value)} className="native-select"><option value="ALL">All Branches</option>{(settings.branches || []).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
+                 <div style={{ flex: "1 1 120px" }}><label style={{ fontSize: "0.75rem", color: "#64748b" }}>Bill Type</label><select value={recentModeFilter} onChange={(e) => setRecentModeFilter(e.target.value)} className="native-select"><option value="ALL">All Types</option><option value="invoice">Invoices Only</option><option value="estimate">Estimates Only</option></select></div>
+               </div>
+               <div style={{ marginBottom: "10px" }}><label style={{ fontSize: "0.75rem", color: "#64748b" }}>Date Range</label><select value={recentDateFilter} onChange={(e) => setRecentDateFilter(e.target.value)} className="native-select"><option value="ALL">All Time</option><option value="THIS_MONTH">This Month</option><option value="LAST_MONTH">Last Month</option><option value="CUSTOM">Custom Date Range</option></select></div>
+               {recentDateFilter === "CUSTOM" && (
+                 <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "10px" }}>
+                    <div style={{ flex: "1 1 120px" }}><label style={{ fontSize: "0.75rem", color: "#64748b" }}>Start Date</label><Input type="date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} /></div>
+                    <div style={{ flex: "1 1 120px" }}><label style={{ fontSize: "0.75rem", color: "#64748b" }}>End Date</label><Input type="date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} /></div>
+                 </div>
+               )}
+               <div><label style={{ fontSize: "0.75rem", color: "#64748b" }}>Search Name/Phone/Inv Number</label><Input placeholder="Type to search..." value={billSearchQuery} onChange={(e) => setBillSearchQuery(e.target.value)} /></div>
+            </div>
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "15px", paddingBottom: "15px", borderBottom: "1px dashed #cbd5e1" }}>
+              <Button size="sm" variant="outline" onClick={() => handleResetCounter("invoice")} style={{ flex: "1 1 100%", borderColor: "#dc2626", color: "#dc2626" }}>Reset Invoice No.</Button>
+              <Button size="sm" variant="outline" onClick={() => handleResetCounter("estimate")} style={{ flex: "1 1 100%", borderColor: "#2563eb", color: "#2563eb" }}>Reset Estimate No.</Button>
+            </div>
+
+            {loadingRecent ? (
+              <p style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>Loading bills from database...</p>
+            ) : (filteredRecentBills || []).length === 0 ? (
+              <p style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>No bills found matching these filters.</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {(filteredRecentBills || []).map((b) => (
+                  <div key={b.id} style={{ border: "1px solid var(--border)", padding: "12px", borderRadius: "8px", backgroundColor: "white" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", marginBottom: "8px" }}>
+                      <strong style={{ color: b.mode === "invoice" ? "#dc2626" : "#2563eb" }}>{b.document_number}</strong><span style={{ fontSize: "0.85rem", color: "#666" }}>{b.date}</span>
+                    </div>
+                    <div style={{ marginBottom: "8px", fontWeight: "500" }}>{b.customer_name || b.customer?.name || "Unknown Customer"}</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+                      <strong>₹{money(b.totals?.grand_total || 0)}</strong>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85rem", cursor: "pointer", marginRight: "5px", padding: "4px 8px", backgroundColor: (b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "#dcfce7" : "#fef3c7", color: (b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "#166534" : "#b45309", borderRadius: "5px", fontWeight: "bold" }}>
+                          <input type="checkbox" checked={(b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) || false} onChange={() => handleQuickPaymentToggle(b)} style={{ cursor: "pointer" }} />
+                          {(b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "Paid" : "Pending"}
+                        </label>
+                        <Button size="sm" variant="destructive" style={{ backgroundColor: "#ef4444", color: "white" }} onClick={() => handleDeleteBill(b)}>Delete</Button>
+                        <Button size="sm" onClick={() => { if (isDirty && !window.confirm("⚠️ You have unsaved changes. Discard them and load this old bill?")) return; loadBillForEditing(b); }}>Edit</Button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* SETTINGS DRAWER */}
+      {showSettings && (
+        <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "500px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
+          <div className="drawer-header">
+            <h3>Settings</h3>
+            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowSettings(false)}><ArrowLeft className="drawer-back-icon" /><span>Back</span></Button>
+          </div>
+
+          <div style={{ padding: "0 15px 15px 15px", boxSizing: "border-box", width: "100%" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "20px" }}>
+              <Button variant={settingsTab === "design" ? "default" : "outline"} onClick={() => setSettingsTab("design")} style={{ flex: "1 1 100px" }}>🎨 Design</Button>
+              <Button variant={settingsTab === "technical" ? "default" : "outline"} onClick={() => setSettingsTab("technical")} style={{ flex: "1 1 100px" }}>⚙️ Tech</Button>
+              <Button variant={settingsTab === "branches" ? "default" : "outline"} onClick={() => setSettingsTab("branches")} style={{ flex: "1 1 100px" }}><Store size={16} style={{marginRight:"4px"}}/> Branches</Button>
+            </div>
+
+            {settingsTab === "design" && (
+              <div className="settings-design-tab" style={{ width: "100%" }}>
+                <DesignSettingRow title="Shop Name" fieldPrefix="shop_name" settings={settings} setSettings={setSettings} />
+                <DesignSettingRow title="Tagline" fieldPrefix="tagline" settings={settings} setSettings={setSettings} />
+                <DesignSettingRow title="Address Style (Edit info in Branches)" fieldPrefix="address" settings={settings} setSettings={setSettings} />
+                <DesignSettingRow title="Phone Numbers" fieldPrefix="phone" settings={settings} setSettings={setSettings} />
+                <DesignSettingRow title="Email" fieldPrefix="email" settings={settings} setSettings={setSettings} />
+                <Button onClick={saveSettings} style={{ width: "100%", marginBottom: "15px", boxSizing: "border-box" }}>Save Design Settings</Button>
+              </div>
+            )}
+
+            {settingsTab === "technical" && (
+              <div className="settings-technical-tab" style={{ width: "100%" }}>
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f0fdf4", width: "100%", boxSizing: "border-box" }}>
+                  <h4 style={{ margin: "0 0 10px 0", color: "#166534", display: "flex", alignItems: "center", gap: "8px" }}><Upload size={18} /> Upload Custom Font</h4>
+                  <label style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px", border: "2px dashed #16a34a", borderRadius: "8px", cursor: "pointer", backgroundColor: "white", flexWrap: "wrap" }}><span style={{ fontSize: "0.85rem", fontWeight: "bold" }}>📁 Choose Font File</span><input type="file" accept=".ttf,.otf,.woff,.woff2" onChange={handleFontUpload} style={{ display: "none" }} /></label>
+                  {(settings.custom_fonts || []).length > 0 && (<div style={{ marginTop: "10px" }}><p style={{ fontSize: "0.75rem", fontWeight: "bold", margin: "0 0 5px 0" }}>Uploaded Fonts:</p><ul style={{ fontSize: "0.75rem", margin: 0, paddingLeft: "15px" }}>{(settings.custom_fonts || []).map(f => <li key={f.name}>{f.name}</li>)}</ul></div>)}
+                </div>
+
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
+                  <h4 style={{ margin: "0 0 10px 0" }}>Math & Formulas</h4>
+                  <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Silver Rate (per gram)</label><Input value={settings.silver_rate_per_gram || ""} onChange={(e) => setSettings((prev) => ({ ...prev, silver_rate_per_gram: num(e.target.value) }))} style={{ marginBottom: "10px" }} />
+                  <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Making Charge (per gram)</label><Input value={settings.making_charge_per_gram || ""} onChange={(e) => setSettings((prev) => ({ ...prev, making_charge_per_gram: num(e.target.value) }))} style={{ marginBottom: "10px" }} />
+                  <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Below 5g Rule: Flat Making Charge (₹)</label><Input value={settings.flat_mc_below_5g || ""} onChange={(e) => setSettings((prev) => ({ ...prev, flat_mc_below_5g: num(e.target.value) }))} style={{ marginBottom: "2px" }} /><p style={{ fontSize: "0.75rem", color: "#666", marginBottom: "10px", marginTop: "0" }}>Example: 150</p>
+                  <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Default HSN Code</label><Input value={settings.default_hsn || ""} onChange={(e) => setSettings((prev) => ({ ...prev, default_hsn: e.target.value }))} style={{ marginBottom: "10px" }} />
+                  <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Formula Note (Prints on bill)</label><Input value={settings.formula_note || ""} onChange={(e) => setSettings((prev) => ({ ...prev, formula_note: e.target.value }))} />
+                </div>
+
+                {/* ⌨️ KEYBOARD SHORTCUTS BOX */}
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
+                  <h4 style={{ margin: "0 0 10px 0" }}>⌨️ Keyboard Shortcuts & Navigation</h4>
+                  <p style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "15px", marginTop: 0 }}>
+                    Use combinations like <strong>ctrl+s</strong>, <strong>alt+n</strong>, or <strong>ctrl+shift+w</strong>. <br/>
+                    <em>Note: Pressing <strong>Enter / Return</strong> will now automatically jump to the next input box.</em>
+                  </p>
+                  
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+                    <div style={{ flex: "1 1 150px" }}>
+                      <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>Save Bill</label>
+                      <Input 
+                        value={settings.shortcuts?.save || ""} 
+                        onChange={(e) => setSettings(prev => ({...prev, shortcuts: {...prev.shortcuts, save: e.target.value.toLowerCase()}}))} 
+                        placeholder="e.g. ctrl+s" 
+                      />
+                    </div>
+                    <div style={{ flex: "1 1 150px" }}>
+                      <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>New Bill</label>
+                      <Input 
+                        value={settings.shortcuts?.new || ""} 
+                        onChange={(e) => setSettings(prev => ({...prev, shortcuts: {...prev.shortcuts, new: e.target.value.toLowerCase()}}))} 
+                        placeholder="e.g. ctrl+n" 
+                      />
+                    </div>
+                    <div style={{ flex: "1 1 150px" }}>
+                      <label className="select-label" style={{ fontSize: "0.8rem", fontWeight: "bold" }}>WhatsApp Link</label>
+                      <Input 
+                        value={settings.shortcuts?.whatsapp || ""} 
+                        onChange={(e) => setSettings(prev => ({...prev, shortcuts: {...prev.shortcuts, whatsapp: e.target.value.toLowerCase()}}))} 
+                        placeholder="e.g. ctrl+w" 
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
+                  <h4 style={{ margin: "0 0 10px 0" }}>Printing & Uploads</h4>
+                  <label className="select-label" htmlFor="print-scale-range" style={{ fontSize: "0.8rem" }}>Auto Print Scale: {Number(printScale).toFixed(1)}%</label>
+                  <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "15px", flexWrap: "wrap" }}><input id="print-scale-range" type="range" min="98" max="102" step="0.1" value={printScale} onChange={(e) => setPrintScale(clampPrintScale(Number(e.target.value)))} style={{ flex: "1 1 150px" }} /><Button type="button" variant="outline" size="sm" onClick={() => setPrintScale(100)}>Reset</Button></div>
+                  <div style={{ marginBottom: "15px", width: "100%" }}><label className="file-label" htmlFor="logo-upload-input" style={{ fontSize: "0.8rem" }}>Upload Shop Logo</label><input id="logo-upload-input" type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/*" onChange={handleLogoUpload} style={{ display: "block", marginBottom: "5px", maxWidth: "100%" }} /><span style={{ fontSize: "0.75rem", color: "#666", wordBreak: "break-all" }}>{logoUploadName ? `Selected: ${logoUploadName}` : "No logo selected"}</span>{settings.logo_data_url && <img src={settings.logo_data_url} alt="Logo preview" style={{ maxWidth: "80px", marginTop: "5px", display: "block" }} />}</div>
+                  <div style={{ width: "100%" }}><label className="file-label" htmlFor="about-qr-upload-input" style={{ fontSize: "0.8rem" }}>Upload About Us QR</label><input id="about-qr-upload-input" type="file" accept=".png,.jpg,.jpeg,.webp,.svg,image/*" onChange={handleAboutQrUpload} style={{ display: "block", marginBottom: "5px", maxWidth: "100%" }} /><span style={{ fontSize: "0.75rem", color: "#666", wordBreak: "break-all" }}>{aboutUploadName ? `Selected: ${aboutUploadName}` : "No QR selected"}</span>{(settings.about_qr_data_url || STATIC_ABOUT_QR_URL) && <img src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="QR preview" style={{ maxWidth: "80px", marginTop: "5px", display: "block" }} />}</div>
+                </div>
+
+                <Button onClick={saveSettings} style={{ width: "100%", marginBottom: "15px" }}>Save Technical Settings</Button>
+
+                <div style={{ marginTop: "20px", padding: "15px", border: "1px solid #ef4444", borderRadius: "8px", backgroundColor: "#fef2f2", width: "100%", boxSizing: "border-box" }}>
+                  <h4 style={{ margin: "0 0 10px 0", color: "#b91c1c" }}>Database & Backup</h4>
+                  <div style={{ marginBottom: "15px" }}><div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginBottom: "5px", color: "#7f1d1d" }}><span>Storage Used: {((storageStats?.used_bytes || 0) / 1024).toFixed(2)} KB</span><span>{storageStats?.percentage || 0}%</span></div><div style={{ width: "100%", backgroundColor: "#fca5a5", borderRadius: "4px", height: "10px", overflow: "hidden" }}><div style={{ width: `${storageStats?.percentage || 0}%`, backgroundColor: "#dc2626", height: "100%", transition: "width 0.5s ease" }}></div></div></div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}><Button type="button" variant="outline" onClick={handleBackupBills}>⬇️ Download Backup (JSON)</Button><Button type="button" variant="destructive" style={{ backgroundColor: "#ef4444", color: "white" }} onClick={handleDeleteAllBills}>⚠️ Wipe All Bills (Clear Storage)</Button></div>
+                </div>
+              </div>
+            )}
+
+            {settingsTab === "branches" && (
+               <div className="settings-branches-tab" style={{ width: "100%" }}>
+                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px", flexWrap: "wrap", gap: "10px" }}><p style={{ margin: 0, fontSize: "0.9rem", color: "#475569" }}>Manage isolated branch ledgers and addresses here.</p><Button size="sm" onClick={() => { const newBranch = { id: `B${Date.now()}`, name: "New Branch", address: "", map_url: "#", invoice_upi_id: "", estimate_upi_id: "", gstin: "", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 }; setSettings(prev => ({ ...prev, branches: [...(prev.branches || []), newBranch] })); }}>+ Add Branch</Button></div>
+                   {(settings.branches || []).map((b, index) => (
+                       <div key={b.id} style={{ padding: "15px", border: "1px solid #cbd5e1", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
+                           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", flexWrap: "wrap", gap: "10px" }}><h4 style={{ margin: 0, color: "var(--brand)" }}>Branch: {b.name}</h4>{(settings.branches || []).length > 1 && (<Button size="sm" variant="outline" style={{ borderColor: "#ef4444", color: "#ef4444", padding: "0 8px", height: "24px" }} onClick={() => { if(window.confirm(`Delete ${b.name}?`)) { setSettings(prev => ({ ...prev, branches: (prev.branches || []).filter(x => x.id !== b.id) })); } }}>Delete</Button>)}</div>
+                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Branch Name (Internal Use)</label><Input value={b.name || ""} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].name = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
+                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Printed Bill Address</label><Input value={b.address || ""} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].address = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
+                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Google Maps Review Link</label><Input value={b.map_url || ""} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].map_url = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
+                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Invoice UPI ID</label><Input value={b.invoice_upi_id || ""} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].invoice_upi_id = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
+                           <label className="select-label" style={{ fontSize: "0.8rem" }}>Estimate UPI ID</label><Input value={b.estimate_upi_id || ""} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].estimate_upi_id = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
+                           <label className="select-label" style={{ fontSize: "0.8rem" }}>GSTIN</label><Input value={b.gstin || ""} onChange={(e) => { const newBranches = [...(settings.branches || [])]; newBranches[index].gstin = e.target.value; setSettings(prev => ({ ...prev, branches: newBranches })); }} style={{ marginBottom: "8px", width: "100%" }} />
+                       </div>
+                   ))}
+                   <Button onClick={saveSettings} style={{ width: "100%", marginBottom: "15px" }}>Save Branch Settings</Button>
+               </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {showAbout && (
+        <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "500px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
+          <div className="drawer-header"><h3>About This App</h3><Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowAbout(false)}><ArrowLeft className="drawer-back-icon" /><span>Back</span></Button></div>
+          <div className="cloud-note" style={{ marginTop: "15px", padding: "0 15px", boxSizing: "border-box" }}>
+            <h4>Cloud Database Setup</h4><ol><li>Create Supabase project and get project URL + service role key.</li><li>Add them in backend <code>SUPABASE_URL</code> and <code>SUPABASE_SERVICE_ROLE_KEY</code>.</li><li>Create <code>customers</code> and <code>number_counters</code> tables as in README.</li></ol>
+            <p className="cloud-status-text">Cloud status: {cloudStatus.enabled ? "Connected" : "Placeholder mode"} ({cloudStatus.mode})</p>
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
