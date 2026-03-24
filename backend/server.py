@@ -88,22 +88,6 @@ async def apply_ledger_diff(branch_id: str, diff_c: float, diff_eb: float, diff_
         "reason": reason, "cash_change": diff_c, "estimate_bank_change": diff_eb, "invoice_bank_change": diff_ib
     })
 
-async def upsert_customer(payload: dict):
-    cust_name = payload.get("customer_name", "").strip()
-    cust_phone = payload.get("customer_phone", "").strip()
-    if cust_name or cust_phone:
-        query = {"phone": cust_phone} if cust_phone else {"name": cust_name}
-        await customers_collection.update_one(
-            query,
-            {"$set": {
-                "name": cust_name, 
-                "phone": cust_phone, 
-                "address": payload.get("customer_address", ""), 
-                "email": payload.get("customer_email", "")
-            }},
-            upsert=True
-        )
-
 def require_auth(authorization: str = Header(None)):
     if not authorization: raise HTTPException(401, "No Token")
     token = authorization.replace("Bearer ", "").strip()
@@ -131,7 +115,7 @@ async def cloud_status(_=Depends(require_auth)):
 async def get_settings(_=Depends(require_auth)):
     doc = await settings_collection.find_one({"key": "app_settings"}, {"_id": 0})
     if not doc:
-        return {"shop_name": "Jalaram Jewellers", "shortcuts": {"saveBill": "F2", "newBill": "F3", "focusCustomer": "F4"}, "branches": [{"id":"B1", "name":"Main Branch", "address":"", "map_url":"#", "invoice_upi_id":"", "estimate_upi_id":"", "gstin":"", "cash_balance":0, "estimate_bank_balance":0, "invoice_bank_balance":0}]}
+        return {"shop_name": "Jalaram Jewellers", "branches": [{"id":"B1", "name":"Main Branch", "address":"", "map_url":"#", "invoice_upi_id":"", "estimate_upi_id":"", "gstin":"", "cash_balance":0, "estimate_bank_balance":0, "invoice_bank_balance":0}]}
     return doc
 
 @api_router.put("/settings")
@@ -191,8 +175,6 @@ async def save_bill(payload: dict, _=Depends(require_auth)):
         new_val = int(match.group())
         await counters_collection.update_one({"mode": mode, "branch_id": branch_id}, {"$set": {"value": new_val}}, upsert=True)
 
-    await upsert_customer(payload)
-
     doc = {**payload, "id": bill_id, "created_at": now_iso()}
     await bills_collection.insert_one(doc)
     c, eb, ib = get_bill_ledger_values(doc)
@@ -209,8 +191,6 @@ async def update_bill_by_id(bill_id: str, payload: dict, _=Depends(require_auth)
     if match:
         new_val = int(match.group())
         await counters_collection.update_one({"mode": payload.get("mode"), "branch_id": payload.get("branch_id")}, {"$set": {"value": new_val}}, upsert=True)
-
-    await upsert_customer(payload)
 
     old_b = existing.get("branch_id")
     new_b = payload.get("branch_id")
@@ -270,7 +250,7 @@ async def storage(_=Depends(require_auth)):
         s = await db.command("dbstats")
         u = s.get("dataSize", 0)
         return {"used_bytes": u, "quota_bytes": 512*1024*1024, "percentage": round((u/(512*1024*1024))*100, 2)}
-    except: return {"used_bytes": 0, "quota_bytes": 512*1024*1024, "percentage": 0} 
+    except: return {"used_bytes": 0, "quota_bytes": 512*1024*1024, "percentage": 0}
 
 @api_router.get("/bills/public/{document_number}")
 async def get_public(document_number: str):
