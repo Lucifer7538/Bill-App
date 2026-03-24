@@ -170,6 +170,24 @@ async def save_bill(payload: dict, _=Depends(require_auth)):
     mode = payload.get("mode")
     branch_id = payload.get("branch_id")
 
+    # Update Customer Database for Autocomplete Fix
+    if payload.get("customer_phone") or payload.get("customer_name"):
+        await customers_collection.update_one(
+            {
+                "$or": [
+                    {"phone": payload.get("customer_phone", "IGNORE_BLANK_PHONE_83726")},
+                    {"name": payload.get("customer_name", "IGNORE_BLANK_NAME_83726")}
+                ]
+            },
+            {"$set": {
+                "name": payload.get("customer_name", ""),
+                "phone": payload.get("customer_phone", ""),
+                "address": payload.get("customer_address", ""),
+                "email": payload.get("customer_email", "")
+            }},
+            upsert=True
+        )
+
     match = re.search(r'\d+$', doc_num)
     if match:
         new_val = int(match.group())
@@ -185,6 +203,24 @@ async def save_bill(payload: dict, _=Depends(require_auth)):
 async def update_bill_by_id(bill_id: str, payload: dict, _=Depends(require_auth)):
     existing = await bills_collection.find_one({"id": bill_id})
     if not existing: raise HTTPException(404, "Bill ID not found")
+
+    # Update Customer Database
+    if payload.get("customer_phone") or payload.get("customer_name"):
+        await customers_collection.update_one(
+            {
+                "$or": [
+                    {"phone": payload.get("customer_phone", "IGNORE_BLANK_PHONE_83726")},
+                    {"name": payload.get("customer_name", "IGNORE_BLANK_NAME_83726")}
+                ]
+            },
+            {"$set": {
+                "name": payload.get("customer_name", ""),
+                "phone": payload.get("customer_phone", ""),
+                "address": payload.get("customer_address", ""),
+                "email": payload.get("customer_email", "")
+            }},
+            upsert=True
+        )
 
     doc_num = payload.get("document_number", "")
     match = re.search(r'\d+$', doc_num)
