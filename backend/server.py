@@ -13,11 +13,9 @@ from pymongo import ReturnDocument
 import requests
 from fastapi.middleware.cors import CORSMiddleware
 
-# --- Setup & Environment ---
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
-# Database Connection
 mongo_url = os.environ.get("MONGO_URL")
 db_name = os.environ.get("DB_NAME", "jalaram_db")
 client = AsyncIOMotorClient(mongo_url)
@@ -31,7 +29,6 @@ ledger_logs_collection = db.ledger_logs
 
 app = FastAPI()
 
-# --- Security ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -44,15 +41,12 @@ api_router = APIRouter(prefix="/api")
 ACTIVE_TOKENS: Dict[str, str] = {}
 AUTH_PASSCODE = os.environ.get("AUTH_PASSCODE", "1234")
 
-# Supabase Check
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip()
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
 SUPABASE_ENABLED = bool(SUPABASE_URL and SUPABASE_KEY and "YOUR_" not in SUPABASE_URL)
 
-def now_iso():
-    return datetime.now(timezone.utc).isoformat()
+def now_iso(): return datetime.now(timezone.utc).isoformat()
 
-# ✅ SMART LEDGER ENGINE: Perfectly calculates Advance & Balance splits
 def get_bill_ledger_values(bill: dict):
     c, eb, ib = 0.0, 0.0, 0.0
     mode = bill.get("mode")
@@ -60,8 +54,7 @@ def get_bill_ledger_values(bill: dict):
 
     def add_vals(method, amount, split_c):
         nonlocal c, eb, ib
-        if method == "Cash":
-            c += amount
+        if method == "Cash": c += amount
         elif method in ["UPI", "Card"]:
             if mode == "estimate": eb += amount
             else: ib += amount
@@ -75,38 +68,41 @@ def get_bill_ledger_values(bill: dict):
             total = float(bill.get("totals", {}).get("grand_total", 0))
             add_vals(bill.get("payment_method"), total, float(bill.get("split_cash", 0)))
     else:
-        # Booking or Service (Handles Advance and Balance Separately)
         if bill.get("is_advance_paid"):
             add_vals(bill.get("advance_method"), float(bill.get("advance_amount", 0)), float(bill.get("advance_split_cash", 0)))
         if bill.get("is_balance_paid"):
             total = float(bill.get("totals", {}).get("grand_total", 0))
             adv = float(bill.get("advance_amount", 0))
-            bal = max(0.0, total - adv) # The actual balance due
+            bal = max(0.0, total - adv)
             add_vals(bill.get("balance_method"), bal, float(bill.get("balance_split_cash", 0)))
-
     return c, eb, ib
 
 async def apply_ledger_diff(branch_id: str, diff_c: float, diff_eb: float, diff_ib: float, reason: str):
     if diff_c == 0 and diff_eb == 0 and diff_ib == 0: return
-    
     await settings_collection.update_one(
         {"key": "app_settings", "branches.id": branch_id},
-        {"$inc": {
-            "branches.$.cash_balance": diff_c,
-            "branches.$.estimate_bank_balance": diff_eb,
-            "branches.$.invoice_bank_balance": diff_ib
-        }}
+        {"$inc": {"branches.$.cash_balance": diff_c, "branches.$.estimate_bank_balance": diff_eb, "branches.$.invoice_bank_balance": diff_ib}}
     )
-
     await ledger_logs_collection.insert_one({
-        "id": str(uuid.uuid4()),
-        "branch_id": branch_id,
-        "date": now_iso(),
-        "reason": reason,
-        "cash_change": diff_c,
-        "estimate_bank_change": diff_eb,
-        "invoice_bank_change": diff_ib
+        "id": str(uuid.uuid4()), "branch_id": branch_id, "date": now_iso(),
+        "reason": reason, "cash_change": diff_c, "estimate_bank_change": diff_eb, "invoice_bank_change": diff_ib
     })
+
+async def upsert_customer(payload: dict):
+    cust_name = payload.get("customer_name", "").strip()
+    cust_phone = payload.get("customer_phone", "").strip()
+    if cust_name or cust_phone:
+        query = {"phone": cust_phone} if cust_phone else {"name": cust_name}
+        await customers_collection.update_one(
+            query,
+            {"$set": {
+                "name": cust_name, 
+                "phone": cust_phone, 
+                "address": payload.get("customer_address", ""), 
+                "email": payload.get("customer_email", "")
+            }},
+            upsert=True
+        )
 
 def require_auth(authorization: str = Header(None)):
     if not authorization: raise HTTPException(401, "No Token")
@@ -114,52 +110,8 @@ def require_auth(authorization: str = Header(None)):
     if token not in ACTIVE_TOKENS: raise HTTPException(401, "Login Expired")
     return token
 
-# ✅ CUSTOMER UPSERT HELPER: Saves or updates customer data before generating a bill
-async def upsert_customer(payload: dict):
-    c_name = payload.get("customer_name", "").strip() if payload.get("customer_name") else ""
-    c_phone = payload.get("customer_phone", "").strip() if payload.get("customer_phone") else ""
-    
-    # If the user left the name and phone totally blank, skip database insertion
-    if not c_name and not c_phone:
-        return payload.get("customer_id")
-
-    customer_id = payload.get("customer_id")
-    
-    # If no ID was provided but we have a phone number, try to find an existing customer to prevent duplicates
-    if not customer_id and c_phone:
-        existing = await customers_collection.find_one({"phone": c_phone})
-        if existing:
-            customer_id = existing.get("id")
-
-    customer_data = {
-        "name": c_name,
-        "phone": c_phone,
-        "address": payload.get("customer_address", "").strip() if payload.get("customer_address") else "",
-        "email": payload.get("customer_email", "").strip() if payload.get("customer_email") else "",
-        "updated_at": now_iso()
-    }
-
-    if customer_id:
-        # Update existing customer
-        await customers_collection.update_one(
-            {"id": customer_id},
-            {"$set": customer_data},
-            upsert=True
-        )
-    else:
-        # Create brand new customer
-        customer_id = str(uuid.uuid4())
-        customer_data["id"] = customer_id
-        customer_data["created_at"] = now_iso()
-        await customers_collection.insert_one(customer_data)
-        
-    return customer_id
-
-# --- API Routes ---
-
 @app.get("/")
-async def root():
-    return {"status": "online", "server": "Jalaram-Master-V8", "msg": "Backend is awake"}
+async def root(): return {"status": "online", "server": "Jalaram-Master-V11", "msg": "Backend is awake"}
 
 @api_router.post("/auth/login")
 async def login(payload: dict):
@@ -169,8 +121,7 @@ async def login(payload: dict):
     return {"access_token": t, "expires_at": ACTIVE_TOKENS[t]}
 
 @api_router.get("/auth/verify")
-async def verify(_=Depends(require_auth)):
-    return {"valid": True}
+async def verify(_=Depends(require_auth)): return {"valid": True}
 
 @api_router.get("/cloud/status")
 async def cloud_status(_=Depends(require_auth)):
@@ -180,7 +131,7 @@ async def cloud_status(_=Depends(require_auth)):
 async def get_settings(_=Depends(require_auth)):
     doc = await settings_collection.find_one({"key": "app_settings"}, {"_id": 0})
     if not doc:
-        return {"shop_name": "Jalaram Jewellers", "branches": [{"id":"B1", "name":"Main Branch", "address":"", "map_url":"#", "invoice_upi_id":"", "estimate_upi_id":"", "cash_balance":0, "estimate_bank_balance":0, "invoice_bank_balance":0}]}
+        return {"shop_name": "Jalaram Jewellers", "shortcuts": {"saveBill": "F2", "newBill": "F3", "focusCustomer": "F4"}, "branches": [{"id":"B1", "name":"Main Branch", "address":"", "map_url":"#", "invoice_upi_id":"", "estimate_upi_id":"", "gstin":"", "cash_balance":0, "estimate_bank_balance":0, "invoice_bank_balance":0}]}
     return doc
 
 @api_router.put("/settings")
@@ -192,11 +143,7 @@ async def update_settings(payload: dict, _=Depends(require_auth)):
 async def set_balances(payload: dict, _=Depends(require_auth)):
     await settings_collection.update_one(
         {"key": "app_settings", "branches.id": payload.get("branch_id")},
-        {"$set": {
-            "branches.$.cash_balance": payload.get("cash_balance"),
-            "branches.$.estimate_bank_balance": payload.get("estimate_bank_balance"),
-            "branches.$.invoice_bank_balance": payload.get("invoice_bank_balance")
-        }}
+        {"$set": {"branches.$.cash_balance": payload.get("cash_balance"), "branches.$.estimate_bank_balance": payload.get("estimate_bank_balance"), "branches.$.invoice_bank_balance": payload.get("invoice_bank_balance")}}
     )
     return {"status": "success"}
 
@@ -206,16 +153,11 @@ async def adjust(payload: dict, _=Depends(require_auth)):
         branch_id = payload.get("branch_id")
         await settings_collection.update_one(
             {"key": "app_settings", "branches.id": branch_id},
-            {"$inc": {
-                "branches.$.cash_balance": payload.get("cash_change", 0),
-                "branches.$.estimate_bank_balance": payload.get("estimate_bank_change", 0),
-                "branches.$.invoice_bank_balance": payload.get("invoice_bank_change", 0)
-            }}
+            {"$inc": {"branches.$.cash_balance": payload.get("cash_change", 0), "branches.$.estimate_bank_balance": payload.get("estimate_bank_change", 0), "branches.$.invoice_bank_balance": payload.get("invoice_bank_change", 0)}}
         )
         await ledger_logs_collection.insert_one({**payload, "id": str(uuid.uuid4()), "date": now_iso()})
         return {"status": "success"}
-    except Exception as e:
-        raise HTTPException(500, detail=str(e))
+    except Exception as e: raise HTTPException(500, detail=str(e))
 
 @api_router.get("/settings/ledger/logs")
 async def get_logs(branch_id: str = Query(...), _=Depends(require_auth)):
@@ -233,21 +175,12 @@ async def reset_counter(payload: dict, _=Depends(require_auth)):
     try:
         mode = payload.get("mode")
         branch_id = payload.get("branch_id")
-        await counters_collection.update_one(
-            {"mode": mode, "branch_id": branch_id}, 
-            {"$set": {"value": 0}}, 
-            upsert=True
-        )
+        await counters_collection.update_one({"mode": mode, "branch_id": branch_id}, {"$set": {"value": 0}}, upsert=True)
         return {"message": "Counter reset successfully"}
-    except Exception as e:
-        raise HTTPException(500, detail=str(e))
+    except Exception as e: raise HTTPException(500, detail=str(e))
 
 @api_router.post("/bills/save")
 async def save_bill(payload: dict, _=Depends(require_auth)):
-    # 1. Process customer logic before doing anything else
-    c_id = await upsert_customer(payload)
-    payload["customer_id"] = c_id
-
     bill_id = str(uuid.uuid4())
     doc_num = payload.get("document_number", "")
     mode = payload.get("mode")
@@ -256,19 +189,14 @@ async def save_bill(payload: dict, _=Depends(require_auth)):
     match = re.search(r'\d+$', doc_num)
     if match:
         new_val = int(match.group())
-        await counters_collection.update_one(
-            {"mode": mode, "branch_id": branch_id}, 
-            {"$set": {"value": new_val}}, 
-            upsert=True
-        )
+        await counters_collection.update_one({"mode": mode, "branch_id": branch_id}, {"$set": {"value": new_val}}, upsert=True)
+
+    await upsert_customer(payload)
 
     doc = {**payload, "id": bill_id, "created_at": now_iso()}
     await bills_collection.insert_one(doc)
-    
-    # Ledger Magic
     c, eb, ib = get_bill_ledger_values(doc)
     await apply_ledger_diff(branch_id, c, eb, ib, f"{doc.get('tx_type', 'sale').upper()}: {doc_num}")
-    
     return {"id": bill_id, "document_number": doc_num}
 
 @api_router.put("/bills/update-by-id/{bill_id}")
@@ -276,31 +204,22 @@ async def update_bill_by_id(bill_id: str, payload: dict, _=Depends(require_auth)
     existing = await bills_collection.find_one({"id": bill_id})
     if not existing: raise HTTPException(404, "Bill ID not found")
 
-    # 1. Process customer logic
-    c_id = await upsert_customer(payload)
-    payload["customer_id"] = c_id
-
     doc_num = payload.get("document_number", "")
     match = re.search(r'\d+$', doc_num)
     if match:
         new_val = int(match.group())
-        await counters_collection.update_one(
-            {"mode": payload.get("mode"), "branch_id": payload.get("branch_id")}, 
-            {"$set": {"value": new_val}}, 
-            upsert=True
-        )
+        await counters_collection.update_one({"mode": payload.get("mode"), "branch_id": payload.get("branch_id")}, {"$set": {"value": new_val}}, upsert=True)
+
+    await upsert_customer(payload)
 
     old_b = existing.get("branch_id")
     new_b = payload.get("branch_id")
-    
     old_c, old_eb, old_ib = get_bill_ledger_values(existing)
     new_c, new_eb, new_ib = get_bill_ledger_values(payload)
 
     if old_b == new_b:
-        # Same branch: apply the mathematical difference perfectly
         await apply_ledger_diff(new_b, new_c - old_c, new_eb - old_eb, new_ib - old_ib, f"UPDATE: {doc_num}")
     else:
-        # Branch Migration
         await apply_ledger_diff(old_b, -old_c, -old_eb, -old_ib, f"MIGRATE OUT: {existing.get('document_number')}")
         await apply_ledger_diff(new_b, new_c, new_eb, new_ib, f"MIGRATE IN: {doc_num}")
 
@@ -312,22 +231,15 @@ async def toggle_pay(document_number: str, payload: dict, _=Depends(require_auth
     try:
         bill = await bills_collection.find_one({"document_number": document_number})
         if not bill: raise HTTPException(404, "Bill not found")
-        
-        if bill.get("tx_type") in ["booking", "service"]:
-            raise HTTPException(400, "Please click Edit to manage Booking or Service balances.")
-            
+        if bill.get("tx_type") in ["booking", "service"]: raise HTTPException(400, "Please click Edit to manage Booking or Service balances.")
         old_c, old_eb, old_ib = get_bill_ledger_values(bill)
         new_status = payload.get("is_payment_done")
         bill["is_payment_done"] = new_status
-        
         new_c, new_eb, new_ib = get_bill_ledger_values(bill)
-        
         await apply_ledger_diff(bill.get("branch_id"), new_c - old_c, new_eb - old_eb, new_ib - old_ib, f"TOGGLE: {document_number}")
         await bills_collection.update_one({"document_number": document_number}, {"$set": {"is_payment_done": new_status}})
-        
         return {"message": "Payment Status Toggled"}
-    except Exception as e:
-        raise HTTPException(500, detail=str(e))
+    except Exception as e: raise HTTPException(500, detail=str(e))
 
 @api_router.delete("/bills/{document_number}")
 async def delete_bill(document_number: str, _=Depends(require_auth)):
@@ -358,7 +270,7 @@ async def storage(_=Depends(require_auth)):
         s = await db.command("dbstats")
         u = s.get("dataSize", 0)
         return {"used_bytes": u, "quota_bytes": 512*1024*1024, "percentage": round((u/(512*1024*1024))*100, 2)}
-    except: return {"used_bytes": 0, "quota_bytes": 512*1024*1024, "percentage": 0}
+    except: return {"used_bytes": 0, "quota_bytes": 512*1024*1024, "percentage": 0} 
 
 @api_router.get("/bills/public/{document_number}")
 async def get_public(document_number: str):
@@ -369,5 +281,4 @@ async def get_public(document_number: str):
 app.include_router(api_router)
 
 @app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
+async def shutdown_db_client(): client.close()
