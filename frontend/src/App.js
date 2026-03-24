@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Wifi, Store, Upload, Download } from "lucide-react";
+import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Wifi, Store, Upload, Download, Home, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Toaster, toast } from "sonner";
@@ -26,6 +26,11 @@ const defaultSettings = {
   silver_rate_per_gram: 240, making_charge_per_gram: 15, flat_mc_below_5g: 150, default_hsn: "7113",
   formula_note: "Line total = Weight x (Silver rate per gram + Making charge per gram)", logo_data_url: "", about_qr_data_url: STATIC_ABOUT_QR_URL, custom_fonts: [],
   shortcuts: { save: "s", new: "n", settings: "q", ledger: "l" },
+  text_macros: [
+    { id: "m1", key: "Alt+1", text: "Silver Payal" },
+    { id: "m2", key: "Alt+2", text: "Silver Chain" },
+    { id: "m3", key: "Alt+3", text: "Silver Ring" }
+  ],
   branches: [
     { id: "B1", name: "Branch 1 (Old Town)", address: "Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2", map_url: "https://g.page/r/CVvnomQZn7zxEBE/review", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", gstin: "21AAUFJ1925F1ZH", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 },
     { id: "B2", name: "Branch 2 (Unit-2)", address: "Branch - 2 : Shop No.14, BMC Market Complex, Market Building, Near Petrol Pump, Unit-2, BBSR-9", map_url: "#", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", gstin: "21AAUFJ1925F1ZH", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 }
@@ -91,21 +96,6 @@ const BillTable = ({ mode, items }) => (
   </table>
 );
 
-const DesignSettingRow = ({ title, fieldPrefix, settings, setSettings }) => (
-  <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
-    <h4 style={{ margin: "0 0 10px 0" }}>{title}</h4>
-    {fieldPrefix !== "address" && (
-      <Input value={Array.isArray(settings[fieldPrefix]) ? settings[fieldPrefix].join(", ") : settings[fieldPrefix] || ""} onChange={(e) => setSettings((prev) => ({ ...prev, [fieldPrefix]: fieldPrefix === 'phone_numbers' ? e.target.value.split(",").map(i=>i.trim()).filter(Boolean) : e.target.value }))} placeholder={title} style={{ marginBottom: "10px", width: "100%", boxSizing: "border-box" }} />
-    )}
-    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", width: "100%" }}>
-      <input type="color" value={settings[`${fieldPrefix}_color`] || "#000000"} onChange={(e) => setSettings((prev) => ({ ...prev, [`${fieldPrefix}_color`]: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px", flexShrink: 0 }} title="Color" />
-      <Input type="number" min="8" max="60" value={settings[`${fieldPrefix}_size`] || 14} onChange={(e) => setSettings((prev) => ({ ...prev, [`${fieldPrefix}_size`]: Number(e.target.value) }))} style={{ width: "70px", padding: "0 5px", textAlign: "center", flexShrink: 0 }} title="Font Size (px)" />
-      <select value={settings[`${fieldPrefix}_font`] || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, [`${fieldPrefix}_font`]: e.target.value }))} style={{ flex: "1 1 120px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "120px" }} title="Font Style"><FontSelectOptions customFonts={settings.custom_fonts || []} /></select>
-      <select value={settings[`${fieldPrefix}_align`] || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, [`${fieldPrefix}_align`]: e.target.value }))} style={{ flex: "1 1 80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "80px" }} title="Alignment"><option value="left">Center</option><option value="right">Right</option></select>
-    </div>
-  </div>
-);
-
 export default function App() {
   const [isCompactView, setIsCompactView] = useState(window.innerWidth <= 768);
   const [isDirty, setIsDirty] = useState(false);
@@ -137,7 +127,7 @@ export default function App() {
 
   const [customer, setCustomer] = useState({ name: "", phone: "", address: "", email: "" });
   const [suggestions, setSuggestions] = useState([]);
-  const [items, setItems] = useState([]);
+  const [items, setItems] = useState([createItem()]);
   const [discount, setDiscount] = useState("0");
   const [exchange, setExchange] = useState("0");
   const [manualRoundOff, setManualRoundOff] = useState("");
@@ -158,8 +148,7 @@ export default function App() {
   const [isBalancePaid, setIsBalancePaid] = useState(false);
 
   const [showSettings, setShowSettings] = useState(false);
-  const [settingsTab, setSettingsTab] = useState("design"); 
-  const [showAbout, setShowAbout] = useState(false);
+  const [settingsTab, setSettingsTab] = useState("tax"); 
   const [showRecentBills, setShowRecentBills] = useState(false);
   const [recentBillsList, setRecentBillsList] = useState([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
@@ -170,6 +159,7 @@ export default function App() {
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
   const [isBulkDownloading, setIsBulkDownloading] = useState(false);
+  
   const [showLedger, setShowLedger] = useState(false);
   const [todayBills, setTodayBills] = useState([]);
   const [ledgerLoading, setLedgerLoading] = useState(false);
@@ -185,11 +175,9 @@ export default function App() {
   const [manualCash, setManualCash] = useState("");
   const [manualEstBank, setManualEstBank] = useState("");
   const [manualInvBank, setManualInvBank] = useState("");
-  const [storageStats, setStorageStats] = useState({ used_bytes: 0, quota_bytes: 524288000, percentage: 0 });
+  
   const [savingBill, setSavingBill] = useState(false);
   const [printScale, setPrintScale] = useState(getInitialPrintScale);
-  const [logoUploadName, setLogoUploadName] = useState("");
-  const [aboutUploadName, setAboutUploadName] = useState("");
   const [cloudStatus, setCloudStatus] = useState({ provider: "supabase", enabled: false, mode: "loading" });
   
   const authHeaders = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
@@ -202,22 +190,6 @@ export default function App() {
       settings.custom_fonts.forEach(f => registerFont(f.name, f.dataUrl));
     }
   }, [settings.custom_fonts]);
-
-  const handleFontUpload = async (event) => {
-    const file = event.target.files?.[0]; if (!file) return;
-    const fontName = file.name.split('.')[0];
-    try {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const dataUrl = e.target.result; const newFont = { name: fontName, dataUrl };
-        const updatedFonts = [...(settings.custom_fonts || []), newFont];
-        setSettings(prev => ({ ...prev, custom_fonts: updatedFonts }));
-        localStorage.setItem("jj_custom_fonts", JSON.stringify(updatedFonts));
-        registerFont(fontName, dataUrl); toast.success(`Font "${fontName}" uploaded!`);
-      };
-      reader.readAsDataURL(file);
-    } catch { toast.error("Font upload failed."); }
-  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -254,10 +226,10 @@ export default function App() {
   useEffect(() => {
     const handleEsc = (event) => {
       if (event.key !== "Escape") return;
-      setShowSettings(false); setShowAbout(false); setShowRecentBills(false); setShowLedger(false); setShowFeedbackModal(false);
+      setShowSettings(false); setShowRecentBills(false); setShowLedger(false); setShowFeedbackModal(false);
     };
     window.addEventListener("keydown", handleEsc); return () => window.removeEventListener("keydown", handleEsc);
-  }, [showSettings, showAbout, showRecentBills, showLedger, showFeedbackModal]);
+  }, [showSettings, showRecentBills, showLedger, showFeedbackModal]);
 
   useEffect(() => { localStorage.setItem("jj_print_scale", String(clampPrintScale(printScale))); }, [printScale]);
 
@@ -307,42 +279,6 @@ export default function App() {
     });
   }, [recentBillsList, recentModeFilter, recentDateFilter, customStartDate, customEndDate]);
 
-  const handleBulkDownload = async () => {
-    if ((filteredRecentBills || []).length === 0) { toast.error("No bills to download!"); return; }
-    if ((filteredRecentBills || []).length > 20) { if (!window.confirm(`Generate PDF with ${filteredRecentBills.length} pages? This might take a minute.`)) return; }
-    setIsBulkDownloading(true); toast.info(`Generating PDF for ${filteredRecentBills.length} bills...`);
-    const wasCompact = isCompactView; if (wasCompact) setIsCompactView(false);
-    await new Promise(resolve => setTimeout(resolve, 800));
-
-    try {
-      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      const pageWidth = pdf.internal.pageSize.getWidth();
-
-      for (let i = 0; i < filteredRecentBills.length; i++) {
-        const bill = filteredRecentBills[i];
-        const node = document.getElementById(`bulk-bill-${bill.document_number}`);
-        if (!node) continue;
-        node.style.display = "block"; node.style.width = "800px"; node.style.minWidth = "800px"; node.style.maxWidth = "800px";
-        const canvas = await html2canvas(node, { 
-          scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#ffffff", 
-          onclone: (clonedDoc) => {
-            const clonedNode = clonedDoc.getElementById(`bulk-bill-${bill.document_number}`);
-            if (clonedNode) {
-              clonedNode.style.width = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.padding = "20px";
-              const images = clonedNode.getElementsByTagName('img'); for (let img of images) img.crossOrigin = "anonymous";
-            }
-          }
-        });
-        node.style.display = "none";
-        const imgData = canvas.toDataURL("image/png", 1.0);
-        const pageHeight = (canvas.height * pageWidth) / canvas.width;
-        if (i > 0) pdf.addPage();
-        pdf.addImage(imgData, "PNG", 0, 0, pageWidth, pageHeight);
-      }
-      pdf.save(`Jalaram_Bills_Export_${today()}.pdf`); toast.success("Bulk PDF Downloaded!");
-    } catch (error) { toast.error("Error generating bulk PDF."); } finally { setIsBulkDownloading(false); if (wasCompact) setIsCompactView(true); }
-  };
-
   const fetchLedgerHistory = async () => {
     try { const res = await axios.get(`${API}/settings/ledger/logs?branch_id=${globalBranchId}`, { headers: authHeaders }); setLedgerLogs(res.data); } catch { toast.error("Failed to load ledger history."); }
   };
@@ -358,13 +294,6 @@ export default function App() {
     }
   }, [showLedger, token, isPublicView, globalBranchId, authHeaders]);
 
-  useEffect(() => {
-    if (showSettings && token && !isPublicView) {
-      const fetchStorageStats = async () => { try { const res = await axios.get(`${API}/system/storage`, { headers: authHeaders }); setStorageStats(res.data); } catch { console.error("Failed to load storage stats"); } };
-      fetchStorageStats();
-    }
-  }, [showSettings, token, isPublicView, authHeaders]);
-
   const loadSettings = async () => {
     const response = await axios.get(`${API}/settings`, { headers: authHeaders });
     const savedLogo = localStorage.getItem("jj_logo_data_url");
@@ -374,6 +303,7 @@ export default function App() {
     let localFonts = []; const localFontsRaw = localStorage.getItem("jj_custom_fonts"); if (localFontsRaw) { try { localFonts = JSON.parse(localFontsRaw); } catch (e) {} }
     const newSettings = { ...defaultSettings, ...dbData, logo_data_url: savedLogo || dbData.logo_data_url || "", about_qr_data_url: savedAboutQr || dbData.about_qr_data_url || STATIC_ABOUT_QR_URL, custom_fonts: dbData.custom_fonts || localFonts };
     if (!newSettings.shortcuts) newSettings.shortcuts = defaultSettings.shortcuts;
+    if (!newSettings.text_macros) newSettings.text_macros = defaultSettings.text_macros;
     setSettings(newSettings);
     if (!(newSettings.branches || []).find(b => b.id === globalBranchId)) { setGlobalBranchId((newSettings.branches || [])[0].id); setBillBranchId((newSettings.branches || [])[0].id); }
   };
@@ -451,7 +381,7 @@ export default function App() {
   const checkIsBlank = () => { return !customer.name.trim() && !customer.phone.trim() && !customer.address.trim() && !(items || []).some(i => i.description.trim() || i.weight.trim() || i.amount_override.trim()) && (!discount || discount === "0") && (!exchange || exchange === "0") && !paymentMethod && !advanceMethod && !advanceAmount && !splitCash; };
 
   const clearBill = async (nextMode = mode, nextBranch = billBranchId) => {
-    setCurrentBillId(null); setEditingDocNumber(null); setItems([]); setCustomer({ name: "", phone: "", address: "", email: "" });
+    setCurrentBillId(null); setEditingDocNumber(null); setItems([createItem(settings.default_hsn)]); setCustomer({ name: "", phone: "", address: "", email: "" });
     setSuggestions([]); setDiscount("0"); setExchange("0"); setManualRoundOff("");
     setTxType("sale"); setPaymentMethod(""); setSplitCash(""); setIsPaymentDone(false); setAdvanceAmount(""); setAdvanceMethod(""); setAdvanceSplitCash(""); setIsAdvancePaid(false); setBalanceMethod(""); setBalanceSplitCash(""); setIsBalancePaid(false); setNotes("");
     setBillDate(today()); setIsDirty(false); await reserveNumber(nextMode, nextBranch); goToBillTop();
@@ -470,38 +400,7 @@ export default function App() {
     setBalanceMethod(bill.balance_method || ""); setBalanceSplitCash(bill.balance_split_cash ? String(bill.balance_split_cash) : ""); setIsBalancePaid(bill.is_balance_paid || false);
     setNotes(bill.notes || ""); setDiscount(bill.discount !== undefined ? String(bill.discount) : "0"); setExchange(bill.exchange !== undefined ? String(bill.exchange) : "0"); setManualRoundOff(bill.round_off !== undefined && bill.round_off !== null ? String(bill.round_off) : "");
     const loadedItems = (bill.items || []).map((item) => ({ id: `${Date.now()}-${Math.random()}`, description: item.description || "", hsn: item.hsn || "", weight: item.weight ? String(item.weight) : "", quantity: item.quantity ? String(item.quantity) : "1", mc_override: item.mc_override !== null && item.mc_override !== undefined ? String(item.mc_override) : "", rate_override: item.rate_override !== null && item.rate_override !== undefined ? String(item.rate_override) : "", amount_override: item.amount_override !== null && item.amount_override !== undefined ? String(item.amount_override) : "", }));
-    setItems(loadedItems); setIsDirty(false); setShowRecentBills(false); setShowLedger(false); toast.success(`Loaded ${bill.document_number} for editing`); goToBillTop();
-  };
-
-  const handleDeleteBill = async (bill) => {
-    if (!window.confirm(`Are you sure you want to permanently delete ${bill.document_number}?`)) return;
-    try { await axios.delete(`${API}/bills/${bill.document_number}`, { headers: authHeaders }); setRecentBillsList((prev) => prev.filter((b) => b.document_number !== bill.document_number)); if (currentBillId === bill.id) await clearBill(mode, billBranchId); toast.success(`${bill.document_number} deleted successfully.`); await loadSettings(); } 
-    catch { toast.error("Failed to delete the bill."); }
-  };
-
-  const handleQuickPaymentToggle = async (bill) => {
-    if (bill.tx_type === "booking" || bill.tx_type === "service") { toast.info("Please open the bill and click Edit to manage Booking/Service balances."); return; }
-    const newStatus = !bill.is_payment_done;
-    try { await axios.put(`${API}/bills/${bill.document_number}/toggle-payment`, { is_payment_done: newStatus }, { headers: authHeaders }); toast.success(`Payment marked as ${newStatus ? 'DONE ✅' : 'PENDING ⏳'}`); if (currentBillId === bill.id) { setIsPaymentDone(newStatus); } setRecentBillsList(prev => prev.map(b => b.document_number === bill.document_number ? { ...b, is_payment_done: newStatus } : b)); await loadSettings(); } 
-    catch { toast.error("Failed to update payment status."); }
-  };
-
-  const handleResetCounter = async (resetMode) => {
-    if (!window.confirm(`Are you SURE you want to restart the ${resetMode.toUpperCase()} counter for ${activeGlobalBranch.name} back to 0001?`)) return;
-    try { await axios.post(`${API}/bills/reset-counter`, { mode: resetMode, branch_id: globalBranchId }, { headers: authHeaders }); toast.success(`${resetMode.toUpperCase()} counter for ${activeGlobalBranch.name} has been reset.`); if (mode === resetMode && billBranchId === globalBranchId) { await reserveNumber(mode, billBranchId); } } 
-    catch { toast.error(`Failed to reset the ${resetMode} counter.`); }
-  };
-
-  const handleBackupBills = async () => {
-    try { toast.info("Preparing backup file..."); const res = await axios.get(`${API}/bills/export`, { headers: authHeaders }); const dataStr = JSON.stringify(res.data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `Jalaram_Bills_Backup_${today()}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link); toast.success("Backup downloaded successfully!"); } 
-    catch { toast.error("Failed to download backup."); }
-  };
-
-  const handleDeleteAllBills = async () => {
-    if (!window.confirm("🚨 WARNING! This will permanently delete ALL bills. Have you downloaded your backup first?")) return;
-    if (window.prompt("Type 'DELETE' to confirm wiping all bills:") !== "DELETE") { toast.error("Deletion cancelled."); return; }
-    try { await axios.delete(`${API}/bills/all`, { headers: authHeaders }); toast.success("All bills wiped. (Ledger balances remain intact)"); setRecentBillsList([]); const res = await axios.get(`${API}/system/storage`, { headers: authHeaders }); setStorageStats(res.data); } 
-    catch { toast.error("Failed to delete bills."); }
+    setItems(loadedItems.length > 0 ? loadedItems : [createItem(settings.default_hsn)]); setIsDirty(false); setShowRecentBills(false); setShowLedger(false); toast.success(`Loaded ${bill.document_number} for editing`); goToBillTop();
   };
 
   const handleModeChange = async (nextMode) => {
@@ -518,12 +417,9 @@ export default function App() {
     catch (error) { if (error?.response?.status === 401) { toast.error("Wrong passcode."); } else { toast.error("Server is waking up. Please wait 15-20 seconds and try again."); } } finally { setLoggingIn(false); }
   };
 
-  const handleLogout = () => { localStorage.removeItem("jj_auth_token"); setToken(""); };
+  const handleLogout = () => { localStorage.removeItem("jj_auth_token"); setToken(""); setGatewayBranchSelected(false); };
 
-  const optimizeImageDataUrl = async (file) => { const reader = new FileReader(); const original = await new Promise((resolve, reject) => { reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); }); const image = new Image(); await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; image.src = original; }); const ratio = Math.min(420 / image.width, 420 / image.height, 1); const targetWidth = Math.round(image.width * ratio); const targetHeight = Math.round(image.height * ratio); const canvas = document.createElement("canvas"); canvas.width = targetWidth; canvas.height = targetHeight; const context = canvas.getContext("2d"); context.drawImage(image, 0, 0, targetWidth, targetHeight); return canvas.toDataURL("image/png", 0.92); };
-  const handleLogoUpload = async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const dataUrl = await optimizeImageDataUrl(file); localStorage.setItem("jj_logo_data_url", dataUrl); setSettings((prev) => ({ ...prev, logo_data_url: dataUrl })); setLogoUploadName(file.name); toast.success("Logo uploaded successfully."); } catch { toast.error("Logo upload failed."); } };
-  const handleAboutQrUpload = async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const dataUrl = await optimizeImageDataUrl(file); localStorage.setItem("jj_about_qr_data_url", dataUrl); setSettings((prev) => ({ ...prev, about_qr_data_url: dataUrl })); setAboutUploadName(file.name); toast.success("About QR updated."); } catch { toast.error("QR upload failed."); } };
-  const saveSettings = async () => { try { await axios.put(`${API}/settings`, settings, { headers: authHeaders }); toast.success("Settings saved."); } catch { toast.error("Could not save settings."); } };
+  const saveSettings = async () => { try { await axios.put(`${API}/settings`, settings, { headers: authHeaders }); toast.success("Settings saved."); setShowSettings(false); } catch { toast.error("Could not save settings."); } };
 
   const submitLedgerLog = async () => {
     if (!logAmount || isNaN(logAmount) || num(logAmount) <= 0) { toast.error("Please enter a valid amount."); return; }
@@ -560,11 +456,10 @@ export default function App() {
 
       if (currentBillId) { await axios.put(`${API}/bills/update-by-id/${currentBillId}`, payload, { headers: authHeaders }); toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} updated & migrated successfully.`); setIsDirty(false); setEditingDocNumber(documentNumber); } 
       else { const res = await axios.post(`${API}/bills/save`, payload, { headers: authHeaders }); toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} saved successfully.`); setIsDirty(false); setCurrentBillId(res.data.id); setEditingDocNumber(res.data.document_number); setDocumentNumber(res.data.document_number); }
-      await loadSettings(); await fetchLedgerHistory();
+      await loadSettings(); 
     } catch (error) { toast.error("Failed to save bill."); } finally { setSavingBill(false); }
   };
 
-  // Setup Keyboard Shortcuts Engine
   useEffect(() => {
     const handleGlobalKey = (e) => {
         if (e.ctrlKey) {
@@ -601,46 +496,46 @@ export default function App() {
   const goToBillTop = () => { document.getElementById("bill-print-root")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
   const handleWifiClick = () => { navigator.clipboard.writeText("12345678").then(() => { toast.success("✅ Password '12345678' Copied! Go to settings and connect to 'JalaramJewellers Unlimited'.", { duration: 6000 }); }).catch(() => { toast.info("Wi-Fi: JalaramJewellers Unlimited | Pass: 12345678", { duration: 6000 }); }); };
 
-  const todaysTotalCash = (todayBills || []).filter(b => b.is_payment_done).reduce((sum, b) => sum + (b.payment_method === 'Cash' ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_cash) : 0), 0);
-  const todaysTotalEstBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'estimate').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
-  const todaysTotalInvBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'invoice').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
+  const handleGlobalKeyDown = (e) => {
+    if (e.key === 'Enter' && ['INPUT', 'SELECT'].includes(e.target.tagName)) {
+      e.preventDefault();
+      const focusableElements = Array.from(document.querySelectorAll('input, select, button')).filter(el => !el.disabled);
+      const index = focusableElements.indexOf(e.target);
+      if (index > -1 && index < focusableElements.length - 1) {
+        focusableElements[index + 1].focus();
+      }
+    }
 
-  const publicComputed = useMemo(() => {
-    if (!publicBill || !publicSettings) return { items: [], taxable: 0, cgst: 0, sgst: 0, igst: 0, mdr: 0, roundOff: 0, grandTotal: 0, discount: 0, exchange: 0 };
-    const baseSilverRate = num(publicSettings.silver_rate_per_gram); const baseMCPerGram = num(publicSettings.making_charge_per_gram); const flatMCBelow5g = num(publicSettings.flat_mc_below_5g);
+    if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) {
+      const macros = settings.text_macros || [];
+      let pressedKey = e.key;
+      if (e.altKey && e.key !== 'Alt') pressedKey = `Alt+${e.key}`;
+      if (e.ctrlKey && e.key !== 'Control') pressedKey = `Ctrl+${e.key}`;
 
-    const mapped = (publicBill.items || []).map((item, index) => {
-      const weight = num(item.weight); const quantity = Math.max(num(item.quantity || 1), 1);
-      const silverRate = (item.rate_override !== undefined && item.rate_override !== null && item.rate_override !== "") ? num(item.rate_override) : baseSilverRate;
-      let mcAmount = 0;
-      if (item.mc_override !== undefined && item.mc_override !== null && item.mc_override !== "") { mcAmount = weight * num(item.mc_override); } 
-      else if (flatMCBelow5g > 0 && weight > 0 && weight < 5) { mcAmount = flatMCBelow5g; } 
-      else { mcAmount = weight * baseMCPerGram; }
-
-      const totalItemCost = (weight * silverRate) + mcAmount;
-      const formulaAmount = publicBill.mode === "estimate" ? totalItemCost * quantity : totalItemCost;
-      const amount = (item.amount !== undefined && item.amount !== null && item.amount !== "") ? num(item.amount) : (item.amount_override ? num(item.amount_override) : formulaAmount);
-      const { rupees, paise } = splitAmount(amount);
-      const rateForPrint = weight > 0 ? (amount / (publicBill.mode === "estimate" ? quantity : 1)) / weight : 0;
+      const macro = macros.find(m => m.key.toLowerCase() === pressedKey.toLowerCase());
       
-      return { ...item, sl_no: item.sl_no || (index + 1), rate: rateForPrint, amount, rupees, paise, weight, quantity };
-    });
-
-    const subtotal = mapped.reduce((sum, row) => sum + row.amount, 0); const taxable = subtotal;
-    const cgst = publicBill.mode === "invoice" ? taxable * 0.015 : 0; const sgst = publicBill.mode === "invoice" ? taxable * 0.015 : 0; const igst = 0;
-    const gstApplied = publicBill.mode === "invoice" ? cgst + sgst + igst : 0;
-    const discount = num(publicBill.discount || publicBill.totals?.discount || 0); const exchange = num(publicBill.exchange || publicBill.totals?.exchange || 0);
-    const mdr = publicBill.payment_method === "Card" ? (taxable + gstApplied) * 0.02 : 0;
-    const baseTotal = taxable + gstApplied + mdr - discount - exchange; const autoRound = Math.round(baseTotal) - baseTotal;
-    const roundOff = publicBill.round_off !== undefined && publicBill.round_off !== null ? num(publicBill.round_off) : (publicBill.totals?.round_off !== undefined && publicBill.totals?.round_off !== null ? num(publicBill.totals?.round_off) : autoRound);
-    const grandTotal = publicBill.totals?.grand_total !== undefined && publicBill.totals?.grand_total !== null ? num(publicBill.totals.grand_total) : (baseTotal + roundOff);
-
-    return { 
-      items: mapped, taxable: publicBill.totals?.taxable_amount || publicBill.totals?.subtotal || taxable, 
-      cgst: publicBill.totals?.cgst ?? cgst, sgst: publicBill.totals?.sgst ?? sgst, igst: publicBill.totals?.igst ?? igst, 
-      mdr: publicBill.totals?.mdr ?? mdr, roundOff, grandTotal, discount, exchange 
-    };
-  }, [publicBill, publicSettings]);
+      if (macro) {
+        e.preventDefault(); 
+        const el = e.target;
+        const start = el.selectionStart || 0;
+        const end = el.selectionEnd || 0;
+        const text = el.value;
+        const newText = text.substring(0, start) + macro.text + text.substring(end);
+        
+        const nativeSetter = Object.getOwnPropertyDescriptor(
+          window.HTMLInputElement.prototype, 'value'
+        )?.set || Object.getOwnPropertyDescriptor(
+          window.HTMLTextAreaElement.prototype, 'value'
+        )?.set;
+        
+        if (nativeSetter) {
+          nativeSetter.call(el, newText);
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          setTimeout(() => { el.setSelectionRange(start + macro.text.length, start + macro.text.length); }, 0);
+        }
+      }
+    }
+  };
 
   const getUpiAmount = () => {
       if (txType === "sale") return paymentMethod === "Split" ? Math.max(0, computed.grandTotal - num(splitCash)) : computed.grandTotal;
@@ -803,7 +698,6 @@ export default function App() {
     );
   }
 
-  // New Branch Selection Gateway
   if (token && !gatewayBranchSelected && !isPublicView) {
     return (
       <div className="login-shell" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", backgroundColor: "#f8fafc" }}>
@@ -826,7 +720,6 @@ export default function App() {
       <div style={{ position: "absolute", top: "-9999px", left: "-9999px", opacity: 0, pointerEvents: "none" }}>
         {(filteredRecentBills || []).map(b => {
            const billBranch = (settings.branches || []).find(br => br.id === b.branch_id) || (settings.branches || [])[0] || defaultSettings.branches[0];
-           const bulkUpiAmountToPay = b.payment_method === "Split" ? num(b.split_upi) : (b.totals?.grand_total || 0);
            const printedItems = (b.items || []).map((item, index) => {
              const rate = (item.rate !== undefined && item.rate !== null) ? num(item.rate) : (item.rate_override ? num(item.rate_override) : 0);
              const amount = (item.amount !== undefined && item.amount !== null) ? num(item.amount) : (item.amount_override ? num(item.amount_override) : 0);
@@ -915,9 +808,10 @@ export default function App() {
         </div>
       </header>
 
-      {/* NEW SPLIT SCREEN LAYOUT CSS INTEGRATED HERE */}
+      {/* MAIN LAYOUT */}
       <main className="main-layout" style={{ display: "flex", flexDirection: isCompactView ? "column" : "row", height: "calc(100vh - 70px)", overflow: "hidden" }}>
         
+        {/* LEFT PANE: BILL RENDERER */}
         <section id="bill-print-root" className="bill-sheet" style={{ flex: "1.5", overflowY: "auto", height: "100%", padding: "20px", boxSizing: "border-box", "--print-scale-factor": (printScale / 100).toFixed(3), position: 'relative', zIndex: 1 }}>
           {(txType === "sale" ? isPaymentDone : isBalancePaid) && <div className="watermark-done">FULLY PAID</div>}
           <div className="bill-header">
@@ -1008,6 +902,7 @@ export default function App() {
           <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
         </section>
 
+        {/* RIGHT PANE: CONTROL PANEL */}
         <aside className="controls no-print" style={{ flex: "1", overflowY: "auto", height: "100%", padding: "20px", borderLeft: "1px solid #e2e8f0", boxSizing: "border-box" }}>
           <div className="control-card">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
@@ -1138,29 +1033,24 @@ export default function App() {
                 </div>
               </div>
             )}
-            <textarea value={notes} onChange={(e) => { setNotes(e.target.value); markDirty(); }} placeholder="Notes / Descriptions" className="notes-box" style={{ marginTop: "15px" }} />
+            <textarea value={notes} onChange={(e) => { setNotes(e.target.value); markDirty(); }} placeholder="Notes / Descriptions" className="notes-box" style={{ marginTop: "15px", width: "100%", minHeight: "80px", padding: "10px", borderRadius: "6px", border: "1px solid #cbd5e1" }} />
           </div>
 
           <div className="control-card action-grid">
-            <Button onClick={saveBill} disabled={savingBill} style={{ backgroundColor: "#0f172a" }}>{savingBill ? "Saving..." : currentBillId ? `Update & Migrate (${editingDocNumber})` : "Save Bill"}</Button>
-            <Button onClick={() => setShowLedger(true)} style={{ backgroundColor: "#16a34a", color: "white" }}>Daily Sales & Ledger</Button>
-            <Button onClick={() => { setShowRecentBills(true); setBillSearchQuery(""); setRecentBranchFilter("ALL"); setRecentModeFilter("ALL"); setRecentDateFilter("ALL"); }} variant="outline">Recent Bills</Button>
-            <Button onClick={() => downloadPdf("bill-print-root", documentNumber || mode)}>Download PDF</Button>
-            <Button onClick={() => window.print()}>Print</Button>
-            <Button onClick={shareWhatsApp}>WhatsApp Link</Button>
-            <Button onClick={shareEmail}>Email Link</Button>
-            <Button onClick={handleNewBillClick} variant="outline">New Bill</Button>
+            <Button onClick={saveBill} disabled={savingBill} style={{ backgroundColor: "#0f172a" }}>{savingBill ? "Saving..." : currentBillId ? `Update (${editingDocNumber})` : "Save Bill"}</Button>
+            <Button onClick={() => setShowLedger(true)} style={{ backgroundColor: "#16a34a", color: "white" }}>Daily Sales</Button>
+            <Button onClick={() => { setShowRecentBills(true); }} variant="outline">Recent Bills</Button>
             <Button onClick={() => setShowSettings(true)} variant="outline">Settings</Button>
           </div>
         </aside>
       </main>
 
-      {/* DAILY SALES & LEDGER */}
+      {/* DAILY SALES & LEDGER MODAL */}
       {showLedger && (
-        <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "650px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
-          <div className="drawer-header" style={{ backgroundColor: "#f0fdf4", borderBottom: "2px solid #bbf7d0", padding: "20px", position: "sticky", top: 0, zIndex: 10 }}>
-            <h3 style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}><Banknote /> Vaults & Ledger: {activeGlobalBranch.name}</h3>
-            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowLedger(false)}><ArrowLeft className="drawer-back-icon" /><span>Back</span></Button>
+        <section className="side-drawer no-print" style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: "100vw", maxWidth: "650px", backgroundColor: "white", zIndex: 1000, boxShadow: "-5px 0 25px rgba(0,0,0,0.1)", overflowY: "auto" }}>
+          <div className="drawer-header" style={{ backgroundColor: "#f0fdf4", borderBottom: "2px solid #bbf7d0", padding: "20px", position: "sticky", top: 0, zIndex: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "10px" }}><Banknote /> Vaults & Ledger</h3>
+            <Button type="button" variant="outline" onClick={() => setShowLedger(false)}>Close</Button>
           </div>
 
           <div style={{ padding: "20px" }}>
@@ -1207,4 +1097,135 @@ export default function App() {
                     <div style={{ flex: "1 1 150px" }}><label className="select-label">{logType === "add" ? "To Vault" : "From Vault"}</label><select value={logSourceVault} onChange={(e) => setLogSourceVault(e.target.value)} className="native-select"><option value="cash">Cash Drawer</option><option value="estimate_bank">Estimate Bank</option><option value="invoice_bank">GST Bank</option></select></div>
                     {logType === "exchange" && (<div style={{ flex: "1 1 150px" }}><label className="select-label">To Vault</label><select value={logTargetVault} onChange={(e) => setLogTargetVault(e.target.value)} className="native-select"><option value="cash">Cash Drawer</option><option value="estimate_bank">Estimate Bank</option><option value="invoice_bank">GST Bank</option></select></div>)}
                   </div>
-                  <label className="select-label">Reason / Remark</label><Input placeholder="e.g. Paid for Lunch, Transfer to Bank..." value={logReason} onChange={(e) => setLogReason(e.target.value)} style={{ marginBottom: "15px"
+                  <label className="select-label">Reason / Remark</label><Input placeholder="e.g. Paid for Lunch, Transfer to Bank..." value={logReason} onChange={(e) => setLogReason(e.target.value)} style={{ marginBottom: "15px" }} />
+                  <Button onClick={submitLedgerLog} disabled={submittingLog} style={{ width: "100%", backgroundColor: "#16a34a" }}>Submit Log</Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* FULLY FUNCTIONAL SETTINGS MODAL */}
+      {showSettings && (
+         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 2000, display: "flex", justifyContent: "center", alignItems: "center" }}>
+            <div style={{ background: "white", padding: "0", borderRadius: "12px", width: "95%", maxWidth: "700px", maxHeight: "90vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)" }}>
+               <div style={{ padding: "20px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#0f172a", color: "white" }}>
+                  <h2 style={{ margin: 0 }}>System Settings</h2>
+                  <Button variant="ghost" onClick={() => setShowSettings(false)} style={{ color: "white" }}><X size={24} /></Button>
+               </div>
+               
+               <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0", backgroundColor: "#f8fafc" }}>
+                  <Button variant={settingsTab === "shop" ? "default" : "ghost"} onClick={() => setSettingsTab("shop")} style={{ borderRadius: 0, borderBottom: settingsTab === "shop" ? "2px solid #0f172a" : "none" }}>Shop Info</Button>
+                  <Button variant={settingsTab === "tax" ? "default" : "ghost"} onClick={() => setSettingsTab("tax")} style={{ borderRadius: 0, borderBottom: settingsTab === "tax" ? "2px solid #0f172a" : "none" }}>Tax, Rates & Shortcuts</Button>
+               </div>
+
+               <div style={{ padding: "20px", overflowY: "auto", flex: 1 }}>
+                  {settingsTab === "shop" && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+                       <div>
+                          <label className="select-label">Shop Name</label>
+                          <Input value={settings.shop_name} onChange={(e) => setSettings({...settings, shop_name: e.target.value})} />
+                       </div>
+                       <div>
+                          <label className="select-label">Tagline</label>
+                          <Input value={settings.tagline} onChange={(e) => setSettings({...settings, tagline: e.target.value})} />
+                       </div>
+                    </div>
+                  )}
+
+                  {settingsTab === "tax" && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "25px" }}>
+                       <div>
+                          <h3 style={{ margin: "0 0 15px 0", borderBottom: "1px solid #e2e8f0", paddingBottom: "5px" }}>Default Rates & Tax</h3>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+                            <div>
+                               <label className="select-label">Silver Rate (per gram)</label>
+                               <Input type="number" value={settings.silver_rate_per_gram} onChange={(e) => setSettings({...settings, silver_rate_per_gram: e.target.value})} />
+                            </div>
+                            <div>
+                               <label className="select-label">Default Making Charge (per gram)</label>
+                               <Input type="number" value={settings.making_charge_per_gram} onChange={(e) => setSettings({...settings, making_charge_per_gram: e.target.value})} />
+                            </div>
+                            <div>
+                               <label className="select-label">Flat MC (Below 5g)</label>
+                               <Input type="number" value={settings.flat_mc_below_5g} onChange={(e) => setSettings({...settings, flat_mc_below_5g: e.target.value})} />
+                            </div>
+                            <div>
+                               <label className="select-label">Default HSN Code</label>
+                               <Input value={settings.default_hsn} onChange={(e) => setSettings({...settings, default_hsn: e.target.value})} />
+                            </div>
+                          </div>
+                       </div>
+
+                       <div>
+                          <h3 style={{ margin: "0 0 5px 0", borderBottom: "1px solid #e2e8f0", paddingBottom: "5px" }}>Custom Text Macros & Shortcuts</h3>
+                          <p style={{ fontSize: "0.85rem", color: "#64748b", marginBottom: "15px" }}>Press these key combinations while typing in any field to instantly paste the text. (e.g. <b>Alt+1</b>, <b>F4</b>)</p>
+                          
+                          {(settings.text_macros || []).map((macro, idx) => (
+                            <div key={macro.id} style={{ display: "flex", gap: "10px", marginBottom: "10px", alignItems: "center" }}>
+                               <Input placeholder="Key (e.g. Alt+1)" value={macro.key} onChange={(e) => {
+                                  const newMacros = [...settings.text_macros];
+                                  newMacros[idx].key = e.target.value;
+                                  setSettings({...settings, text_macros: newMacros});
+                               }} style={{ width: "130px", fontWeight: "bold" }} />
+                               <span style={{color: "#94a3b8"}}>→</span>
+                               <Input placeholder="Text to paste (e.g. Silver Chain 92.5)" value={macro.text} onChange={(e) => {
+                                  const newMacros = [...settings.text_macros];
+                                  newMacros[idx].text = e.target.value;
+                                  setSettings({...settings, text_macros: newMacros});
+                               }} style={{ flex: 1 }} />
+                               <Button variant="outline" style={{ color: "#ef4444", borderColor: "#fca5a5" }} onClick={() => {
+                                  setSettings({...settings, text_macros: settings.text_macros.filter(m => m.id !== macro.id)});
+                               }}>Remove</Button>
+                            </div>
+                          ))}
+                          <Button variant="outline" onClick={() => {
+                             setSettings({...settings, text_macros: [...(settings.text_macros || []), { id: Date.now().toString(), key: "", text: "" }]});
+                          }} style={{ marginTop: "10px" }}><Plus size={16} style={{marginRight: "5px"}}/> Add Shortcut</Button>
+                       </div>
+                    </div>
+                  )}
+               </div>
+
+               <div style={{ padding: "20px", borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "flex-end", gap: "10px", backgroundColor: "#f8fafc" }}>
+                 <Button variant="outline" onClick={() => setShowSettings(false)}>Cancel</Button>
+                 <Button onClick={saveSettings} style={{ backgroundColor: "#16a34a" }}>Save All Settings</Button>
+               </div>
+            </div>
+         </div>
+      )}
+
+      {/* RECENT BILLS MODAL */}
+      {showRecentBills && (
+         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.5)", zIndex: 2000, display: "flex", justifyContent: "center", padding: "20px" }}>
+            <div style={{ background: "white", width: "100%", maxWidth: "800px", borderRadius: "12px", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)" }}>
+               <div style={{ padding: "20px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#0f172a", color: "white" }}>
+                  <h2 style={{ margin: 0 }}>Recent Bills</h2>
+                  <Button variant="ghost" onClick={() => setShowRecentBills(false)} style={{ color: "white" }}><X size={24} /></Button>
+               </div>
+               <div style={{ padding: "20px", overflowY: "auto", flex: 1 }}>
+                  {filteredRecentBills.length === 0 ? (
+                     <p style={{ textAlign: "center", color: "#64748b", marginTop: "40px" }}>No recent bills found.</p>
+                  ) : (
+                     filteredRecentBills.map(b => (
+                        <div key={b.id} style={{ padding: "15px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "10px", display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#f8fafc" }}>
+                           <div>
+                              <strong style={{ fontSize: "1.1rem" }}>{b.document_number}</strong>
+                              <span style={{ marginLeft: "10px", color: "#64748b" }}>{b.customer_name || "Guest"}</span>
+                           </div>
+                           <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
+                              <strong style={{ fontSize: "1.1rem" }}>₹{money(b.totals?.grand_total)}</strong>
+                              <Button size="sm" onClick={() => loadBillForEditing(b)} variant="outline">Load & Edit</Button>
+                           </div>
+                        </div>
+                     ))
+                  )}
+               </div>
+            </div>
+         </div>
+      )}
+
+    </div>
+  );
+}
