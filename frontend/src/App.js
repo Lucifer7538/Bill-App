@@ -53,18 +53,6 @@ const ConnectWithUs = ({ phoneLink, instaLink = "https://www.instagram.com/jalar
   </div>
 );
 
-const UpiAppsRow = ({ upiUri }) => (
-  <div style={{ marginTop: "20px" }}>
-    <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Or select your app directly:</p>
-    <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
-      <a href={upiUri.replace("upi://pay", "phonepe://pay")} style={{ padding: "8px 16px", backgroundColor: "#5f259f", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>PhonePe</a>
-      <a href={upiUri.replace("upi://pay", "tez://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#1a73e8", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>G-Pay</a>
-      <a href={upiUri.replace("upi://pay", "paytmmp://pay")} style={{ padding: "8px 16px", backgroundColor: "#00baf2", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>Paytm</a>
-      <a href={upiUri.replace("upi://pay", "credpay://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#212121", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>CRED</a>
-    </div>
-  </div>
-);
-
 const BillTable = ({ mode, items }) => (
   <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
     <thead>
@@ -281,11 +269,10 @@ export default function App() {
           return;
       }
 
-      // Allow Save/Row creation even while typing
       if (e.ctrlKey && e.key.toLowerCase() === 's') { e.preventDefault(); saveBill(); return; }
       if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'r') { e.preventDefault(); setItems(prev => [...prev, createItem(settings.default_hsn)]); markDirty(); return; }
 
-      if (isInput) return; // Ignore other shortcuts while typing text
+      if (isInput) return;
 
       if (e.shiftKey && e.key.toLowerCase() === 'n') { e.preventDefault(); handleNewBillClick(); }
       if (e.shiftKey && e.key.toLowerCase() === 'w') { e.preventDefault(); shareWhatsApp(); }
@@ -295,7 +282,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }); // Note: omitting dependencies makes it re-bind every render with fresh state context
+  }); 
 
   useEffect(() => { localStorage.setItem("jj_print_scale", String(clampPrintScale(printScale))); }, [printScale]);
 
@@ -430,12 +417,12 @@ export default function App() {
     if (isPublicView) return;
     const bootstrap = async () => { if (!token) return; try { await loadSettings(); await fetchCloudStatus(); } catch { toast.error("Could not load billing settings."); } };
     bootstrap();
-  }, [token, isPublicView]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [token, isPublicView]); 
 
   useEffect(() => {
     if (!token || isPublicView) return;
     const interval = setInterval(() => { fetchCloudStatus(); }, 30000); return () => clearInterval(interval);
-  }, [token, isPublicView]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [token, isPublicView]); 
 
   useEffect(() => {
     if (!token || isPublicView) return;
@@ -822,7 +809,6 @@ export default function App() {
     );
   }
 
-  // GATEWAY FOR BRANCH SELECTION UPON LOGIN
   if (token && settingsLoaded && !isPublicView && !gatewayPassed) {
      return (
         <div className="login-shell" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9', height: '100vh' }}>
@@ -843,7 +829,7 @@ export default function App() {
   }
 
   return (
-    <div className="billing-app" style={{ height: "100vh", overflow: "hidden" }}>
+    <div className="billing-app" style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", backgroundColor: "#f1f5f9" }}>
       <Toaster position="bottom-right" />
 
       {/* INVISIBLE BULK PDF RENDERER */}
@@ -860,7 +846,6 @@ export default function App() {
            return (
              <section key={b.id} id={`bulk-bill-${b.document_number}`} className="bill-sheet" style={{ width: "800px", maxWidth: "800px", margin: 0, "--print-scale-factor": 1 }}>
                 {(b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) && <div className="watermark-done">FULLY PAID</div>}
-                
                 <div className="bill-header">
                   <div className="logo-area">
                     {settings.logo_data_url ? <img src={settings.logo_data_url} alt="Shop Logo" className="shop-logo" crossOrigin="anonymous" /> : <div className="shop-logo-fallback">JJ</div>}
@@ -918,35 +903,41 @@ export default function App() {
            );
         })}
       </div>
-      {/* END OF BULK PDF RENDERER */}
 
-      <header className="top-bar no-print" style={{ height: "65px" }}>
+      {/* TOP HEADER */}
+      <header className="top-bar no-print" style={{ flexShrink: 0, height: "65px", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", backgroundColor: "#0f172a", color: "white" }}>
         <div className="brand-block" style={{ display: "flex", alignItems: "center", gap: "15px" }}>
-          <div><h1 className="brand-title">{settings.shop_name}</h1><p className="brand-tagline">{settings.tagline}</p></div>
+          <div><h1 className="brand-title" style={{ margin: 0, fontSize: "1.2rem", color: "white" }}>{settings.shop_name}</h1></div>
           <div style={{ paddingLeft: "15px", borderLeft: "2px solid rgba(255,255,255,0.2)" }}>
              <select value={globalBranchId} onChange={(e) => handleGlobalBranchChange(e.target.value)} style={{ backgroundColor: "rgba(255,255,255,0.1)", color: "white", border: "1px solid rgba(255,255,255,0.3)", padding: "6px 12px", borderRadius: "6px", fontWeight: "bold", outline: "none", cursor: "pointer" }}>
                 {(settings.branches || []).map(b => <option key={b.id} value={b.id} style={{ color: "black" }}>📍 {b.name}</option>)}
              </select>
           </div>
         </div>
-        <div className="mode-toggle">
-          <Button onClick={() => handleModeChange("invoice")} className={mode === "invoice" ? "mode-active" : "mode-inactive"}>Invoice Mode</Button>
-          <Button onClick={() => handleModeChange("estimate")} className={mode === "estimate" ? "mode-active" : "mode-inactive"}>Estimate Mode</Button>
-        </div>
-        <div className={`cloud-badge ${cloudStatus.enabled ? "cloud-badge-live" : "cloud-badge-fallback"}`}>
-          <span className="cloud-dot" /><span>Cloud Sync: {cloudStatus.enabled ? "Live" : "Fallback"}</span>
-        </div>
-        <div className="top-actions">
-          <Button variant="outline" onClick={goToBillTop}>Back</Button>
-          <Button variant="outline" onClick={handleLogout}>Logout</Button>
+        
+        {/* Hidden on very small screens, shown otherwise */}
+        {!isMobileSplit && (
+          <div className="mode-toggle" style={{ display: "flex", gap: "10px", backgroundColor: "#1e293b", padding: "4px", borderRadius: "8px" }}>
+            <Button onClick={() => handleModeChange("invoice")} style={{ backgroundColor: mode === "invoice" ? "#2563eb" : "transparent", color: mode === "invoice" ? "white" : "#cbd5e1", border: "none", boxShadow: mode === "invoice" ? "0 2px 4px rgba(0,0,0,0.2)" : "none" }}>Invoice Mode</Button>
+            <Button onClick={() => handleModeChange("estimate")} style={{ backgroundColor: mode === "estimate" ? "#2563eb" : "transparent", color: mode === "estimate" ? "white" : "#cbd5e1", border: "none", boxShadow: mode === "estimate" ? "0 2px 4px rgba(0,0,0,0.2)" : "none" }}>Estimate Mode</Button>
+          </div>
+        )}
+
+        <div className="top-actions" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.85rem", color: cloudStatus.enabled ? "#4ade80" : "#facc15", marginRight: "10px" }}>
+             <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: cloudStatus.enabled ? "#4ade80" : "#facc15" }} />
+             <span>{cloudStatus.enabled ? "Live" : "Offline"}</span>
+          </div>
+          <Button variant="outline" onClick={goToBillTop} style={{ color: "black", backgroundColor: "white" }}>Back</Button>
+          <Button variant="outline" onClick={handleLogout} style={{ color: "black", backgroundColor: "white" }}>Logout</Button>
         </div>
       </header>
 
       {/* INDEPENDENT SPLIT-SCREEN LAYOUT FOR TABLETS & PHONES */}
-      <main className="main-layout" style={{ display: "flex", flexDirection: isMobileSplit ? "column" : "row", height: "calc(100vh - 65px)", overflow: "hidden", width: "100%", backgroundColor: "#f1f5f9" }}>
+      <main className="main-layout" style={{ flex: 1, display: "flex", flexDirection: isMobileSplit ? "column" : "row", overflowY: isMobileSplit ? "auto" : "hidden", overflowX: "hidden", backgroundColor: "#f1f5f9" }}>
         
         {/* LEFT PANEL: Bill Sheet */}
-        <section style={{ flex: isMobileSplit ? "1" : "3", overflowY: "auto", padding: "10px", display: "flex", justifyContent: "center", alignItems: "flex-start" }}>
+        <section style={{ flex: isMobileSplit ? "none" : "3", overflowY: isMobileSplit ? "visible" : "auto", padding: "20px" }}>
           <div id="bill-print-root" className="bill-sheet" style={{ "--print-scale-factor": (printScale / 100).toFixed(3), position: 'relative', zIndex: 1, margin: "0 auto" }}>
             {(txType === "sale" ? isPaymentDone : isBalancePaid) && <div className="watermark-done">FULLY PAID</div>}
             <div className="bill-header">
@@ -1038,7 +1029,8 @@ export default function App() {
         </section>
 
         {/* RIGHT PANEL: Controls Menu */}
-        <aside className="controls no-print" style={{ flex: isMobileSplit ? "1" : "2", overflowY: "auto", padding: "10px", backgroundColor: "white", borderLeft: isMobileSplit ? "none" : "1px solid #cbd5e1", borderTop: isMobileSplit ? "1px solid #cbd5e1" : "none" }}>
+        <aside className="controls no-print" style={{ flex: isMobileSplit ? "none" : "2", overflowY: isMobileSplit ? "visible" : "auto", padding: "20px", backgroundColor: "white", borderLeft: isMobileSplit ? "none" : "1px solid #cbd5e1", borderTop: isMobileSplit ? "1px solid #cbd5e1" : "none" }}>
+          
           <div className="control-card action-grid">
             <Button onClick={saveBill} disabled={savingBill} style={{ backgroundColor: "#0f172a" }}>{savingBill ? "Saving..." : currentBillId ? `Update & Migrate (${editingDocNumber})` : "Save Bill"}</Button>
             <Button onClick={() => setShowLedger(true)} style={{ backgroundColor: "#16a34a", color: "white" }}>Daily Sales & Ledger</Button>
@@ -1049,6 +1041,17 @@ export default function App() {
             <Button onClick={shareEmail}>Email Link</Button>
             <Button onClick={handleNewBillClick} variant="outline">New Bill</Button>
             <Button onClick={() => setShowSettings(true)} variant="outline">Settings</Button>
+          </div>
+
+          {/* EXPLICIT MODE TOGGLE INSIDE CONTROLS (So it's never missed on mobile) */}
+          <div className="control-card" style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1", marginBottom: "15px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+              <h3 style={{ margin: 0 }}>Bill Mode</h3>
+              <div style={{ display: "flex", gap: "8px", backgroundColor: "#e2e8f0", padding: "4px", borderRadius: "8px" }}>
+                <Button onClick={() => handleModeChange("invoice")} style={{ backgroundColor: mode === "invoice" ? "#0f172a" : "transparent", color: mode === "invoice" ? "white" : "#334155", border: "none" }}>Tax Invoice</Button>
+                <Button onClick={() => handleModeChange("estimate")} style={{ backgroundColor: mode === "estimate" ? "#0f172a" : "transparent", color: mode === "estimate" ? "white" : "#334155", border: "none" }}>Estimate</Button>
+              </div>
+            </div>
           </div>
 
           <div className="control-card">
@@ -1184,10 +1187,10 @@ export default function App() {
 
       {/* DAILY SALES & LEDGER */}
       {showLedger && (
-        <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "650px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
+        <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "650px", backgroundColor: "white", zIndex: 100, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
           <div className="drawer-header" style={{ backgroundColor: "#f0fdf4", borderBottom: "2px solid #bbf7d0", padding: "20px", position: "sticky", top: 0, zIndex: 10 }}>
-            <h3 style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}><Banknote /> Vaults & Ledger: {activeGlobalBranch.name}</h3>
-            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowLedger(false)}><ArrowLeft className="drawer-back-icon" /><span>Back</span></Button>
+            <h3 style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", margin: 0 }}><Banknote /> Vaults & Ledger: {activeGlobalBranch.name}</h3>
+            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowLedger(false)} style={{ marginTop: "10px" }}><ArrowLeft className="drawer-back-icon" style={{ marginRight: "5px" }} /><span>Close Menu</span></Button>
           </div>
 
           <div style={{ padding: "20px" }}>
@@ -1299,10 +1302,10 @@ export default function App() {
 
       {/* RECENT BILLS */}
       {showRecentBills && (
-        <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "550px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
+        <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "550px", backgroundColor: "white", zIndex: 100, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
           <div className="drawer-header" style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10, paddingBottom: "15px", borderBottom: "1px solid #e2e8f0" }}>
-            <h3>Recent Bills & Exports</h3>
-            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowRecentBills(false)}><ArrowLeft className="drawer-back-icon" /><span>Back</span></Button>
+            <h3 style={{ margin: "20px 20px 10px 20px" }}>Recent Bills & Exports</h3>
+            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowRecentBills(false)} style={{ marginLeft: "20px" }}><ArrowLeft className="drawer-back-icon" style={{ marginRight: "5px" }} /><span>Close Menu</span></Button>
           </div>
 
           <div style={{ padding: "15px" }}>
@@ -1367,10 +1370,10 @@ export default function App() {
 
       {/* SETTINGS DRAWER */}
       {showSettings && (
-        <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "600px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
+        <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "600px", backgroundColor: "white", zIndex: 100, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
           <div className="drawer-header" style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10, paddingBottom: "15px", borderBottom: "1px solid #e2e8f0" }}>
-            <h3>System Settings</h3>
-            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowSettings(false)}><ArrowLeft className="drawer-back-icon" /><span>Back</span></Button>
+            <h3 style={{ margin: "20px 20px 10px 20px" }}>System Settings</h3>
+            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowSettings(false)} style={{ marginLeft: "20px" }}><ArrowLeft className="drawer-back-icon" style={{ marginRight: "5px" }} /><span>Close Menu</span></Button>
           </div>
           <div style={{ padding: "15px" }}>
             <div style={{ display: "flex", gap: "10px", marginBottom: "20px", borderBottom: "1px solid #e2e8f0", paddingBottom: "10px", overflowX: "auto" }}>
