@@ -864,7 +864,6 @@ export default function App() {
   }
 
   return (
-    // Replaced inline strict height styles with conditional printing styles to prevent Print Cropping
     <div className="billing-app" style={isPrinting ? { height: "auto", overflow: "visible" } : { display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", backgroundColor: "#f1f5f9" }}>
       <Toaster position="bottom-right" />
 
@@ -942,21 +941,24 @@ export default function App() {
 
       {/* TOP HEADER */}
       <header className="top-bar no-print" style={{ flexShrink: 0, height: "65px", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px" }}>
-        <div className="brand-block" style={{ display: "flex", alignItems: "center", gap: "15px" }}>
+        {/* Left Side: Brand, Branch, and inline Mode Toggle */}
+        <div className="brand-block" style={{ display: "flex", alignItems: "center", gap: "15px", flexWrap: "nowrap" }}>
           <div><h1 className="brand-title" style={{ margin: 0, fontSize: "1.2rem", color: "white" }}>{settings.shop_name}</h1></div>
+          
           <div style={{ paddingLeft: "15px", borderLeft: "2px solid rgba(255,255,255,0.2)" }}>
              <select value={globalBranchId} onChange={(e) => handleGlobalBranchChange(e.target.value)} style={{ backgroundColor: "rgba(255,255,255,0.1)", color: "white", border: "1px solid rgba(255,255,255,0.3)", padding: "6px 12px", borderRadius: "6px", fontWeight: "bold", outline: "none", cursor: "pointer" }}>
                 {(settings.branches || []).map(b => <option key={b.id} value={b.id} style={{ color: "black" }}>📍 {b.name}</option>)}
              </select>
           </div>
+
+          {/* Mode Toggle next to the Branch (overriding any glitchy external CSS with inline flex layout) */}
+          <div style={{ display: "flex", gap: "6px", backgroundColor: "rgba(255,255,255,0.15)", padding: "4px", borderRadius: "8px", marginLeft: "10px" }}>
+            <Button onClick={() => handleModeChange("invoice")} style={{ backgroundColor: mode === "invoice" ? "#ffffff" : "transparent", color: mode === "invoice" ? "#000000" : "white", border: "none", padding: "4px 12px", height: "auto" }}>Tax Invoice</Button>
+            <Button onClick={() => handleModeChange("estimate")} style={{ backgroundColor: mode === "estimate" ? "#ffffff" : "transparent", color: mode === "estimate" ? "#000000" : "white", border: "none", padding: "4px 12px", height: "auto" }}>Estimate</Button>
+          </div>
         </div>
         
-        {/* Original Mode Toggle */}
-        <div className="mode-toggle">
-          <Button onClick={() => handleModeChange("invoice")} className={mode === "invoice" ? "mode-active" : "mode-inactive"}>Invoice Mode</Button>
-          <Button onClick={() => handleModeChange("estimate")} className={mode === "estimate" ? "mode-active" : "mode-inactive"}>Estimate Mode</Button>
-        </div>
-
+        {/* Right Side: Status and Actions */}
         <div className="top-actions" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.85rem", color: cloudStatus.enabled ? "#4ade80" : "#facc15", marginRight: "10px" }}>
              <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: cloudStatus.enabled ? "#4ade80" : "#facc15" }} />
@@ -1065,18 +1067,6 @@ export default function App() {
         {/* RIGHT PANEL: Controls Menu */}
         <aside className="controls no-print" style={{ flex: isMobileSplit ? "none" : "2", overflowY: isMobileSplit ? "visible" : "auto", overflowX: "hidden", padding: "20px", backgroundColor: "white", borderLeft: isMobileSplit ? "none" : "1px solid #cbd5e1", borderTop: isMobileSplit ? "1px solid #cbd5e1" : "none", height: isMobileSplit ? "auto" : "100%" }}>
           
-          <div className="control-card action-grid">
-            <Button onClick={saveBill} disabled={savingBill} style={{ backgroundColor: "#0f172a" }}>{savingBill ? "Saving..." : currentBillId ? `Update & Migrate (${editingDocNumber})` : "Save Bill"}</Button>
-            <Button onClick={() => setShowLedger(true)} style={{ backgroundColor: "#16a34a", color: "white" }}>Daily Sales & Ledger</Button>
-            <Button onClick={() => { setShowRecentBills(true); setBillSearchQuery(""); setRecentBranchFilter("ALL"); setRecentModeFilter("ALL"); setRecentDateFilter("ALL"); }} variant="outline">Recent Bills</Button>
-            <Button onClick={() => downloadPdf("bill-print-root", documentNumber || mode)}>Download PDF</Button>
-            <Button onClick={() => window.print()}>Print</Button>
-            <Button onClick={shareWhatsApp}>WhatsApp Link</Button>
-            <Button onClick={shareEmail}>Email Link</Button>
-            <Button onClick={handleNewBillClick} variant="outline">New Bill</Button>
-            <Button onClick={() => setShowSettings(true)} variant="outline">Settings</Button>
-          </div>
-
           <div className="control-card">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
                 <h3 style={{ margin: 0 }}>Bill Details</h3>
@@ -1205,6 +1195,20 @@ export default function App() {
             )}
             <textarea value={notes} onChange={(e) => { setNotes(e.target.value); markDirty(); }} placeholder="Notes / Descriptions" className="notes-box" style={{ marginTop: "15px" }} />
           </div>
+
+          {/* MOVED TO BOTTOM */}
+          <div className="control-card action-grid">
+            <Button onClick={saveBill} disabled={savingBill} style={{ backgroundColor: "#0f172a" }}>{savingBill ? "Saving..." : currentBillId ? `Update & Migrate (${editingDocNumber})` : "Save Bill"}</Button>
+            <Button onClick={() => setShowLedger(true)} style={{ backgroundColor: "#16a34a", color: "white" }}>Daily Sales & Ledger</Button>
+            <Button onClick={() => { setShowRecentBills(true); setBillSearchQuery(""); setRecentBranchFilter("ALL"); setRecentModeFilter("ALL"); setRecentDateFilter("ALL"); }} variant="outline">Recent Bills</Button>
+            <Button onClick={() => downloadPdf("bill-print-root", documentNumber || mode)}>Download PDF</Button>
+            <Button onClick={() => window.print()}>Print</Button>
+            <Button onClick={shareWhatsApp}>WhatsApp Link</Button>
+            <Button onClick={shareEmail}>Email Link</Button>
+            <Button onClick={handleNewBillClick} variant="outline">New Bill</Button>
+            <Button onClick={() => setShowSettings(true)} variant="outline">Settings</Button>
+          </div>
+
         </aside>
       </main>
 
