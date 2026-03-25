@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Wifi, Store, Upload, Download } from "lucide-react";
+import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Wifi, Store, Upload, Download, Keyboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Toaster, toast } from "sonner";
@@ -107,9 +107,22 @@ const DesignSettingRow = ({ title, fieldPrefix, settings, setSettings }) => (
 
 export default function App() {
   const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
+  const [isPrinting, setIsPrinting] = useState(false);
+
   useEffect(() => {
       const handleResize = () => setViewportWidth(window.innerWidth);
-      window.addEventListener("resize", handleResize); return () => window.removeEventListener("resize", handleResize);
+      window.addEventListener("resize", handleResize); 
+      
+      const handleBeforePrint = () => setIsPrinting(true);
+      const handleAfterPrint = () => setIsPrinting(false);
+      window.addEventListener("beforeprint", handleBeforePrint);
+      window.addEventListener("afterprint", handleAfterPrint);
+
+      return () => { 
+        window.removeEventListener("resize", handleResize); 
+        window.removeEventListener("beforeprint", handleBeforePrint);
+        window.removeEventListener("afterprint", handleAfterPrint);
+      };
   }, []);
   const isMobileSplit = viewportWidth <= 820;
 
@@ -252,6 +265,7 @@ export default function App() {
     window.addEventListener("keydown", handleEsc); return () => window.removeEventListener("keydown", handleEsc);
   }, [showSettings, showAbout, showRecentBills, showLedger, showFeedbackModal]);
 
+  // KEYBOARD SHORTCUTS INTEGRATION
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
       const activeTag = document.activeElement?.tagName.toLowerCase();
@@ -352,7 +366,9 @@ export default function App() {
             const clonedNode = clonedDoc.getElementById(`bulk-bill-${bill.document_number}`);
             if (clonedNode) {
               clonedNode.style.display = "block";
-              clonedNode.style.width = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.padding = "20px";
+              clonedNode.style.transform = "none"; // Disable scaling for HTML2Canvas
+              clonedNode.style.width = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.maxWidth = "800px"; 
+              clonedNode.style.padding = "20px"; clonedNode.style.boxSizing = "border-box";
               const images = clonedNode.getElementsByTagName('img'); for (let img of images) img.crossOrigin = "anonymous";
             }
           }
@@ -536,6 +552,24 @@ export default function App() {
 
   const handleGlobalBranchChange = async (nextBranchId) => { setGlobalBranchId(nextBranchId); if (!currentBillId && checkIsBlank()) { setBillBranchId(nextBranchId); await reserveNumber(mode, nextBranchId); } };
 
+  // Branches Update Handlers
+  const updateBranch = (index, field, value) => {
+    const updatedBranches = [...(settings.branches || [])];
+    updatedBranches[index] = { ...updatedBranches[index], [field]: value };
+    setSettings({ ...settings, branches: updatedBranches });
+  };
+  const addBranch = () => {
+    const newId = `B${Date.now()}`;
+    const newBranch = { id: newId, name: `New Branch`, address: "", map_url: "#", invoice_upi_id: "", estimate_upi_id: "", gstin: "", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 };
+    setSettings({ ...settings, branches: [...(settings.branches || []), newBranch] });
+  };
+  const removeBranch = (index) => {
+    if ((settings.branches || []).length <= 1) { toast.error("You must have at least one branch."); return; }
+    if (!window.confirm("Remove this branch from settings?")) return;
+    const updatedBranches = (settings.branches || []).filter((_, i) => i !== index);
+    setSettings({ ...settings, branches: updatedBranches });
+  };
+
   const handleLogin = async (event) => {
     event.preventDefault(); setLoggingIn(true);
     try { const response = await axios.post(`${API}/auth/login`, { passcode }, { timeout: 15000 }); localStorage.setItem("jj_auth_token", response.data.access_token); setToken(response.data.access_token); setPasscode(""); toast.success("Logged in successfully"); } 
@@ -595,7 +629,10 @@ export default function App() {
         onclone: (clonedDoc) => {
           const clonedNode = clonedDoc.getElementById(elementId);
           if (clonedNode) { 
-             clonedNode.style.width = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.position = "absolute"; clonedNode.style.top = "0"; clonedNode.style.left = "0"; clonedNode.style.margin = "0"; clonedNode.style.padding = "20px"; clonedNode.style.boxSizing = "border-box";
+             clonedNode.style.transform = "none"; // Disable scaling for HTML2Canvas to fix cropping!
+             clonedNode.style.width = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.minWidth = "800px"; 
+             clonedNode.style.position = "absolute"; clonedNode.style.top = "0"; clonedNode.style.left = "0"; 
+             clonedNode.style.margin = "0"; clonedNode.style.padding = "20px"; clonedNode.style.boxSizing = "border-box";
              const images = clonedNode.getElementsByTagName('img'); for (let img of images) img.crossOrigin = "anonymous"; 
           }
         }
@@ -827,7 +864,8 @@ export default function App() {
   }
 
   return (
-    <div className="billing-app" style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", backgroundColor: "#f1f5f9" }}>
+    // Replaced inline strict height styles with conditional printing styles to prevent Print Cropping
+    <div className="billing-app" style={isPrinting ? { height: "auto", overflow: "visible" } : { display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", backgroundColor: "#f1f5f9" }}>
       <Toaster position="bottom-right" />
 
       {/* INVISIBLE BULK PDF RENDERER */}
@@ -903,7 +941,7 @@ export default function App() {
       </div>
 
       {/* TOP HEADER */}
-      <header className="top-bar no-print" style={{ flexShrink: 0, height: "65px", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px", backgroundColor: "#0f172a", color: "white" }}>
+      <header className="top-bar no-print" style={{ flexShrink: 0, height: "65px", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px" }}>
         <div className="brand-block" style={{ display: "flex", alignItems: "center", gap: "15px" }}>
           <div><h1 className="brand-title" style={{ margin: 0, fontSize: "1.2rem", color: "white" }}>{settings.shop_name}</h1></div>
           <div style={{ paddingLeft: "15px", borderLeft: "2px solid rgba(255,255,255,0.2)" }}>
@@ -913,13 +951,11 @@ export default function App() {
           </div>
         </div>
         
-        {/* Hidden on very small screens, shown otherwise */}
-        {!isMobileSplit && (
-          <div className="mode-toggle" style={{ display: "flex", gap: "10px", backgroundColor: "#1e293b", padding: "4px", borderRadius: "8px" }}>
-            <Button onClick={() => handleModeChange("invoice")} style={{ backgroundColor: mode === "invoice" ? "#2563eb" : "transparent", color: mode === "invoice" ? "white" : "#cbd5e1", border: "none", boxShadow: mode === "invoice" ? "0 2px 4px rgba(0,0,0,0.2)" : "none" }}>Invoice Mode</Button>
-            <Button onClick={() => handleModeChange("estimate")} style={{ backgroundColor: mode === "estimate" ? "#2563eb" : "transparent", color: mode === "estimate" ? "white" : "#cbd5e1", border: "none", boxShadow: mode === "estimate" ? "0 2px 4px rgba(0,0,0,0.2)" : "none" }}>Estimate Mode</Button>
-          </div>
-        )}
+        {/* Original Mode Toggle */}
+        <div className="mode-toggle">
+          <Button onClick={() => handleModeChange("invoice")} className={mode === "invoice" ? "mode-active" : "mode-inactive"}>Invoice Mode</Button>
+          <Button onClick={() => handleModeChange("estimate")} className={mode === "estimate" ? "mode-active" : "mode-inactive"}>Estimate Mode</Button>
+        </div>
 
         <div className="top-actions" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.85rem", color: cloudStatus.enabled ? "#4ade80" : "#facc15", marginRight: "10px" }}>
@@ -932,10 +968,10 @@ export default function App() {
       </header>
 
       {/* INDEPENDENT SPLIT-SCREEN LAYOUT FOR TABLETS & PHONES */}
-      <main className="main-layout" style={{ flex: 1, display: "flex", flexDirection: isMobileSplit ? "column" : "row", overflowY: isMobileSplit ? "auto" : "hidden", overflowX: "hidden", backgroundColor: "#f1f5f9", minHeight: 0 }}>
+      <main className="main-layout" style={isPrinting ? { height: "auto", overflow: "visible", display: "block" } : { flex: 1, display: "flex", flexDirection: isMobileSplit ? "column" : "row", overflowY: isMobileSplit ? "auto" : "hidden", overflowX: "hidden", backgroundColor: "#f1f5f9", minHeight: 0 }}>
         
         {/* LEFT PANEL: Bill Sheet */}
-        <section style={{ flex: isMobileSplit ? "none" : "3", overflow: isMobileSplit ? "visible" : "auto", padding: "20px", height: isMobileSplit ? "auto" : "100%" }}>
+        <section style={isPrinting ? { padding: 0, margin: 0, overflow: "visible" } : { flex: isMobileSplit ? "none" : "3", overflow: isMobileSplit ? "visible" : "auto", padding: "20px", height: isMobileSplit ? "auto" : "100%" }}>
           <div id="bill-print-root" className="bill-sheet" style={{ "--print-scale-factor": (printScale / 100).toFixed(3), position: 'relative', zIndex: 1, margin: "0 auto" }}>
             {(txType === "sale" ? isPaymentDone : isBalancePaid) && <div className="watermark-done">FULLY PAID</div>}
             <div className="bill-header">
@@ -1039,17 +1075,6 @@ export default function App() {
             <Button onClick={shareEmail}>Email Link</Button>
             <Button onClick={handleNewBillClick} variant="outline">New Bill</Button>
             <Button onClick={() => setShowSettings(true)} variant="outline">Settings</Button>
-          </div>
-
-          {/* EXPLICIT MODE TOGGLE INSIDE CONTROLS (So it's never missed on mobile) */}
-          <div className="control-card" style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1", marginBottom: "15px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
-              <h3 style={{ margin: 0 }}>Bill Mode</h3>
-              <div style={{ display: "flex", gap: "8px", backgroundColor: "#e2e8f0", padding: "4px", borderRadius: "8px" }}>
-                <Button onClick={() => handleModeChange("invoice")} style={{ backgroundColor: mode === "invoice" ? "#0f172a" : "transparent", color: mode === "invoice" ? "white" : "#334155", border: "none" }}>Tax Invoice</Button>
-                <Button onClick={() => handleModeChange("estimate")} style={{ backgroundColor: mode === "estimate" ? "#0f172a" : "transparent", color: mode === "estimate" ? "white" : "#334155", border: "none" }}>Estimate</Button>
-              </div>
-            </div>
           </div>
 
           <div className="control-card">
@@ -1376,7 +1401,7 @@ export default function App() {
           <div style={{ padding: "15px" }}>
             <div style={{ display: "flex", gap: "10px", marginBottom: "20px", borderBottom: "1px solid #e2e8f0", paddingBottom: "10px", overflowX: "auto" }}>
               <Button variant={settingsTab === "design" ? "default" : "ghost"} onClick={() => setSettingsTab("design")}>Design</Button>
-              <Button variant={settingsTab === "business" ? "default" : "ghost"} onClick={() => setSettingsTab("business")}>Business</Button>
+              <Button variant={settingsTab === "business" ? "default" : "ghost"} onClick={() => setSettingsTab("business")}>Business & Branches</Button>
               <Button variant={settingsTab === "advanced" ? "default" : "ghost"} onClick={() => setSettingsTab("advanced")}>Advanced</Button>
             </div>
 
@@ -1418,14 +1443,58 @@ export default function App() {
 
             {settingsTab === "business" && (
               <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-                <label className="select-label">Today's Silver Rate (₹ per gram)</label>
-                <Input type="number" value={settings.silver_rate_per_gram} onChange={(e) => setSettings({ ...settings, silver_rate_per_gram: e.target.value })} />
-                <label className="select-label">Default Making Charge (₹ per gram)</label>
-                <Input type="number" value={settings.making_charge_per_gram} onChange={(e) => setSettings({ ...settings, making_charge_per_gram: e.target.value })} />
-                <label className="select-label">Flat MC for Items Below 5g (₹)</label>
-                <Input type="number" value={settings.flat_mc_below_5g} onChange={(e) => setSettings({ ...settings, flat_mc_below_5g: e.target.value })} />
-                <label className="select-label">Default HSN Code</label>
-                <Input value={settings.default_hsn} onChange={(e) => setSettings({ ...settings, default_hsn: e.target.value })} />
+                <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
+                  <h4 style={{ margin: "0 0 15px 0" }}>Pricing Rules</h4>
+                  <label className="select-label">Today's Silver Rate (₹ per gram)</label>
+                  <Input type="number" value={settings.silver_rate_per_gram} onChange={(e) => setSettings({ ...settings, silver_rate_per_gram: e.target.value })} style={{ marginBottom: "10px" }} />
+                  
+                  <label className="select-label">Default Making Charge (₹ per gram)</label>
+                  <Input type="number" value={settings.making_charge_per_gram} onChange={(e) => setSettings({ ...settings, making_charge_per_gram: e.target.value })} style={{ marginBottom: "10px" }} />
+                  
+                  <label className="select-label">Flat MC for Items Below 5g (₹)</label>
+                  <Input type="number" value={settings.flat_mc_below_5g} onChange={(e) => setSettings({ ...settings, flat_mc_below_5g: e.target.value })} style={{ marginBottom: "10px" }} />
+                  
+                  <label className="select-label">Default HSN Code</label>
+                  <Input value={settings.default_hsn} onChange={(e) => setSettings({ ...settings, default_hsn: e.target.value })} />
+                </div>
+
+                <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
+                  <h4 style={{ margin: "0 0 15px 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    Branch Management
+                    <Button size="sm" onClick={addBranch} style={{ backgroundColor: "#0f172a" }}>+ Add Branch</Button>
+                  </h4>
+                  
+                  {(settings.branches || []).map((branch, index) => (
+                    <div key={branch.id} style={{ marginBottom: "20px", padding: "15px", border: "1px dashed #cbd5e1", borderRadius: "8px", backgroundColor: "white" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                        <strong>Branch {index + 1}</strong>
+                        <Button size="sm" variant="outline" onClick={() => removeBranch(index)} style={{ borderColor: "#ef4444", color: "#ef4444" }}>Remove</Button>
+                      </div>
+                      <label className="select-label">Branch Name</label>
+                      <Input value={branch.name} onChange={(e) => updateBranch(index, 'name', e.target.value)} style={{ marginBottom: "10px" }} />
+                      
+                      <label className="select-label">Branch Address</label>
+                      <Input value={branch.address} onChange={(e) => updateBranch(index, 'address', e.target.value)} style={{ marginBottom: "10px" }} />
+                      
+                      <label className="select-label">Google Maps Feedback URL</label>
+                      <Input value={branch.map_url} onChange={(e) => updateBranch(index, 'map_url', e.target.value)} style={{ marginBottom: "10px" }} />
+                      
+                      <label className="select-label">GSTIN Number (Optional)</label>
+                      <Input value={branch.gstin || ""} onChange={(e) => updateBranch(index, 'gstin', e.target.value)} placeholder="Leave blank if no GST" style={{ marginBottom: "10px" }} />
+                      
+                      <div style={{ display: "flex", gap: "10px", marginTop: "5px" }}>
+                         <div style={{ flex: 1 }}>
+                           <label className="select-label">Invoice UPI ID</label>
+                           <Input value={branch.invoice_upi_id} onChange={(e) => updateBranch(index, 'invoice_upi_id', e.target.value)} placeholder="name@bank" />
+                         </div>
+                         <div style={{ flex: 1 }}>
+                           <label className="select-label">Estimate UPI ID</label>
+                           <Input value={branch.estimate_upi_id} onChange={(e) => updateBranch(index, 'estimate_upi_id', e.target.value)} placeholder="name@bank" />
+                         </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -1448,6 +1517,21 @@ export default function App() {
                      <div style={{ height: "100%", width: `${storageStats.percentage}%`, backgroundColor: storageStats.percentage > 80 ? "#ef4444" : "#14b8a6" }}></div>
                   </div>
                   <Button onClick={handleBackupBills} style={{ width: "100%", backgroundColor: "#0f766e", color: "white" }}><Download size={16} style={{ marginRight: "8px" }} /> Download JSON Backup</Button>
+                </div>
+
+                <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                  <h4 style={{ display: "flex", alignItems: "center", gap: "8px", margin: "0 0 10px 0" }}><Keyboard size={18} /> Keyboard Shortcuts</h4>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "8px", fontSize: "0.85rem", color: "#475569" }}>
+                    <strong>Ctrl + S</strong><span>Save Bill</span>
+                    <strong>Ctrl + Shift + R</strong><span>Add new item row</span>
+                    <strong>Shift + N</strong><span>New blank bill</span>
+                    <strong>Shift + W</strong><span>Share via WhatsApp</span>
+                    <strong>Shift + P</strong><span>Jump to Payment Method</span>
+                    <strong>Ctrl + W</strong><span>Open Ledger/Vaults</span>
+                    <strong>Ctrl + R</strong><span>Open Recent Bills</span>
+                    <strong>Enter</strong><span>Jump to next input field</span>
+                    <strong>Esc</strong><span>Close side menus</span>
+                  </div>
                 </div>
               </div>
             )}
