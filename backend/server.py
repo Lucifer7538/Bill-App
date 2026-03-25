@@ -47,6 +47,11 @@ SUPABASE_ENABLED = bool(SUPABASE_URL and SUPABASE_KEY and "YOUR_" not in SUPABAS
 
 def now_iso(): return datetime.now(timezone.utc).isoformat()
 
+def safe_float(val):
+    if val is None or val == "": return 0.0
+    try: return float(val)
+    except (ValueError, TypeError): return 0.0
+
 def get_bill_ledger_values(bill: dict):
     c, eb, ib = 0.0, 0.0, 0.0
     mode = bill.get("mode")
@@ -65,16 +70,16 @@ def get_bill_ledger_values(bill: dict):
 
     if tx_type == "sale":
         if bill.get("is_payment_done"):
-            total = float(bill.get("totals", {}).get("grand_total", 0))
-            add_vals(bill.get("payment_method"), total, float(bill.get("split_cash", 0)))
+            total = safe_float(bill.get("totals", {}).get("grand_total", 0))
+            add_vals(bill.get("payment_method"), total, safe_float(bill.get("split_cash", 0)))
     else:
         if bill.get("is_advance_paid"):
-            add_vals(bill.get("advance_method"), float(bill.get("advance_amount", 0)), float(bill.get("advance_split_cash", 0)))
+            add_vals(bill.get("advance_method"), safe_float(bill.get("advance_amount", 0)), safe_float(bill.get("advance_split_cash", 0)))
         if bill.get("is_balance_paid"):
-            total = float(bill.get("totals", {}).get("grand_total", 0))
-            adv = float(bill.get("advance_amount", 0))
+            total = safe_float(bill.get("totals", {}).get("grand_total", 0))
+            adv = safe_float(bill.get("advance_amount", 0))
             bal = max(0.0, total - adv)
-            add_vals(bill.get("balance_method"), bal, float(bill.get("balance_split_cash", 0)))
+            add_vals(bill.get("balance_method"), bal, safe_float(bill.get("balance_split_cash", 0)))
     return c, eb, ib
 
 async def apply_ledger_diff(branch_id: str, diff_c: float, diff_eb: float, diff_ib: float, reason: str):
@@ -170,28 +175,25 @@ async def save_bill(payload: dict, _=Depends(require_auth)):
     mode = payload.get("mode")
     branch_id = payload.get("branch_id")
 
-    # Update Customer Database for Autocomplete Fix
-    if payload.get("customer_phone") or payload.get("customer_name"):
-        await customers_collection.update_one(
-            {
-                "$or": [
-                    {"phone": payload.get("customer_phone", "IGNORE_BLANK_PHONE_83726")},
-                    {"name": payload.get("customer_name", "IGNORE_BLANK_NAME_83726")}
-                ]
-            },
-            {"$set": {
-                "name": payload.get("customer_name", ""),
-                "phone": payload.get("customer_phone", ""),
-                "address": payload.get("customer_address", ""),
-                "email": payload.get("customer_email", "")
-            }},
-            upsert=True
-        )
-
     match = re.search(r'\d+$', doc_num)
     if match:
         new_val = int(match.group())
         await counters_collection.update_one({"mode": mode, "branch_id": branch_id}, {"$set": {"value": new_val}}, upsert=True)
+
+    c_name = payload.get("customer_name", "").strip()
+    c_phone = payload.get("customer_phone", "").strip()
+    if c_name or c_phone:
+        query = {"phone": c_phone} if c_phone else {"name": c_name}
+        await customers_collection.update_one(
+            query,
+            {"$set": {
+                "name": c_name, "phone": c_phone,
+                "address": payload.get("customer_address", ""),
+                "email": payload.get("customer_email", ""),
+                "updated_at": now_iso()
+            }},
+            upsert=True
+        )
 
     doc = {**payload, "id": bill_id, "created_at": now_iso()}
     await bills_collection.insert_one(doc)
@@ -204,29 +206,26 @@ async def update_bill_by_id(bill_id: str, payload: dict, _=Depends(require_auth)
     existing = await bills_collection.find_one({"id": bill_id})
     if not existing: raise HTTPException(404, "Bill ID not found")
 
-    # Update Customer Database
-    if payload.get("customer_phone") or payload.get("customer_name"):
-        await customers_collection.update_one(
-            {
-                "$or": [
-                    {"phone": payload.get("customer_phone", "IGNORE_BLANK_PHONE_83726")},
-                    {"name": payload.get("customer_name", "IGNORE_BLANK_NAME_83726")}
-                ]
-            },
-            {"$set": {
-                "name": payload.get("customer_name", ""),
-                "phone": payload.get("customer_phone", ""),
-                "address": payload.get("customer_address", ""),
-                "email": payload.get("customer_email", "")
-            }},
-            upsert=True
-        )
-
     doc_num = payload.get("document_number", "")
     match = re.search(r'\d+$', doc_num)
     if match:
         new_val = int(match.group())
         await counters_collection.update_one({"mode": payload.get("mode"), "branch_id": payload.get("branch_id")}, {"$set": {"value": new_val}}, upsert=True)
+
+    c_name = payload.get("customer_name", "").strip()
+    c_phone = payload.get("customer_phone", "").strip()
+    if c_name or c_phone:
+        query = {"phone": c_phone} if c_phone else {"name": c_name}
+        await customers_collection.update_one(
+            query,
+            {"$set": {
+                "name": c_name, "phone": c_phone,
+                "address": payload.get("customer_address", ""),
+                "email": payload.get("customer_email", ""),
+                "updated_at": now_iso()
+            }},
+            upsert=True
+        )
 
     old_b = existing.get("branch_id")
     new_b = payload.get("branch_id")
