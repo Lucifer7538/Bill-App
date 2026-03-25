@@ -265,7 +265,6 @@ export default function App() {
     window.addEventListener("keydown", handleEsc); return () => window.removeEventListener("keydown", handleEsc);
   }, [showSettings, showAbout, showRecentBills, showLedger, showFeedbackModal]);
 
-  // KEYBOARD SHORTCUTS INTEGRATION
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
       const activeTag = document.activeElement?.tagName.toLowerCase();
@@ -366,7 +365,7 @@ export default function App() {
             const clonedNode = clonedDoc.getElementById(`bulk-bill-${bill.document_number}`);
             if (clonedNode) {
               clonedNode.style.display = "block";
-              clonedNode.style.transform = "none"; // Disable scaling for HTML2Canvas
+              clonedNode.style.transform = "none";
               clonedNode.style.width = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.maxWidth = "800px"; 
               clonedNode.style.padding = "20px"; clonedNode.style.boxSizing = "border-box";
               const images = clonedNode.getElementsByTagName('img'); for (let img of images) img.crossOrigin = "anonymous";
@@ -552,7 +551,6 @@ export default function App() {
 
   const handleGlobalBranchChange = async (nextBranchId) => { setGlobalBranchId(nextBranchId); if (!currentBillId && checkIsBlank()) { setBillBranchId(nextBranchId); await reserveNumber(mode, nextBranchId); } };
 
-  // Branches Update Handlers
   const updateBranch = (index, field, value) => {
     const updatedBranches = [...(settings.branches || [])];
     updatedBranches[index] = { ...updatedBranches[index], [field]: value };
@@ -629,7 +627,7 @@ export default function App() {
         onclone: (clonedDoc) => {
           const clonedNode = clonedDoc.getElementById(elementId);
           if (clonedNode) { 
-             clonedNode.style.transform = "none"; // Disable scaling for HTML2Canvas to fix cropping!
+             clonedNode.style.transform = "none"; 
              clonedNode.style.width = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.minWidth = "800px"; 
              clonedNode.style.position = "absolute"; clonedNode.style.top = "0"; clonedNode.style.left = "0"; 
              clonedNode.style.margin = "0"; clonedNode.style.padding = "20px"; clonedNode.style.boxSizing = "border-box";
@@ -697,7 +695,8 @@ export default function App() {
   const upiId = mode === "invoice" ? activeBillBranch.invoice_upi_id : activeBillBranch.estimate_upi_id;
   const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
   const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
-
+// --- END OF PART 1 ---
+// --- START OF PART 2 ---
   // --- PUBLIC VIEW ---
   if (isPublicView) {
     if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
@@ -864,7 +863,6 @@ export default function App() {
   }
 
   return (
-    // Replaced inline strict height styles with conditional printing styles to prevent Print Cropping
     <div className="billing-app" style={isPrinting ? { height: "auto", overflow: "visible" } : { display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", backgroundColor: "#f1f5f9" }}>
       <Toaster position="bottom-right" />
 
@@ -952,7 +950,6 @@ export default function App() {
              </select>
           </div>
 
-          {/* Mode Toggle next to the Branch (overriding any glitchy external CSS with inline flex layout) */}
           <div style={{ display: "flex", gap: "6px", backgroundColor: "rgba(255,255,255,0.15)", padding: "4px", borderRadius: "8px", marginLeft: "10px" }}>
             <Button onClick={() => handleModeChange("invoice")} style={{ backgroundColor: mode === "invoice" ? "#ffffff" : "transparent", color: mode === "invoice" ? "#000000" : "white", border: "none", padding: "4px 12px", height: "auto" }}>Tax Invoice</Button>
             <Button onClick={() => handleModeChange("estimate")} style={{ backgroundColor: mode === "estimate" ? "#ffffff" : "transparent", color: mode === "estimate" ? "#000000" : "white", border: "none", padding: "4px 12px", height: "auto" }}>Estimate</Button>
@@ -1197,7 +1194,6 @@ export default function App() {
             <textarea value={notes} onChange={(e) => { setNotes(e.target.value); markDirty(); }} placeholder="Notes / Descriptions" className="notes-box" style={{ marginTop: "15px" }} />
           </div>
 
-          {/* ACTION BUTTONS MOVED TO BOTTOM */}
           <div className="control-card action-grid">
             <Button onClick={saveBill} disabled={savingBill} style={{ backgroundColor: "#0f172a" }}>{savingBill ? "Saving..." : currentBillId ? `Update & Migrate (${editingDocNumber})` : "Save Bill"}</Button>
             <Button onClick={() => setShowLedger(true)} style={{ backgroundColor: "#16a34a", color: "white" }}>Daily Sales & Ledger</Button>
@@ -1396,7 +1392,7 @@ export default function App() {
         </section>
       )}
 
-      {/* SETTINGS DRAWER */}
+           {/* SETTINGS DRAWER */}
       {showSettings && (
         <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "600px", backgroundColor: "white", zIndex: 100, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
           <div className="drawer-header" style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10, paddingBottom: "15px", borderBottom: "1px solid #e2e8f0" }}>
