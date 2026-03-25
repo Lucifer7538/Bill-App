@@ -53,6 +53,18 @@ const ConnectWithUs = ({ phoneLink, instaLink = "https://www.instagram.com/jalar
   </div>
 );
 
+const UpiAppsRow = ({ upiUri }) => (
+  <div style={{ marginTop: "20px" }}>
+    <p style={{ fontSize: "0.85rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Or select your app directly:</p>
+    <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
+      <a href={upiUri.replace("upi://pay", "phonepe://pay")} style={{ padding: "8px 16px", backgroundColor: "#5f259f", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>PhonePe</a>
+      <a href={upiUri.replace("upi://pay", "tez://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#1a73e8", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>G-Pay</a>
+      <a href={upiUri.replace("upi://pay", "paytmmp://pay")} style={{ padding: "8px 16px", backgroundColor: "#00baf2", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>Paytm</a>
+      <a href={upiUri.replace("upi://pay", "credpay://upi/pay")} style={{ padding: "8px 16px", backgroundColor: "#212121", color: "white", textDecoration: "none", borderRadius: "6px", fontWeight: "bold", fontSize: "0.85rem", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>CRED</a>
+    </div>
+  </div>
+);
+
 const BillTable = ({ mode, items }) => (
   <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
     <thead>
@@ -105,9 +117,14 @@ const DesignSettingRow = ({ title, fieldPrefix, settings, setSettings }) => (
   </div>
 );
 
-// --- MAIN APP ---
 export default function App() {
-  const [isCompactView, setIsCompactView] = useState(window.innerWidth <= 520);
+  const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
+  useEffect(() => {
+      const handleResize = () => setViewportWidth(window.innerWidth);
+      window.addEventListener("resize", handleResize); return () => window.removeEventListener("resize", handleResize);
+  }, []);
+  const isMobileSplit = viewportWidth <= 820;
+
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
   
@@ -123,7 +140,8 @@ export default function App() {
   const [isWakingUp, setIsWakingUp] = useState(false);
   const [loggingIn, setLoggingIn] = useState(false);
 
-  const [hasSelectedBranch, setHasSelectedBranch] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [gatewayPassed, setGatewayPassed] = useState(false);
   const [settings, setSettings] = useState(defaultSettings);
   const [globalBranchId, setGlobalBranchId] = useState("B1");
   const [billBranchId, setBillBranchId] = useState("B1");
@@ -239,45 +257,45 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const handleResize = () => setIsCompactView(window.innerWidth <= 520);
-    window.addEventListener("resize", handleResize); return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
-  // Keyboard Shortcuts Binding
-  useEffect(() => {
-    if (!hasSelectedBranch || isPublicView) return;
-
-    const handleKeyDown = (e) => {
-      // Form 'Enter' navigation
-      if (e.key === 'Enter') {
-        const active = document.activeElement;
-        if (active && (active.tagName === 'INPUT' || active.tagName === 'SELECT')) {
-          e.preventDefault();
-          const focusable = Array.from(document.querySelectorAll('input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])')).filter(el => el.tabIndex !== -1);
-          const index = focusable.indexOf(active);
-          if (index > -1 && index < focusable.length - 1) { focusable[index + 1].focus(); }
-        }
-      }
-
-      // Ctrl + Key Shortcuts
-      if (e.ctrlKey) {
-        if (e.key.toLowerCase() === 'n') { e.preventDefault(); document.getElementById('btn-new-bill')?.click(); }
-        if (e.key.toLowerCase() === 's') { e.preventDefault(); document.getElementById('btn-save-bill')?.click(); }
-        if (e.key.toLowerCase() === 'w') { e.preventDefault(); document.getElementById('btn-whatsapp')?.click(); }
-        if (e.key.toLowerCase() === 'r') { e.preventDefault(); document.getElementById('btn-add-row')?.click(); }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hasSelectedBranch, isPublicView]);
-
-  useEffect(() => {
     const handleEsc = (event) => {
       if (event.key !== "Escape") return;
       setShowSettings(false); setShowAbout(false); setShowRecentBills(false); setShowLedger(false); setShowFeedbackModal(false);
     };
     window.addEventListener("keydown", handleEsc); return () => window.removeEventListener("keydown", handleEsc);
   }, [showSettings, showAbout, showRecentBills, showLedger, showFeedbackModal]);
+
+  // KEYBOARD SHORTCUTS INTEGRATION
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      const activeTag = document.activeElement?.tagName.toLowerCase();
+      const isInput = activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select';
+
+      // Enter to skip to next input
+      if (e.key === "Enter" && isInput && activeTag !== 'textarea') {
+          e.preventDefault();
+          const formElements = Array.from(document.querySelectorAll('input, select, textarea, button:not(:disabled)'));
+          const index = formElements.indexOf(document.activeElement);
+          if (index > -1 && index < formElements.length - 1) {
+              formElements[index + 1].focus();
+          }
+          return;
+      }
+
+      // Allow Save/Row creation even while typing
+      if (e.ctrlKey && e.key.toLowerCase() === 's') { e.preventDefault(); saveBill(); return; }
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'r') { e.preventDefault(); setItems(prev => [...prev, createItem(settings.default_hsn)]); markDirty(); return; }
+
+      if (isInput) return; // Ignore other shortcuts while typing text
+
+      if (e.shiftKey && e.key.toLowerCase() === 'n') { e.preventDefault(); handleNewBillClick(); }
+      if (e.shiftKey && e.key.toLowerCase() === 'w') { e.preventDefault(); shareWhatsApp(); }
+      if (e.ctrlKey && e.key.toLowerCase() === 'w') { e.preventDefault(); setShowLedger(true); }
+      if (e.ctrlKey && e.key.toLowerCase() === 'r') { e.preventDefault(); setShowRecentBills(true); }
+      if (e.shiftKey && e.key.toLowerCase() === 'p') { e.preventDefault(); document.getElementById('paymentMethodSelect')?.focus(); }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }); // Note: omitting dependencies makes it re-bind every render with fresh state context
 
   useEffect(() => { localStorage.setItem("jj_print_scale", String(clampPrintScale(printScale))); }, [printScale]);
 
@@ -331,7 +349,7 @@ export default function App() {
     if ((filteredRecentBills || []).length === 0) { toast.error("No bills to download!"); return; }
     if ((filteredRecentBills || []).length > 20) { if (!window.confirm(`Generate PDF with ${filteredRecentBills.length} pages? This might take a minute.`)) return; }
     setIsBulkDownloading(true); toast.info(`Generating PDF for ${filteredRecentBills.length} bills...`);
-    const wasCompact = isCompactView; if (wasCompact) setIsCompactView(false);
+    
     await new Promise(resolve => setTimeout(resolve, 800));
 
     try {
@@ -342,26 +360,25 @@ export default function App() {
         const bill = filteredRecentBills[i];
         const node = document.getElementById(`bulk-bill-${bill.document_number}`);
         if (!node) continue;
-        node.style.display = "block";
+        
         const canvas = await html2canvas(node, { 
           scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#ffffff", windowWidth: 1024,
           onclone: (clonedDoc) => {
             const clonedNode = clonedDoc.getElementById(`bulk-bill-${bill.document_number}`);
             if (clonedNode) {
-              clonedNode.style.width = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.maxWidth = "800px"; 
-              clonedNode.style.position = "relative"; clonedNode.style.height = "max-content"; clonedNode.style.overflow = "visible";
+              clonedNode.style.display = "block";
+              clonedNode.style.width = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.padding = "20px";
               const images = clonedNode.getElementsByTagName('img'); for (let img of images) img.crossOrigin = "anonymous";
             }
           }
         });
-        node.style.display = "none";
         const imgData = canvas.toDataURL("image/png", 1.0);
         const pageHeight = (canvas.height * pageWidth) / canvas.width;
         if (i > 0) pdf.addPage();
         pdf.addImage(imgData, "PNG", 0, 0, pageWidth, pageHeight);
       }
       pdf.save(`Jalaram_Bills_Export_${today()}.pdf`); toast.success("Bulk PDF Downloaded!");
-    } catch (error) { toast.error("Error generating bulk PDF."); } finally { setIsBulkDownloading(false); if (wasCompact) setIsCompactView(true); }
+    } catch (error) { toast.error("Error generating bulk PDF."); } finally { setIsBulkDownloading(false); }
   };
 
   const fetchLedgerHistory = async () => {
@@ -397,6 +414,7 @@ export default function App() {
     setSettings(newSettings);
     if (!(newSettings.branches || []).find(b => b.id === globalBranchId)) { setGlobalBranchId((newSettings.branches || [])[0].id); setBillBranchId((newSettings.branches || [])[0].id); }
     setItems((prev) => { if (prev.length === 1 && !prev[0].description && !prev[0].weight && !prev[0].hsn) return [{ ...prev[0], hsn: newSettings.default_hsn }]; return prev; });
+    setSettingsLoaded(true);
   };
 
   const reserveNumber = async (activeMode, activeBranch) => {
@@ -410,7 +428,7 @@ export default function App() {
 
   useEffect(() => {
     if (isPublicView) return;
-    const bootstrap = async () => { if (!token) return; try { await loadSettings(); await fetchCloudStatus(); await reserveNumber(mode, billBranchId); } catch { toast.error("Could not load billing settings."); } };
+    const bootstrap = async () => { if (!token) return; try { await loadSettings(); await fetchCloudStatus(); } catch { toast.error("Could not load billing settings."); } };
     bootstrap();
   }, [token, isPublicView]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -420,14 +438,14 @@ export default function App() {
   }, [token, isPublicView]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!token || isPublicView || !hasSelectedBranch) return;
+    if (!token || isPublicView) return;
     const query = customer.phone.trim().length >= 2 ? customer.phone.trim() : customer.name.trim();
     if (query.length < 2) { setSuggestions([]); return; }
     const timer = setTimeout(async () => {
       try { const response = await axios.get(`${API}/customers/suggest`, { headers: authHeaders, params: { query } }); setSuggestions(response.data || []); } catch { setSuggestions([]); }
     }, 250);
     return () => clearTimeout(timer);
-  }, [customer.phone, customer.name, token, isPublicView, hasSelectedBranch, authHeaders]);
+  }, [customer.phone, customer.name, token, isPublicView, authHeaders]);
 
   const computed = useMemo(() => {
     const baseSilverRate = num(settings.silver_rate_per_gram);
@@ -489,13 +507,7 @@ export default function App() {
     setTxType(bill.tx_type || "sale"); setPaymentMethod(bill.payment_method || ""); setSplitCash(bill.split_cash !== null && bill.split_cash !== undefined ? String(bill.split_cash) : ""); setIsPaymentDone(bill.is_payment_done || false); 
     setAdvanceAmount(bill.advance_amount ? String(bill.advance_amount) : ""); setAdvanceMethod(bill.advance_method || ""); setAdvanceSplitCash(bill.advance_split_cash ? String(bill.advance_split_cash) : ""); setIsAdvancePaid(bill.is_advance_paid || false);
     setBalanceMethod(bill.balance_method || ""); setBalanceSplitCash(bill.balance_split_cash ? String(bill.balance_split_cash) : ""); setIsBalancePaid(bill.is_balance_paid || false);
-    setNotes(bill.notes || ""); 
-    
-    // Fixed mapping for discount and exchange logic to persist on reload.
-    setDiscount(bill.discount !== undefined && bill.discount !== null ? String(bill.discount) : (bill.totals?.discount ? String(bill.totals.discount) : "0")); 
-    setExchange(bill.exchange !== undefined && bill.exchange !== null ? String(bill.exchange) : (bill.totals?.exchange ? String(bill.totals.exchange) : "0")); 
-    setManualRoundOff(bill.totals?.round_off !== null && bill.totals?.round_off !== undefined ? String(bill.totals.round_off) : "");
-    
+    setNotes(bill.notes || ""); setDiscount(bill.discount ? String(bill.discount) : (bill.totals?.discount ? String(bill.totals.discount) : "0")); setExchange(bill.exchange ? String(bill.exchange) : (bill.totals?.exchange ? String(bill.totals.exchange) : "0")); setManualRoundOff(bill.totals?.round_off !== null && bill.totals?.round_off !== undefined ? String(bill.totals.round_off) : "");
     const loadedItems = (bill.items || []).map((item) => ({ id: `${Date.now()}-${Math.random()}`, description: item.description || "", hsn: item.hsn || "", weight: item.weight ? String(item.weight) : "", quantity: item.quantity ? String(item.quantity) : "1", mc_override: item.mc_override !== null && item.mc_override !== undefined ? String(item.mc_override) : "", rate_override: item.rate_override !== null && item.rate_override !== undefined ? String(item.rate_override) : "", amount_override: item.amount_override !== null && item.amount_override !== undefined ? String(item.amount_override) : "", }));
     setItems(loadedItems.length > 0 ? loadedItems : [createItem(settings.default_hsn)]); setIsDirty(false); setShowRecentBills(false); setShowLedger(false); toast.success(`Loaded ${bill.document_number} for editing`); goToBillTop();
   };
@@ -545,7 +557,7 @@ export default function App() {
     catch (error) { if (error?.response?.status === 401) { toast.error("Wrong passcode."); } else { toast.error("Server is waking up. Please wait 15-20 seconds and try again."); } } finally { setLoggingIn(false); }
   };
 
-  const handleLogout = () => { localStorage.removeItem("jj_auth_token"); setToken(""); setHasSelectedBranch(false); };
+  const handleLogout = () => { localStorage.removeItem("jj_auth_token"); setToken(""); setGatewayPassed(false); setSettingsLoaded(false); };
 
   const optimizeImageDataUrl = async (file) => { const reader = new FileReader(); const original = await new Promise((resolve, reject) => { reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); }); const image = new Image(); await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; image.src = original; }); const ratio = Math.min(420 / image.width, 420 / image.height, 1); const targetWidth = Math.round(image.width * ratio); const targetHeight = Math.round(image.height * ratio); const canvas = document.createElement("canvas"); canvas.width = targetWidth; canvas.height = targetHeight; const context = canvas.getContext("2d"); context.drawImage(image, 0, 0, targetWidth, targetHeight); return canvas.toDataURL("image/png", 0.92); };
   const handleLogoUpload = async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const dataUrl = await optimizeImageDataUrl(file); localStorage.setItem("jj_logo_data_url", dataUrl); setSettings((prev) => ({ ...prev, logo_data_url: dataUrl })); setLogoUploadName(file.name); toast.success("Logo uploaded successfully."); } catch { toast.error("Logo upload failed."); } };
@@ -598,8 +610,7 @@ export default function App() {
         onclone: (clonedDoc) => {
           const clonedNode = clonedDoc.getElementById(elementId);
           if (clonedNode) { 
-             clonedNode.style.width = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.minWidth = "800px"; 
-             clonedNode.style.position = "relative"; clonedNode.style.height = "max-content"; clonedNode.style.margin = "0"; clonedNode.style.padding = "20px"; clonedNode.style.boxSizing = "border-box";
+             clonedNode.style.width = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.position = "absolute"; clonedNode.style.top = "0"; clonedNode.style.left = "0"; clonedNode.style.margin = "0"; clonedNode.style.padding = "20px"; clonedNode.style.boxSizing = "border-box";
              const images = clonedNode.getElementsByTagName('img'); for (let img of images) img.crossOrigin = "anonymous"; 
           }
         }
@@ -612,7 +623,6 @@ export default function App() {
   const shareWhatsApp = () => { const link = `${window.location.origin}/?view=${documentNumber}`; const text = `Hello ${customer.name || "Customer"},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`; let cleanedPhone = customer.phone.replace(/\D/g, ""); if (cleanedPhone.length === 10) cleanedPhone = `91${cleanedPhone}`; window.open(`https://wa.me/${cleanedPhone}?text=${encodeURIComponent(text)}`, "_blank"); };
   const shareEmail = () => { const link = `${window.location.origin}/?view=${documentNumber}`; const subject = `${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber}`; const body = `Dear ${customer.name || "Customer"},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`; window.location.href = `mailto:${customer.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; };
   const goToBillTop = () => { document.getElementById("bill-print-root")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
-  const handleWifiClick = () => { navigator.clipboard.writeText("12345678").then(() => { toast.success("✅ Password '12345678' Copied! Go to settings and connect to 'JalaramJewellers Unlimited'.", { duration: 6000 }); }).catch(() => { toast.info("Wi-Fi: JalaramJewellers Unlimited | Pass: 12345678", { duration: 6000 }); }); };
 
   const todaysTotalCash = (todayBills || []).filter(b => b.is_payment_done).reduce((sum, b) => sum + (b.payment_method === 'Cash' ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_cash) : 0), 0);
   const todaysTotalEstBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'estimate').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
@@ -642,8 +652,7 @@ export default function App() {
     const subtotal = mapped.reduce((sum, row) => sum + row.amount, 0); const taxable = subtotal;
     const cgst = publicBill.mode === "invoice" ? taxable * 0.015 : 0; const sgst = publicBill.mode === "invoice" ? taxable * 0.015 : 0; const igst = 0;
     const gstApplied = publicBill.mode === "invoice" ? cgst + sgst + igst : 0;
-    const discount = num(publicBill.discount !== undefined ? publicBill.discount : (publicBill.totals?.discount || 0)); 
-    const exchange = num(publicBill.exchange !== undefined ? publicBill.exchange : (publicBill.totals?.exchange || 0));
+    const discount = num(publicBill.discount || publicBill.totals?.discount || 0); const exchange = num(publicBill.exchange || publicBill.totals?.exchange || 0);
     const mdr = publicBill.payment_method === "Card" ? (taxable + gstApplied) * 0.02 : 0;
     const baseTotal = taxable + gstApplied + mdr - discount - exchange; const autoRound = Math.round(baseTotal) - baseTotal;
     const roundOff = publicBill.round_off !== undefined && publicBill.round_off !== null ? num(publicBill.round_off) : (publicBill.totals?.round_off !== undefined && publicBill.totals?.round_off !== null ? num(publicBill.totals?.round_off) : autoRound);
@@ -672,33 +681,12 @@ export default function App() {
     if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
     if (publicBill === "NOT_FOUND" || !publicBill) return <div className="loading-screen">Bill not found or has been deleted.</div>;
 
-    let publicUpiAmt = 0;
     const isSale = publicBill.tx_type === "sale" || !publicBill.tx_type;
-    
-    if (isSale) { 
-        publicUpiAmt = publicBill.payment_method === "Split" ? num(publicBill.split_upi) : publicComputed.grandTotal; 
-    } else {
-        if (!publicBill.is_advance_paid && (publicBill.advance_method === "UPI" || publicBill.advance_method === "Split")) { 
-            publicUpiAmt = publicBill.advance_method === "Split" ? Math.max(0, num(publicBill.advance_amount) - num(publicBill.advance_split_cash)) : num(publicBill.advance_amount); 
-        } else if (publicBill.is_advance_paid && !publicBill.is_balance_paid && (publicBill.balance_method === "UPI" || publicBill.balance_method === "Split")) { 
-            const bal = Math.max(0, publicComputed.grandTotal - num(publicBill.advance_amount)); 
-            publicUpiAmt = publicBill.balance_method === "Split" ? Math.max(0, bal - num(publicBill.balance_split_cash)) : bal; 
-        }
-    }
-    
-    const showPublicUpi = publicUpiAmt > 0 && !(isSale ? publicBill.is_payment_done : publicBill.is_balance_paid);
     const pbBranch = (publicSettings?.branches || []).find(b => b.id === publicBill.branch_id) || (publicSettings?.branches || [])[0] || defaultSettings.branches[0];
-    const publicUpiId = publicBill.mode === "invoice" ? pbBranch.invoice_upi_id : pbBranch.estimate_upi_id;
-    const publicUpiUri = `upi://pay?pa=${publicUpiId}&pn=${encodeURIComponent(publicSettings?.shop_name)}&am=${money(publicUpiAmt)}&cu=INR&tn=Bill_${publicBill.document_number}`;
 
     return (
       <div className="billing-app" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px' }}>
         <Toaster position="bottom-right" />
-        {!(isSale ? publicBill.is_payment_done : publicBill.is_balance_paid) && (
-          <div className="no-print" onClick={handleWifiClick} style={{ width: "100%", maxWidth: "800px", backgroundColor: "#eff6ff", border: "2px solid #3b82f6", borderRadius: "8px", padding: "12px", marginBottom: "20px", display: "flex", justifyContent: "center", alignItems: "center", gap: "10px", color: "#1d4ed8", fontWeight: "bold", cursor: "pointer", boxShadow: "0 4px 6px rgba(0,0,0,0.1)" }}>
-            <Wifi size={20} /> Slow Internet? Tap here for Free Shop Wi-Fi
-          </div>
-        )}
         {showFeedbackModal && (
           <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
             <div style={{ backgroundColor: "white", padding: "30px", borderRadius: "16px", width: "100%", maxWidth: "380px", textAlign: "center", boxShadow: "0 10px 25px rgba(0,0,0,0.2)" }}>
@@ -779,14 +767,6 @@ export default function App() {
                   <div className="totals-row" style={{ color: "#dc2626" }}><span>BALANCE DUE</span><strong>₹{money(Math.max(0, publicComputed.grandTotal - num(publicBill.advance_amount)))}</strong></div>
                 </>
               )}
-
-              {showPublicUpi && (
-                <div className="payment-qr-box">
-                  <p className="scan-title" style={{ marginBottom: "15px" }}>Scan Here to Pay ₹{money(publicUpiAmt)}</p>
-                  <img src={`https://quickchart.io/qr?text=${encodeURIComponent(publicUpiUri)}&size=220`} alt="Dynamic payment QR" className="upi-qr" crossOrigin="anonymous" />
-                  <p className="upi-id">UPI ID: {publicUpiId}</p>
-                </div>
-              )}
             </div>
 
             <ConnectWithUs phoneLink={(publicSettings?.phone_numbers || [])[0]} />
@@ -842,31 +822,34 @@ export default function App() {
     );
   }
 
-  // --- GATEWAY FOR BRANCH SELECTION ---
-  if (token && !isPublicView && !hasSelectedBranch) {
-    return (
-      <div className="login-shell">
-        <div className="login-card" style={{ padding: "40px 30px" }}>
-          <h1 className="login-title" style={{ fontSize: "1.8rem" }}>Welcome Back</h1>
-          <p className="login-subtitle" style={{ fontSize: "1.1rem", marginBottom: "25px", color: "#334155" }}>Which branch are you in today?</p>
-          <select className="native-select" value={billBranchId} onChange={(e) => setBillBranchId(e.target.value)} style={{ padding: "12px", fontSize: "1.1rem" }}>
-            {(settings?.branches || []).map(b => <option key={b.id} value={b.id}>📍 {b.name}</option>)}
-          </select>
-          <Button onClick={() => { setGlobalBranchId(billBranchId); setHasSelectedBranch(true); }} style={{ width: "100%", marginTop: "20px", fontSize: "1.1rem", padding: "12px" }}>Enter Dashboard</Button>
+  // GATEWAY FOR BRANCH SELECTION UPON LOGIN
+  if (token && settingsLoaded && !isPublicView && !gatewayPassed) {
+     return (
+        <div className="login-shell" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9', height: '100vh' }}>
+           <div className="login-card" style={{ maxWidth: '400px', width: '90%', textAlign: 'center', backgroundColor: 'white', padding: '30px', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+              <Store size={48} color="#0f172a" style={{ margin: '0 auto 15px auto' }} />
+              <h2 style={{ marginBottom: '10px', color: '#0f172a' }}>Select Branch</h2>
+              <p style={{ color: '#64748b', marginBottom: '25px', fontSize: '0.9rem' }}>Which branch are you working in today?</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                 {(settings.branches || []).map(b => (
+                    <Button key={b.id} onClick={() => { setGlobalBranchId(b.id); setBillBranchId(b.id); reserveNumber(mode, b.id); setGatewayPassed(true); }} style={{ padding: '15px', height: 'auto', fontSize: '1.1rem', backgroundColor: '#f8fafc', color: '#0f172a', border: '1px solid #cbd5e1', justifyContent: 'flex-start', textAlign: 'left' }} variant="outline">
+                       📍 {b.name}
+                    </Button>
+                 ))}
+              </div>
+           </div>
         </div>
-      </div>
-    )
+     );
   }
 
   return (
-    <div className="billing-app">
+    <div className="billing-app" style={{ height: "100vh", overflow: "hidden" }}>
       <Toaster position="bottom-right" />
 
       {/* INVISIBLE BULK PDF RENDERER */}
-      <div style={{ position: "absolute", top: "-9999px", left: "-9999px", opacity: 0, pointerEvents: "none" }}>
+      <div style={{ position: "absolute", zIndex: -9999, opacity: 0, pointerEvents: "none" }}>
         {(filteredRecentBills || []).map(b => {
            const billBranch = (settings.branches || []).find(br => br.id === b.branch_id) || (settings.branches || [])[0] || defaultSettings.branches[0];
-           const bulkUpiAmountToPay = b.payment_method === "Split" ? num(b.split_upi) : (b.totals?.grand_total || 0);
            const printedItems = (b.items || []).map((item, index) => {
              const rate = (item.rate !== undefined && item.rate !== null) ? num(item.rate) : (item.rate_override ? num(item.rate_override) : 0);
              const amount = (item.amount !== undefined && item.amount !== null) ? num(item.amount) : (item.amount_override ? num(item.amount_override) : 0);
@@ -937,7 +920,7 @@ export default function App() {
       </div>
       {/* END OF BULK PDF RENDERER */}
 
-      <header className="top-bar no-print">
+      <header className="top-bar no-print" style={{ height: "65px" }}>
         <div className="brand-block" style={{ display: "flex", alignItems: "center", gap: "15px" }}>
           <div><h1 className="brand-title">{settings.shop_name}</h1><p className="brand-tagline">{settings.tagline}</p></div>
           <div style={{ paddingLeft: "15px", borderLeft: "2px solid rgba(255,255,255,0.2)" }}>
@@ -959,98 +942,115 @@ export default function App() {
         </div>
       </header>
 
-      <main className="main-layout">
+      {/* INDEPENDENT SPLIT-SCREEN LAYOUT FOR TABLETS & PHONES */}
+      <main className="main-layout" style={{ display: "flex", flexDirection: isMobileSplit ? "column" : "row", height: "calc(100vh - 65px)", overflow: "hidden", width: "100%", backgroundColor: "#f1f5f9" }}>
         
-        <section id="bill-print-root" className="bill-sheet" style={{ "--print-scale-factor": (printScale / 100).toFixed(3), position: 'relative', zIndex: 1 }}>
-          {(txType === "sale" ? isPaymentDone : isBalancePaid) && <div className="watermark-done">FULLY PAID</div>}
-          <div className="bill-header">
-            <div className="logo-area">
-              {settings.logo_data_url ? <img src={settings.logo_data_url} alt="Shop Logo" className="shop-logo" crossOrigin="anonymous" /> : <div className="shop-logo-fallback">JJ</div>}
-              <div style={{ width: "100%", textAlign: settings.shop_name_align || "center" }}>
-                <h2 className="sheet-shop-title" style={{ fontFamily: settings.shop_name_font || "sans-serif", color: settings.shop_name_color || "#000", fontSize: `${settings.shop_name_size}px`, margin: 0 }}>{settings.shop_name}</h2>
+        {/* LEFT PANEL: Bill Sheet */}
+        <section style={{ flex: isMobileSplit ? "1" : "3", overflowY: "auto", padding: "10px", display: "flex", justifyContent: "center", alignItems: "flex-start" }}>
+          <div id="bill-print-root" className="bill-sheet" style={{ "--print-scale-factor": (printScale / 100).toFixed(3), position: 'relative', zIndex: 1, margin: "0 auto" }}>
+            {(txType === "sale" ? isPaymentDone : isBalancePaid) && <div className="watermark-done">FULLY PAID</div>}
+            <div className="bill-header">
+              <div className="logo-area">
+                {settings.logo_data_url ? <img src={settings.logo_data_url} alt="Shop Logo" className="shop-logo" crossOrigin="anonymous" /> : <div className="shop-logo-fallback">JJ</div>}
+                <div style={{ width: "100%", textAlign: settings.shop_name_align || "center" }}>
+                  <h2 className="sheet-shop-title" style={{ fontFamily: settings.shop_name_font || "sans-serif", color: settings.shop_name_color || "#000", fontSize: `${settings.shop_name_size}px`, margin: 0 }}>{settings.shop_name}</h2>
+                </div>
+                <div style={{ width: "100%", textAlign: settings.tagline_align || "center" }}>
+                  <p className="sheet-tagline" style={{ fontFamily: settings.tagline_font || "sans-serif", color: settings.tagline_color || "#475569", fontSize: `${settings.tagline_size}px`, margin: "5px 0" }}>{settings.tagline}</p>
+                </div>
               </div>
-              <div style={{ width: "100%", textAlign: settings.tagline_align || "center" }}>
-                <p className="sheet-tagline" style={{ fontFamily: settings.tagline_font || "sans-serif", color: settings.tagline_color || "#475569", fontSize: `${settings.tagline_size}px`, margin: "5px 0" }}>{settings.tagline}</p>
+
+              <div className="contact-area">
+                <div className="contact-address" style={{ fontFamily: settings.address_font || "sans-serif", display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '8px', alignItems: settings.address_align === 'left' ? 'flex-start' : settings.address_align === 'right' ? 'flex-end' : 'center', textAlign: settings.address_align || "center" }}>
+                    <a href={activeBillBranch.map_url !== "#" ? activeBillBranch.map_url : "#"} target="_blank" rel="noopener noreferrer" style={{ color: settings.address_color || "#475569", fontSize: `${settings.address_size || 14}px`, textDecoration: 'none' }}>{activeBillBranch.address}</a>
+                </div>
+                <div style={{ width: "100%", textAlign: settings.phone_align || "center", fontFamily: settings.phone_font || "sans-serif", fontSize: `${settings.phone_size || 13}px`, marginBottom: "4px" }}>
+                  {(settings.phone_numbers || []).join(" | ")}
+                </div>
+                <div style={{ width: "100%", textAlign: settings.email_align || "center", fontFamily: settings.email_font || "sans-serif", fontSize: `${settings.email_size || 13}px`, marginBottom: "4px" }}>
+                  <a href={`mailto:${settings.email}`} style={{ color: settings.email_color || "#475569", textDecoration: 'none' }}>{settings.email}</a>
+                </div>
+                {mode === "invoice" && activeBillBranch.gstin && <p style={{ margin: "4px 0", textAlign: "center", fontWeight: "bold" }}>GSTIN: {activeBillBranch.gstin}</p>}
               </div>
             </div>
 
-            <div className="contact-area">
-              <div className="contact-address" style={{ fontFamily: settings.address_font || "sans-serif", display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '8px', alignItems: settings.address_align === 'left' ? 'flex-start' : settings.address_align === 'right' ? 'flex-end' : 'center', textAlign: settings.address_align || "center" }}>
-                  <a href={activeBillBranch.map_url !== "#" ? activeBillBranch.map_url : "#"} target="_blank" rel="noopener noreferrer" style={{ color: settings.address_color || "#475569", fontSize: `${settings.address_size || 14}px`, textDecoration: 'none' }}>{activeBillBranch.address}</a>
-              </div>
-              <div style={{ width: "100%", textAlign: settings.phone_align || "center", fontFamily: settings.phone_font || "sans-serif", fontSize: `${settings.phone_size || 13}px`, marginBottom: "4px" }}>
-                {(settings.phone_numbers || []).join(" | ")}
-              </div>
-              <div style={{ width: "100%", textAlign: settings.email_align || "center", fontFamily: settings.email_font || "sans-serif", fontSize: `${settings.email_size || 13}px`, marginBottom: "4px" }}>
-                <a href={`mailto:${settings.email}`} style={{ color: settings.email_color || "#475569", textDecoration: 'none' }}>{settings.email}</a>
-              </div>
-              {mode === "invoice" && activeBillBranch.gstin && <p style={{ margin: "4px 0", textAlign: "center", fontWeight: "bold" }}>GSTIN: {activeBillBranch.gstin}</p>}
+            <div className="sheet-banner">{txType === "booking" ? "BOOKING RECEIPT" : txType === "service" ? "SERVICE ORDER" : mode === "invoice" ? "TAX INVOICE" : "ESTIMATE"}</div>
+
+            <div className="meta-grid">
+              <p><strong>{mode === "invoice" ? "Invoice No" : "Estimate No"}:</strong> {isNumberLoading ? "Generating..." : documentNumber || "-"}</p>
+              <p><strong>Date:</strong> {billDate}</p>
             </div>
-          </div>
 
-          <div className="sheet-banner">{txType === "booking" ? "BOOKING RECEIPT" : txType === "service" ? "SERVICE ORDER" : mode === "invoice" ? "TAX INVOICE" : "ESTIMATE"}</div>
+            <div className="customer-box">
+              <p><strong>Name:</strong> {customer.name || "-"}</p>
+              <p><strong>Address:</strong> {customer.address || "-"}</p>
+              <p><strong>Phone:</strong> {customer.phone || "-"}</p>
+            </div>
 
-          <div className="meta-grid">
-            <p><strong>{mode === "invoice" ? "Invoice No" : "Estimate No"}:</strong> {isNumberLoading ? "Generating..." : documentNumber || "-"}</p>
-            <p><strong>Date:</strong> {billDate}</p>
-          </div>
+            <BillTable mode={mode} items={computed.items} />
 
-          <div className="customer-box">
-            <p><strong>Name:</strong> {customer.name || "-"}</p>
-            <p><strong>Address:</strong> {customer.address || "-"}</p>
-            <p><strong>Phone:</strong> {customer.phone || "-"}</p>
-          </div>
+            <div className="sheet-bottom-stack">
+              <div className="totals">
+                <div className="totals-row"><span>{mode === "invoice" ? "Taxable Amt." : "TOTAL"}</span><strong>₹{money(computed.taxable)}</strong></div>
+                {mode === "invoice" ? (
+                  <>
+                    <div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(computed.cgst)}</strong></div>
+                    <div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(computed.sgst)}</strong></div>
+                    <div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(computed.igst)}</strong></div>
+                  </>
+                ) : (
+                  <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(discount)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(exchange)}</strong></div></>
+                )}
+                <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(computed.mdr)}</strong></div>
+                <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(computed.roundOff)}</strong></div>
+                <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(computed.grandTotal)}</strong></div>
 
-          <BillTable mode={mode} items={computed.items} />
+                {txType !== "sale" && (
+                  <>
+                    <div className="totals-row" style={{ marginTop: "10px", color: "#16a34a" }}><span>ADVANCE RECEIVED</span><strong>₹{money(advanceAmount)}</strong></div>
+                    <div className="totals-row" style={{ color: "#dc2626" }}><span>BALANCE DUE</span><strong>₹{money(Math.max(0, computed.grandTotal - num(advanceAmount)))}</strong></div>
+                  </>
+                )}
 
-          <div className="sheet-bottom-stack">
-            <div className="totals">
-              <div className="totals-row"><span>{mode === "invoice" ? "Taxable Amt." : "TOTAL"}</span><strong>₹{money(computed.taxable)}</strong></div>
+                {showDashboardUpi && (
+                  <div className="payment-qr-box">
+                    <p className="scan-title">Scan Here For Payment (₹{money(upiAmountToPay)})</p>
+                    <img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" crossOrigin="anonymous" />
+                    <p className="upi-id">UPI: {upiId}</p>
+                  </div>
+                )}
+              </div>
+
               {mode === "invoice" ? (
-                <>
-                  <div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(computed.cgst)}</strong></div>
-                  <div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(computed.sgst)}</strong></div>
-                  <div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(computed.igst)}</strong></div>
-                </>
+                <div className="declaration">
+                  <p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p>
+                  <div className="about-qr"><p className="section-title">About Us QR</p>{(settings.about_qr_data_url || STATIC_ABOUT_QR_URL) && <img src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="About us QR" className="about-qr-image" crossOrigin="anonymous" />}</div>
+                </div>
               ) : (
-                <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(discount)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(exchange)}</strong></div></>
-              )}
-              <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(computed.mdr)}</strong></div>
-              <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(computed.roundOff)}</strong></div>
-              <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(computed.grandTotal)}</strong></div>
-
-              {txType !== "sale" && (
-                <>
-                  <div className="totals-row" style={{ marginTop: "10px", color: "#16a34a" }}><span>ADVANCE RECEIVED</span><strong>₹{money(advanceAmount)}</strong></div>
-                  <div className="totals-row" style={{ color: "#dc2626" }}><span>BALANCE DUE</span><strong>₹{money(Math.max(0, computed.grandTotal - num(advanceAmount)))}</strong></div>
-                </>
-              )}
-
-              {showDashboardUpi && (
-                <div className="payment-qr-box">
-                  <p className="scan-title">Scan Here For Payment (₹{money(upiAmountToPay)})</p>
-                  <img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" crossOrigin="anonymous" />
-                  <p className="upi-id">UPI: {upiId}</p>
+                <div className="policies">
+                  <p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul>
+                  <div className="about-qr"><p className="section-title">About Us QR</p>{(settings.about_qr_data_url || STATIC_ABOUT_QR_URL) && <img src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="About us QR" className="about-qr-image" crossOrigin="anonymous" />}</div>
                 </div>
               )}
             </div>
-
-            {mode === "invoice" ? (
-              <div className="declaration">
-                <p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p>
-                <div className="about-qr"><p className="section-title">About Us QR</p>{(settings.about_qr_data_url || STATIC_ABOUT_QR_URL) && <img src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="About us QR" className="about-qr-image" crossOrigin="anonymous" />}</div>
-              </div>
-            ) : (
-              <div className="policies">
-                <p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul>
-                <div className="about-qr"><p className="section-title">About Us QR</p>{(settings.about_qr_data_url || STATIC_ABOUT_QR_URL) && <img src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="About us QR" className="about-qr-image" crossOrigin="anonymous" />}</div>
-              </div>
-            )}
+            <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
           </div>
-          <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
         </section>
 
-        <aside className="controls no-print">
+        {/* RIGHT PANEL: Controls Menu */}
+        <aside className="controls no-print" style={{ flex: isMobileSplit ? "1" : "2", overflowY: "auto", padding: "10px", backgroundColor: "white", borderLeft: isMobileSplit ? "none" : "1px solid #cbd5e1", borderTop: isMobileSplit ? "1px solid #cbd5e1" : "none" }}>
+          <div className="control-card action-grid">
+            <Button onClick={saveBill} disabled={savingBill} style={{ backgroundColor: "#0f172a" }}>{savingBill ? "Saving..." : currentBillId ? `Update & Migrate (${editingDocNumber})` : "Save Bill"}</Button>
+            <Button onClick={() => setShowLedger(true)} style={{ backgroundColor: "#16a34a", color: "white" }}>Daily Sales & Ledger</Button>
+            <Button onClick={() => { setShowRecentBills(true); setBillSearchQuery(""); setRecentBranchFilter("ALL"); setRecentModeFilter("ALL"); setRecentDateFilter("ALL"); }} variant="outline">Recent Bills</Button>
+            <Button onClick={() => downloadPdf("bill-print-root", documentNumber || mode)}>Download PDF</Button>
+            <Button onClick={() => window.print()}>Print</Button>
+            <Button onClick={shareWhatsApp}>WhatsApp Link</Button>
+            <Button onClick={shareEmail}>Email Link</Button>
+            <Button onClick={handleNewBillClick} variant="outline">New Bill</Button>
+            <Button onClick={() => setShowSettings(true)} variant="outline">Settings</Button>
+          </div>
+
           <div className="control-card">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
                 <h3 style={{ margin: 0 }}>Bill Details</h3>
@@ -1095,10 +1095,10 @@ export default function App() {
                 <Input value={item.mc_override} onChange={(e) => updateItem(item.id, "mc_override", e.target.value)} placeholder="Custom MC ₹/g" />
                 <Input value={item.rate_override} onChange={(e) => updateItem(item.id, "rate_override", e.target.value)} placeholder="Custom Silver Rate" />
                 <Input value={item.amount_override} onChange={(e) => updateItem(item.id, "amount_override", e.target.value)} placeholder="Fixed Amount ₹" />
-                <Button type="button" variant="outline" onClick={() => { setItems((prev) => prev.filter((row) => row.id !== item.id)); markDirty(); }} disabled={(items || []).length === 1} style={{ borderColor: "#ef4444", color: "#ef4444" }}>Remove</Button>
+                <Button type="button" variant="outline" onClick={() => { setItems((prev) => prev.filter((row) => row.id !== item.id)); markDirty(); }} disabled={(items || []).length === 1}>Remove</Button>
               </div>
             ))}
-            <Button id="btn-add-row" type="button" onClick={() => { setItems((prev) => [...prev, createItem(settings.default_hsn)]); markDirty(); }} style={{ width: "100%", marginTop: "10px", backgroundColor: "transparent", color: "#16a34a", border: "2px dashed #16a34a" }}>+ Add New Row (Ctrl + R)</Button>
+            <Button type="button" onClick={() => { setItems((prev) => [...prev, createItem(settings.default_hsn)]); markDirty(); }}>Add Item</Button>
           </div>
 
           <div className="control-card">
@@ -1120,7 +1120,7 @@ export default function App() {
             {txType === "sale" && (
               <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
                 <label className="select-label">Payment Method</label>
-                <select value={paymentMethod} onChange={(e) => { setPaymentMethod(e.target.value); markDirty(); }} className="native-select">
+                <select id="paymentMethodSelect" value={paymentMethod} onChange={(e) => { setPaymentMethod(e.target.value); markDirty(); }} className="native-select">
                   <option value="" disabled>Select Method</option><option value="Cash">Cash</option><option value="UPI">UPI</option>
                   {mode === "invoice" && <option value="Card">Card</option>}
                   <option value="Split">Split (Cash + UPI)</option>
@@ -1178,18 +1178,6 @@ export default function App() {
               </div>
             )}
             <textarea value={notes} onChange={(e) => { setNotes(e.target.value); markDirty(); }} placeholder="Notes / Descriptions" className="notes-box" style={{ marginTop: "15px" }} />
-          </div>
-
-          <div className="control-card action-grid">
-            <Button id="btn-save-bill" onClick={saveBill} disabled={savingBill} style={{ backgroundColor: "#0f172a" }}>{savingBill ? "Saving..." : currentBillId ? `Update & Migrate (${editingDocNumber})` : "Save Bill (Ctrl+S)"}</Button>
-            <Button onClick={() => setShowLedger(true)} style={{ backgroundColor: "#16a34a", color: "white" }}>Daily Sales & Ledger</Button>
-            <Button onClick={() => { setShowRecentBills(true); setBillSearchQuery(""); setRecentBranchFilter("ALL"); setRecentModeFilter("ALL"); setRecentDateFilter("ALL"); }} variant="outline">Recent Bills</Button>
-            <Button onClick={() => downloadPdf("bill-print-root", documentNumber || mode)}>Download PDF</Button>
-            <Button onClick={() => window.print()}>Print</Button>
-            <Button id="btn-whatsapp" onClick={shareWhatsApp}>WhatsApp (Ctrl+W)</Button>
-            <Button onClick={shareEmail}>Email Link</Button>
-            <Button id="btn-new-bill" onClick={handleNewBillClick} variant="outline">New Bill (Ctrl+N)</Button>
-            <Button onClick={() => setShowSettings(true)} variant="outline">Settings</Button>
           </div>
         </aside>
       </main>
@@ -1320,89 +1308,4 @@ export default function App() {
           <div style={{ padding: "15px" }}>
             <div style={{ marginBottom: "20px" }}>
               <Button onClick={handleBulkDownload} disabled={isBulkDownloading || (filteredRecentBills || []).length === 0} style={{ width: "100%", backgroundColor: "#0f172a", height: "auto", padding: "10px", display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", justifyContent: "center", fontSize: "1rem", boxSizing: "border-box" }}>
-                {isBulkDownloading ? "Generating PDF... Please Wait" : <><Download size={18} /> Download {(filteredRecentBills || []).length} Bills as Single PDF</>}
-              </Button>
-            </div>
-
-            <div style={{ backgroundColor: "#f8fafc", padding: "15px", borderRadius: "8px", border: "1px solid #cbd5e1", marginBottom: "20px" }}>
-               <h4 style={{ margin: "0 0 10px 0", color: "#334155", fontSize: "0.9rem" }}>Filter Bills</h4>
-               <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "10px" }}>
-                 <div style={{ flex: "1 1 120px" }}><label style={{ fontSize: "0.75rem", color: "#64748b" }}>Branch</label><select value={recentBranchFilter} onChange={(e) => setRecentBranchFilter(e.target.value)} className="native-select"><option value="ALL">All Branches</option>{(settings.branches || []).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
-                 <div style={{ flex: "1 1 120px" }}><label style={{ fontSize: "0.75rem", color: "#64748b" }}>Bill Type</label><select value={recentModeFilter} onChange={(e) => setRecentModeFilter(e.target.value)} className="native-select"><option value="ALL">All Types</option><option value="invoice">Invoices Only</option><option value="estimate">Estimates Only</option></select></div>
-               </div>
-               <div style={{ marginBottom: "10px" }}><label style={{ fontSize: "0.75rem", color: "#64748b" }}>Date Range</label><select value={recentDateFilter} onChange={(e) => setRecentDateFilter(e.target.value)} className="native-select"><option value="ALL">All Time</option><option value="THIS_MONTH">This Month</option><option value="LAST_MONTH">Last Month</option><option value="CUSTOM">Custom Date Range</option></select></div>
-               {recentDateFilter === "CUSTOM" && (
-                 <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "10px" }}>
-                    <div style={{ flex: "1 1 120px" }}><label style={{ fontSize: "0.75rem", color: "#64748b" }}>Start Date</label><Input type="date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} /></div>
-                    <div style={{ flex: "1 1 120px" }}><label style={{ fontSize: "0.75rem", color: "#64748b" }}>End Date</label><Input type="date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} /></div>
-                 </div>
-               )}
-               <div><label style={{ fontSize: "0.75rem", color: "#64748b" }}>Search Name/Phone/Inv Number</label><Input placeholder="Type to search..." value={billSearchQuery} onChange={(e) => setBillSearchQuery(e.target.value)} /></div>
-            </div>
-
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "15px", paddingBottom: "15px", borderBottom: "1px dashed #cbd5e1" }}>
-              <Button size="sm" variant="outline" onClick={() => handleResetCounter("invoice")} style={{ flex: "1 1 100%", borderColor: "#dc2626", color: "#dc2626" }}>Reset Invoice No.</Button>
-              <Button size="sm" variant="outline" onClick={() => handleResetCounter("estimate")} style={{ flex: "1 1 100%", borderColor: "#2563eb", color: "#2563eb" }}>Reset Estimate No.</Button>
-            </div>
-
-            {loadingRecent ? (
-              <p style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>Loading bills from database...</p>
-            ) : (filteredRecentBills || []).length === 0 ? (
-              <p style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>No bills found matching these filters.</p>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                {(filteredRecentBills || []).map((b) => (
-                  <div key={b.id} style={{ border: "1px solid var(--border)", padding: "12px", borderRadius: "8px", backgroundColor: "white" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", marginBottom: "8px" }}>
-                      <strong style={{ color: b.mode === "invoice" ? "#dc2626" : "#2563eb" }}>{b.document_number}</strong><span style={{ fontSize: "0.85rem", color: "#666" }}>{b.date}</span>
-                    </div>
-                    <div style={{ marginBottom: "8px", fontWeight: "500" }}>{b.customer_name || b.customer?.name || "Unknown Customer"}</div>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
-                      <strong>₹{money(b.totals?.grand_total || 0)}</strong>
-                      <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-                        <label style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "0.85rem", cursor: "pointer", marginRight: "5px", padding: "4px 8px", backgroundColor: (b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "#dcfce7" : "#fef3c7", color: (b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "#166534" : "#b45309", borderRadius: "5px", fontWeight: "bold" }}>
-                          <input type="checkbox" checked={(b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) || false} onChange={() => handleQuickPaymentToggle(b)} style={{ cursor: "pointer" }} />
-                          {(b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "Paid" : "Pending"}
-                        </label>
-                        <Button size="sm" variant="destructive" style={{ backgroundColor: "#ef4444", color: "white" }} onClick={() => handleDeleteBill(b)}>Delete</Button>
-                        <Button size="sm" onClick={() => { if (isDirty && !window.confirm("⚠️ You have unsaved changes. Discard them and load this old bill?")) return; loadBillForEditing(b); }}>Edit</Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-      )}
-
-      {/* SETTINGS DRAWER */}
-      {showSettings && (
-        <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "500px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
-          <div className="drawer-header">
-            <h3>Settings</h3>
-            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowSettings(false)}><ArrowLeft className="drawer-back-icon" /><span>Back</span></Button>
-          </div>
-
-          <div style={{ padding: "0 15px 15px 15px", boxSizing: "border-box", width: "100%" }}>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "20px" }}>
-              <Button variant={settingsTab === "design" ? "default" : "outline"} onClick={() => setSettingsTab("design")} style={{ flex: "1 1 100px" }}>🎨 Design</Button>
-              <Button variant={settingsTab === "technical" ? "default" : "outline"} onClick={() => setSettingsTab("technical")} style={{ flex: "1 1 100px" }}>⚙️ Tech</Button>
-              <Button variant={settingsTab === "branches" ? "default" : "outline"} onClick={() => setSettingsTab("branches")} style={{ flex: "1 1 100px" }}><Store size={16} style={{marginRight:"4px"}}/> Branches</Button>
-            </div>
-
-            {settingsTab === "design" && (
-              <div className="settings-design-tab" style={{ width: "100%" }}>
-                <DesignSettingRow title="Shop Name" fieldPrefix="shop_name" settings={settings} setSettings={setSettings} />
-                <DesignSettingRow title="Tagline" fieldPrefix="tagline" settings={settings} setSettings={setSettings} />
-                <DesignSettingRow title="Address Style (Edit info in Branches)" fieldPrefix="address" settings={settings} setSettings={setSettings} />
-                <DesignSettingRow title="Phone Numbers" fieldPrefix="phone" settings={settings} setSettings={setSettings} />
-                <DesignSettingRow title="Email" fieldPrefix="email" settings={settings} setSettings={setSettings} />
-                <Button onClick={saveSettings} style={{ width: "100%", marginBottom: "15px", boxSizing: "border-box" }}>Save Design Settings</Button>
-              </div>
-            )}
-
-            {settingsTab === "technical" && (
-              <div className="settings-technical-tab" style={{ width: "100%" }}>
-                <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f0fdf4", width: "100%", boxSizing: "border-box" }}>
-                  <h4 style={{ margin: "0 0 10px 0", color: "#166534", display: "flex", alignItems: "center", gap: "8px" }}><Upload size={1
+                {isBulkDownloading ? "Generating PDF... Please Wait" : <><Download size={18} /> Download {(filteredRecentBills || []).length}
