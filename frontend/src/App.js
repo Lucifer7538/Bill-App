@@ -25,6 +25,15 @@ const defaultSettings = {
   email_color: "#475569", email_size: 13, email_font: "sans-serif", email_align: "center",
   silver_rate_per_gram: 240, making_charge_per_gram: 15, flat_mc_below_5g: 150, default_hsn: "7113",
   formula_note: "Line total = Weight x (Silver rate per gram + Making charge per gram)", logo_data_url: "", about_qr_data_url: STATIC_ABOUT_QR_URL, custom_fonts: [],
+  shortcuts: [
+    { id: "save_bill", action: "Save Bill", keys: "Ctrl + S", isSystem: true },
+    { id: "add_item", action: "Add new item row", keys: "Ctrl + Shift + R", isSystem: true },
+    { id: "new_bill", action: "New blank bill", keys: "Shift + N", isSystem: true },
+    { id: "share_wa", action: "Share via WhatsApp", keys: "Shift + W", isSystem: true },
+    { id: "focus_payment", action: "Jump to Payment Method", keys: "Shift + P", isSystem: true },
+    { id: "open_ledger", action: "Open Ledger/Vaults", keys: "Ctrl + W", isSystem: true },
+    { id: "open_recent", action: "Open Recent Bills", keys: "Ctrl + R", isSystem: true }
+  ],
   branches: [
     { id: "B1", name: "Branch 1 (Old Town)", address: "Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2", map_url: "https://g.page/r/CVvnomQZn7zxEBE/review", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", gstin: "21AAUFJ1925F1ZH", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 },
     { id: "B2", name: "Branch 2 (Unit-2)", address: "Branch - 2 : Shop No.14, BMC Market Complex, Market Building, Near Petrol Pump, Unit-2, BBSR-9", map_url: "#", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", gstin: "21AAUFJ1925F1ZH", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 }
@@ -265,6 +274,7 @@ export default function App() {
     window.addEventListener("keydown", handleEsc); return () => window.removeEventListener("keydown", handleEsc);
   }, [showSettings, showAbout, showRecentBills, showLedger, showFeedbackModal]);
 
+  // KEYBOARD SHORTCUTS INTEGRATION
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
       const activeTag = document.activeElement?.tagName.toLowerCase();
@@ -280,16 +290,29 @@ export default function App() {
           return;
       }
 
-      if (e.ctrlKey && e.key.toLowerCase() === 's') { e.preventDefault(); saveBill(); return; }
-      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'r') { e.preventDefault(); setItems(prev => [...prev, createItem(settings.default_hsn)]); markDirty(); return; }
+      const scList = settings.shortcuts || defaultSettings.shortcuts;
+      const checkKey = (actionId) => {
+          const sc = scList.find(s => s.id === actionId);
+          if (!sc || !sc.keys) return false;
+          const parts = sc.keys.toLowerCase().split('+').map(p => p.trim());
+          const needsCtrl = parts.includes('ctrl') || parts.includes('cmd');
+          const needsShift = parts.includes('shift');
+          const needsAlt = parts.includes('alt');
+          const keyPart = parts[parts.length - 1]; 
+          const ctrlPressed = e.ctrlKey || e.metaKey;
 
-      if (isInput) return;
+          return (!!ctrlPressed === needsCtrl) && (!!e.shiftKey === needsShift) && (!!e.altKey === needsAlt) && (e.key.toLowerCase() === keyPart);
+      };
 
-      if (e.shiftKey && e.key.toLowerCase() === 'n') { e.preventDefault(); handleNewBillClick(); }
-      if (e.shiftKey && e.key.toLowerCase() === 'w') { e.preventDefault(); shareWhatsApp(); }
-      if (e.ctrlKey && e.key.toLowerCase() === 'w') { e.preventDefault(); setShowLedger(true); }
-      if (e.ctrlKey && e.key.toLowerCase() === 'r') { e.preventDefault(); setShowRecentBills(true); }
-      if (e.shiftKey && e.key.toLowerCase() === 'p') { e.preventDefault(); document.getElementById('paymentMethodSelect')?.focus(); }
+      if (isInput && !e.ctrlKey && !e.metaKey && !e.altKey) return; 
+      
+      if (checkKey('save_bill')) { e.preventDefault(); saveBill(); return; }
+      if (checkKey('add_item')) { e.preventDefault(); setItems(prev => [...prev, createItem(settings.default_hsn)]); markDirty(); return; }
+      if (checkKey('new_bill')) { e.preventDefault(); handleNewBillClick(); return; }
+      if (checkKey('share_wa')) { e.preventDefault(); shareWhatsApp(); return; }
+      if (checkKey('open_ledger')) { e.preventDefault(); setShowLedger(true); return; }
+      if (checkKey('open_recent')) { e.preventDefault(); setShowRecentBills(true); return; }
+      if (checkKey('focus_payment')) { e.preventDefault(); document.getElementById('paymentMethodSelect')?.focus(); return; }
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
@@ -410,7 +433,7 @@ export default function App() {
     let dbData = response.data || {};
     if (!dbData.branches) dbData.branches = defaultSettings.branches;
     let localFonts = []; const localFontsRaw = localStorage.getItem("jj_custom_fonts"); if (localFontsRaw) { try { localFonts = JSON.parse(localFontsRaw); } catch (e) {} }
-    const newSettings = { ...defaultSettings, ...dbData, logo_data_url: savedLogo || dbData.logo_data_url || "", about_qr_data_url: savedAboutQr || dbData.about_qr_data_url || STATIC_ABOUT_QR_URL, custom_fonts: dbData.custom_fonts || localFonts };
+    const newSettings = { ...defaultSettings, ...dbData, logo_data_url: savedLogo || dbData.logo_data_url || "", about_qr_data_url: savedAboutQr || dbData.about_qr_data_url || STATIC_ABOUT_QR_URL, custom_fonts: dbData.custom_fonts || localFonts, shortcuts: dbData.shortcuts || defaultSettings.shortcuts };
     setSettings(newSettings);
     if (!(newSettings.branches || []).find(b => b.id === globalBranchId)) { setGlobalBranchId((newSettings.branches || [])[0].id); setBillBranchId((newSettings.branches || [])[0].id); }
     setItems((prev) => { if (prev.length === 1 && !prev[0].description && !prev[0].weight && !prev[0].hsn) return [{ ...prev[0], hsn: newSettings.default_hsn }]; return prev; });
@@ -551,6 +574,7 @@ export default function App() {
 
   const handleGlobalBranchChange = async (nextBranchId) => { setGlobalBranchId(nextBranchId); if (!currentBillId && checkIsBlank()) { setBillBranchId(nextBranchId); await reserveNumber(mode, nextBranchId); } };
 
+  // Branches Update Handlers
   const updateBranch = (index, field, value) => {
     const updatedBranches = [...(settings.branches || [])];
     updatedBranches[index] = { ...updatedBranches[index], [field]: value };
@@ -566,6 +590,22 @@ export default function App() {
     if (!window.confirm("Remove this branch from settings?")) return;
     const updatedBranches = (settings.branches || []).filter((_, i) => i !== index);
     setSettings({ ...settings, branches: updatedBranches });
+  };
+
+  // Shortcuts Update Handlers
+  const addShortcut = () => {
+    const newSc = { id: `custom_${Date.now()}`, action: "", keys: "", isSystem: false };
+    setSettings(prev => ({ ...prev, shortcuts: [...(prev.shortcuts || defaultSettings.shortcuts), newSc] }));
+  };
+  const updateShortcut = (index, field, value) => {
+    const list = [...(settings.shortcuts || defaultSettings.shortcuts)];
+    list[index] = { ...list[index], [field]: value };
+    setSettings(prev => ({ ...prev, shortcuts: list }));
+  };
+  const removeShortcut = (index) => {
+    const list = [...(settings.shortcuts || defaultSettings.shortcuts)];
+    list.splice(index, 1);
+    setSettings(prev => ({ ...prev, shortcuts: list }));
   };
 
   const handleLogin = async (event) => {
@@ -695,8 +735,7 @@ export default function App() {
   const upiId = mode === "invoice" ? activeBillBranch.invoice_upi_id : activeBillBranch.estimate_upi_id;
   const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
   const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
-// --- END OF PART 1 ---
-// --- START OF PART 2 ---
+
   // --- PUBLIC VIEW ---
   if (isPublicView) {
     if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
@@ -939,7 +978,7 @@ export default function App() {
       </div>
 
       {/* TOP HEADER */}
-      <header className="top-bar no-print" style={{ flexShrink: 0, height: "65px", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px" }}>
+      <header className="top-bar no-print" style={{ zIndex: 50, position: "relative", flexShrink: 0, minHeight: "65px", height: "auto", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 20px", flexWrap: "wrap", gap: "10px" }}>
         {/* Left Side: Brand, Branch, and inline Mode Toggle */}
         <div className="brand-block" style={{ display: "flex", alignItems: "center", gap: "15px", flexWrap: "nowrap" }}>
           <div><h1 className="brand-title" style={{ margin: 0, fontSize: "1.2rem", color: "white" }}>{settings.shop_name}</h1></div>
@@ -957,7 +996,7 @@ export default function App() {
         </div>
         
         {/* Right Side: Status and Actions */}
-        <div className="top-actions" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        <div className="top-actions" style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.85rem", color: cloudStatus.enabled ? "#4ade80" : "#facc15", marginRight: "10px" }}>
              <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: cloudStatus.enabled ? "#4ade80" : "#facc15" }} />
              <span>{cloudStatus.enabled ? "Live" : "Offline"}</span>
@@ -1392,7 +1431,7 @@ export default function App() {
         </section>
       )}
 
-           {/* SETTINGS DRAWER */}
+      {/* SETTINGS DRAWER */}
       {showSettings && (
         <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "600px", backgroundColor: "white", zIndex: 100, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
           <div className="drawer-header" style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10, paddingBottom: "15px", borderBottom: "1px solid #e2e8f0" }}>
@@ -1521,18 +1560,20 @@ export default function App() {
                 </div>
 
                 <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-                  <h4 style={{ display: "flex", alignItems: "center", gap: "8px", margin: "0 0 10px 0" }}><Keyboard size={18} /> Keyboard Shortcuts</h4>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "8px", fontSize: "0.85rem", color: "#475569" }}>
-                    <strong>Ctrl + S</strong><span>Save Bill</span>
-                    <strong>Ctrl + Shift + R</strong><span>Add new item row</span>
-                    <strong>Shift + N</strong><span>New blank bill</span>
-                    <strong>Shift + W</strong><span>Share via WhatsApp</span>
-                    <strong>Shift + P</strong><span>Jump to Payment Method</span>
-                    <strong>Ctrl + W</strong><span>Open Ledger/Vaults</span>
-                    <strong>Ctrl + R</strong><span>Open Recent Bills</span>
-                    <strong>Enter</strong><span>Jump to next input field</span>
-                    <strong>Esc</strong><span>Close side menus</span>
+                  <h4 style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "0 0 15px 0" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}><Keyboard size={18} /> Keyboard Shortcuts</div>
+                    <Button size="sm" onClick={addShortcut} style={{ backgroundColor: "#0f172a" }}><Plus size={16} style={{ marginRight: "5px" }} /> Add Shortcut</Button>
+                  </h4>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    {(settings.shortcuts || defaultSettings.shortcuts).map((sc, index) => (
+                      <div key={sc.id} style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                         <Input value={sc.keys} onChange={(e) => updateShortcut(index, 'keys', e.target.value)} placeholder="Keys (e.g. Ctrl+S)" style={{ width: "130px", fontWeight: "bold" }} />
+                         <Input value={sc.action} onChange={(e) => updateShortcut(index, 'action', e.target.value)} placeholder="Action / Description" disabled={sc.isSystem} />
+                         {!sc.isSystem && <Button size="sm" variant="outline" onClick={() => removeShortcut(index)} style={{ borderColor: "#ef4444", color: "#ef4444", padding: "0 8px" }}>X</Button>}
+                      </div>
+                    ))}
                   </div>
+                  <p style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "10px" }}>Note: System actions are locked, but you can safely change their key combinations. Add custom entries as a quick reference guide for your staff.</p>
                 </div>
               </div>
             )}
