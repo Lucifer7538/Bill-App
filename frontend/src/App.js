@@ -864,6 +864,7 @@ export default function App() {
   }
 
   return (
+    // Replaced inline strict height styles with conditional printing styles to prevent Print Cropping
     <div className="billing-app" style={isPrinting ? { height: "auto", overflow: "visible" } : { display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", backgroundColor: "#f1f5f9" }}>
       <Toaster position="bottom-right" />
 
@@ -940,9 +941,10 @@ export default function App() {
       </div>
 
       {/* TOP HEADER */}
-      <header className="top-bar no-print" style={{ flexShrink: 0, height: "65px", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 20px" }}>
+      <header className="top-bar no-print" style={{ flexShrink: 0, minHeight: "65px", width: "100%", display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", padding: "10px 20px", boxSizing: "border-box", gap: "10px" }}>
+        
         {/* Left Side: Brand, Branch, and inline Mode Toggle */}
-        <div className="brand-block" style={{ display: "flex", alignItems: "center", gap: "15px", flexWrap: "nowrap" }}>
+        <div className="brand-block" style={{ display: "flex", alignItems: "center", gap: "15px", flexWrap: "wrap" }}>
           <div><h1 className="brand-title" style={{ margin: 0, fontSize: "1.2rem", color: "white" }}>{settings.shop_name}</h1></div>
           
           <div style={{ paddingLeft: "15px", borderLeft: "2px solid rgba(255,255,255,0.2)" }}>
@@ -951,21 +953,21 @@ export default function App() {
              </select>
           </div>
 
-          {/* Mode Toggle next to the Branch (overriding any glitchy external CSS with inline flex layout) */}
-          <div style={{ display: "flex", gap: "6px", backgroundColor: "rgba(255,255,255,0.15)", padding: "4px", borderRadius: "8px", marginLeft: "10px" }}>
+          {/* Mode Toggle properly aligned inside the header next to the Branch selector */}
+          <div style={{ display: "flex", gap: "6px", backgroundColor: "rgba(255,255,255,0.15)", padding: "4px", borderRadius: "8px" }}>
             <Button onClick={() => handleModeChange("invoice")} style={{ backgroundColor: mode === "invoice" ? "#ffffff" : "transparent", color: mode === "invoice" ? "#000000" : "white", border: "none", padding: "4px 12px", height: "auto" }}>Tax Invoice</Button>
             <Button onClick={() => handleModeChange("estimate")} style={{ backgroundColor: mode === "estimate" ? "#ffffff" : "transparent", color: mode === "estimate" ? "#000000" : "white", border: "none", padding: "4px 12px", height: "auto" }}>Estimate</Button>
           </div>
         </div>
         
         {/* Right Side: Status and Actions */}
-        <div className="top-actions" style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.85rem", color: cloudStatus.enabled ? "#4ade80" : "#facc15", marginRight: "10px" }}>
-             <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: cloudStatus.enabled ? "#4ade80" : "#facc15" }} />
-             <span>{cloudStatus.enabled ? "Live" : "Offline"}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: "15px", flexWrap: "nowrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.9rem", color: cloudStatus.enabled ? "#4ade80" : "#facc15" }}>
+             <span style={{ width: "10px", height: "10px", borderRadius: "50%", backgroundColor: cloudStatus.enabled ? "#4ade80" : "#facc15" }} />
+             <span style={{ fontWeight: "bold", whiteSpace: "nowrap" }}>Cloud Sync: {cloudStatus.enabled ? "Live" : "Fallback"}</span>
           </div>
-          <Button variant="outline" onClick={goToBillTop} style={{ color: "black", backgroundColor: "white" }}>Back</Button>
-          <Button variant="outline" onClick={handleLogout} style={{ color: "black", backgroundColor: "white" }}>Logout</Button>
+          <Button variant="outline" onClick={goToBillTop} style={{ color: "black", backgroundColor: "white", padding: "4px 12px", height: "auto" }}>Back</Button>
+          <Button variant="outline" onClick={handleLogout} style={{ color: "black", backgroundColor: "white", padding: "4px 12px", height: "auto" }}>Logout</Button>
         </div>
       </header>
 
@@ -1196,7 +1198,7 @@ export default function App() {
             <textarea value={notes} onChange={(e) => { setNotes(e.target.value); markDirty(); }} placeholder="Notes / Descriptions" className="notes-box" style={{ marginTop: "15px" }} />
           </div>
 
-          {/* MOVED TO BOTTOM */}
+          {/* ACTION BUTTONS MOVED TO THE BOTTOM OF THE RIGHT PANEL */}
           <div className="control-card action-grid">
             <Button onClick={saveBill} disabled={savingBill} style={{ backgroundColor: "#0f172a" }}>{savingBill ? "Saving..." : currentBillId ? `Update & Migrate (${editingDocNumber})` : "Save Bill"}</Button>
             <Button onClick={() => setShowLedger(true)} style={{ backgroundColor: "#16a34a", color: "white" }}>Daily Sales & Ledger</Button>
@@ -1345,206 +1347,4 @@ export default function App() {
             <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "20px" }}>
               <Input placeholder="Search Customer Name, Phone, or Bill No..." value={billSearchQuery} onChange={(e) => setBillSearchQuery(e.target.value)} />
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                <select value={recentBranchFilter} onChange={(e) => setRecentBranchFilter(e.target.value)} className="native-select" style={{ flex: 1, minWidth: "120px" }}>
-                  <option value="ALL">All Branches</option>
-                  {(settings.branches || []).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                </select>
-                <select value={recentModeFilter} onChange={(e) => setRecentModeFilter(e.target.value)} className="native-select" style={{ flex: 1, minWidth: "120px" }}>
-                  <option value="ALL">All Modes</option><option value="invoice">Invoices</option><option value="estimate">Estimates</option>
-                </select>
-                <select value={recentDateFilter} onChange={(e) => setRecentDateFilter(e.target.value)} className="native-select" style={{ flex: 1, minWidth: "120px" }}>
-                  <option value="ALL">All Time</option><option value="THIS_MONTH">This Month</option><option value="LAST_MONTH">Last Month</option><option value="CUSTOM">Custom Range</option>
-                </select>
-              </div>
-              {recentDateFilter === "CUSTOM" && (
-                <div style={{ display: "flex", gap: "10px" }}>
-                  <Input type="date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} style={{ flex: 1 }} />
-                  <Input type="date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} style={{ flex: 1 }} />
-                </div>
-              )}
-            </div>
-
-            {loadingRecent ? (<p style={{ textAlign: "center", padding: "20px" }}>Loading recent bills...</p>) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                {(filteredRecentBills || []).length === 0 ? (<p style={{ textAlign: "center", color: "#64748b", padding: "20px" }}>No bills found matching criteria.</p>) : (
-                  (filteredRecentBills || []).map((bill) => (
-                    <div key={bill.id} className="recent-bill-card" style={{ padding: "15px", border: "1px solid #cbd5e1", borderRadius: "8px", backgroundColor: "#f8fafc" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-                        <strong style={{ fontSize: "1.1rem", color: bill.mode === "invoice" ? "#dc2626" : "#2563eb" }}>{bill.document_number}</strong>
-                        <span style={{ fontSize: "0.85rem", color: "#475569" }}>{bill.date}</span>
-                      </div>
-                      <p style={{ margin: "0 0 5px 0", fontWeight: "bold" }}>{bill.customer_name || bill.customer?.name || "Unknown Customer"}</p>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", fontSize: "0.9rem" }}>
-                        <span>Total: <strong>₹{money(bill.totals?.grand_total || 0)}</strong></span>
-                        <span style={{ padding: "3px 8px", borderRadius: "12px", fontSize: "0.75rem", backgroundColor: (bill.tx_type === "sale" ? bill.is_payment_done : bill.is_balance_paid) ? "#dcfce7" : "#fef3c7", color: (bill.tx_type === "sale" ? bill.is_payment_done : bill.is_balance_paid) ? "#166534" : "#b45309" }}>
-                          {(bill.tx_type === "sale" ? bill.is_payment_done : bill.is_balance_paid) ? "PAID" : "PENDING"}
-                        </span>
-                      </div>
-                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                        <Button size="sm" onClick={() => loadBillForEditing(bill)} style={{ flex: 1, backgroundColor: "#0f172a" }}>Edit</Button>
-                        <Button size="sm" variant="outline" onClick={() => downloadPdf(`bulk-bill-${bill.document_number}`, bill.document_number)} style={{ flex: 1 }}>PDF</Button>
-                        <Button size="sm" variant="outline" onClick={() => handleQuickPaymentToggle(bill)} style={{ flex: 1 }}>{bill.is_payment_done ? "Mark Pending" : "Mark Paid"}</Button>
-                        <Button size="sm" variant="outline" onClick={() => handleDeleteBill(bill)} style={{ borderColor: "#ef4444", color: "#ef4444" }}>Del</Button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-        </section>
-      )}
-
-      {/* SETTINGS DRAWER */}
-      {showSettings && (
-        <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "600px", backgroundColor: "white", zIndex: 100, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
-          <div className="drawer-header" style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10, paddingBottom: "15px", borderBottom: "1px solid #e2e8f0" }}>
-            <h3 style={{ margin: "20px 20px 10px 20px" }}>System Settings</h3>
-            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowSettings(false)} style={{ marginLeft: "20px" }}><ArrowLeft className="drawer-back-icon" style={{ marginRight: "5px" }} /><span>Close Menu</span></Button>
-          </div>
-          <div style={{ padding: "15px" }}>
-            <div style={{ display: "flex", gap: "10px", marginBottom: "20px", borderBottom: "1px solid #e2e8f0", paddingBottom: "10px", overflowX: "auto" }}>
-              <Button variant={settingsTab === "design" ? "default" : "ghost"} onClick={() => setSettingsTab("design")}>Design</Button>
-              <Button variant={settingsTab === "business" ? "default" : "ghost"} onClick={() => setSettingsTab("business")}>Business & Branches</Button>
-              <Button variant={settingsTab === "advanced" ? "default" : "ghost"} onClick={() => setSettingsTab("advanced")}>Advanced</Button>
-            </div>
-
-            {settingsTab === "design" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-                <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-                  <h4>Print Scale Alignment</h4>
-                  <p style={{ fontSize: "0.85rem", color: "#64748b", marginBottom: "10px" }}>Adjust this if your printed bill cuts off or is too small. (Default 100%)</p>
-                  <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
-                    <input type="range" min="98" max="102" step="0.5" value={printScale} onChange={(e) => setPrintScale(Number(e.target.value))} style={{ flex: 1 }} />
-                    <strong style={{ minWidth: "50px", textAlign: "right" }}>{printScale}%</strong>
-                  </div>
-                </div>
-                
-                <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-                  <h4>Custom Fonts</h4>
-                  <p style={{ fontSize: "0.85rem", color: "#64748b", marginBottom: "10px" }}>Upload a .ttf or .woff file to use custom fonts.</p>
-                  <Input type="file" accept=".ttf,.woff,.woff2" onChange={handleFontUpload} />
-                </div>
-
-                <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-                  <h4>Logos & QR</h4>
-                  <label className="select-label">Shop Logo (PNG/JPG)</label>
-                  <Input type="file" accept="image/*" onChange={handleLogoUpload} style={{ marginBottom: "10px" }} />
-                  {logoUploadName && <p style={{ fontSize: "0.8rem", color: "#16a34a" }}>Selected: {logoUploadName}</p>}
-                  
-                  <label className="select-label" style={{ marginTop: "10px" }}>About Us QR (PNG/JPG)</label>
-                  <Input type="file" accept="image/*" onChange={handleAboutQrUpload} style={{ marginBottom: "10px" }} />
-                  {aboutUploadName && <p style={{ fontSize: "0.8rem", color: "#16a34a" }}>Selected: {aboutUploadName}</p>}
-                </div>
-
-                <DesignSettingRow title="Shop Name" fieldPrefix="shop_name" settings={settings} setSettings={setSettings} />
-                <DesignSettingRow title="Tagline" fieldPrefix="tagline" settings={settings} setSettings={setSettings} />
-                <DesignSettingRow title="Phone Numbers (Comma Separated)" fieldPrefix="phone" settings={settings} setSettings={setSettings} />
-                <DesignSettingRow title="Email Address" fieldPrefix="email" settings={settings} setSettings={setSettings} />
-                <DesignSettingRow title="Address Style" fieldPrefix="address" settings={settings} setSettings={setSettings} />
-              </div>
-            )}
-
-            {settingsTab === "business" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-                <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
-                  <h4 style={{ margin: "0 0 15px 0" }}>Pricing Rules</h4>
-                  <label className="select-label">Today's Silver Rate (₹ per gram)</label>
-                  <Input type="number" value={settings.silver_rate_per_gram} onChange={(e) => setSettings({ ...settings, silver_rate_per_gram: e.target.value })} style={{ marginBottom: "10px" }} />
-                  
-                  <label className="select-label">Default Making Charge (₹ per gram)</label>
-                  <Input type="number" value={settings.making_charge_per_gram} onChange={(e) => setSettings({ ...settings, making_charge_per_gram: e.target.value })} style={{ marginBottom: "10px" }} />
-                  
-                  <label className="select-label">Flat MC for Items Below 5g (₹)</label>
-                  <Input type="number" value={settings.flat_mc_below_5g} onChange={(e) => setSettings({ ...settings, flat_mc_below_5g: e.target.value })} style={{ marginBottom: "10px" }} />
-                  
-                  <label className="select-label">Default HSN Code</label>
-                  <Input value={settings.default_hsn} onChange={(e) => setSettings({ ...settings, default_hsn: e.target.value })} />
-                </div>
-
-                <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
-                  <h4 style={{ margin: "0 0 15px 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    Branch Management
-                    <Button size="sm" onClick={addBranch} style={{ backgroundColor: "#0f172a" }}>+ Add Branch</Button>
-                  </h4>
-                  
-                  {(settings.branches || []).map((branch, index) => (
-                    <div key={branch.id} style={{ marginBottom: "20px", padding: "15px", border: "1px dashed #cbd5e1", borderRadius: "8px", backgroundColor: "white" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                        <strong>Branch {index + 1}</strong>
-                        <Button size="sm" variant="outline" onClick={() => removeBranch(index)} style={{ borderColor: "#ef4444", color: "#ef4444" }}>Remove</Button>
-                      </div>
-                      <label className="select-label">Branch Name</label>
-                      <Input value={branch.name} onChange={(e) => updateBranch(index, 'name', e.target.value)} style={{ marginBottom: "10px" }} />
-                      
-                      <label className="select-label">Branch Address</label>
-                      <Input value={branch.address} onChange={(e) => updateBranch(index, 'address', e.target.value)} style={{ marginBottom: "10px" }} />
-                      
-                      <label className="select-label">Google Maps Feedback URL</label>
-                      <Input value={branch.map_url} onChange={(e) => updateBranch(index, 'map_url', e.target.value)} style={{ marginBottom: "10px" }} />
-                      
-                      <label className="select-label">GSTIN Number (Optional)</label>
-                      <Input value={branch.gstin || ""} onChange={(e) => updateBranch(index, 'gstin', e.target.value)} placeholder="Leave blank if no GST" style={{ marginBottom: "10px" }} />
-                      
-                      <div style={{ display: "flex", gap: "10px", marginTop: "5px" }}>
-                         <div style={{ flex: 1 }}>
-                           <label className="select-label">Invoice UPI ID</label>
-                           <Input value={branch.invoice_upi_id} onChange={(e) => updateBranch(index, 'invoice_upi_id', e.target.value)} placeholder="name@bank" />
-                         </div>
-                         <div style={{ flex: 1 }}>
-                           <label className="select-label">Estimate UPI ID</label>
-                           <Input value={branch.estimate_upi_id} onChange={(e) => updateBranch(index, 'estimate_upi_id', e.target.value)} placeholder="name@bank" />
-                         </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {settingsTab === "advanced" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-                <div style={{ padding: "15px", backgroundColor: "#fef2f2", borderRadius: "8px", border: "1px solid #fecaca" }}>
-                  <h4 style={{ color: "#991b1b", margin: "0 0 10px 0" }}>Danger Zone</h4>
-                  <Button onClick={() => handleResetCounter("estimate")} style={{ width: "100%", marginBottom: "10px", backgroundColor: "#b91c1c", color: "white" }}>Reset Estimate Counter</Button>
-                  <Button onClick={() => handleResetCounter("invoice")} style={{ width: "100%", marginBottom: "10px", backgroundColor: "#b91c1c", color: "white" }}>Reset Invoice Counter</Button>
-                  <Button onClick={handleDeleteAllBills} style={{ width: "100%", backgroundColor: "#7f1d1d", color: "white" }}>WIPE ALL BILLS</Button>
-                </div>
-                
-                <div style={{ padding: "15px", backgroundColor: "#f0fdfa", borderRadius: "8px", border: "1px solid #ccfbf1" }}>
-                  <h4 style={{ color: "#0f766e", margin: "0 0 10px 0" }}>Data Backup & Storage</h4>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", fontSize: "0.85rem", color: "#0f766e" }}>
-                     <span>Storage Used: {(storageStats.used_bytes / 1024 / 1024).toFixed(2)} MB</span>
-                     <span>Limit: {(storageStats.quota_bytes / 1024 / 1024).toFixed(2)} MB</span>
-                  </div>
-                  <div style={{ width: "100%", height: "8px", backgroundColor: "#ccfbf1", borderRadius: "4px", marginBottom: "15px", overflow: "hidden" }}>
-                     <div style={{ height: "100%", width: `${storageStats.percentage}%`, backgroundColor: storageStats.percentage > 80 ? "#ef4444" : "#14b8a6" }}></div>
-                  </div>
-                  <Button onClick={handleBackupBills} style={{ width: "100%", backgroundColor: "#0f766e", color: "white" }}><Download size={16} style={{ marginRight: "8px" }} /> Download JSON Backup</Button>
-                </div>
-
-                <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-                  <h4 style={{ display: "flex", alignItems: "center", gap: "8px", margin: "0 0 10px 0" }}><Keyboard size={18} /> Keyboard Shortcuts</h4>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "8px", fontSize: "0.85rem", color: "#475569" }}>
-                    <strong>Ctrl + S</strong><span>Save Bill</span>
-                    <strong>Ctrl + Shift + R</strong><span>Add new item row</span>
-                    <strong>Shift + N</strong><span>New blank bill</span>
-                    <strong>Shift + W</strong><span>Share via WhatsApp</span>
-                    <strong>Shift + P</strong><span>Jump to Payment Method</span>
-                    <strong>Ctrl + W</strong><span>Open Ledger/Vaults</span>
-                    <strong>Ctrl + R</strong><span>Open Recent Bills</span>
-                    <strong>Enter</strong><span>Jump to next input field</span>
-                    <strong>Esc</strong><span>Close side menus</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <Button onClick={saveSettings} style={{ width: "100%", marginTop: "20px", backgroundColor: "#0f172a", padding: "15px", fontSize: "1.1rem" }}>Save All Settings</Button>
-          </div>
-        </section>
-      )}
-
-    </div>
-  );
-}
+                <select value={recentBranchFilter} onChange={(e) => setRecentBranchFilter(e.target.value)} className="native-select
