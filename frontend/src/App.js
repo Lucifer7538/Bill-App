@@ -252,13 +252,11 @@ export default function App() {
     window.addEventListener("keydown", handleEsc); return () => window.removeEventListener("keydown", handleEsc);
   }, [showSettings, showAbout, showRecentBills, showLedger, showFeedbackModal]);
 
-  // KEYBOARD SHORTCUTS INTEGRATION
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
       const activeTag = document.activeElement?.tagName.toLowerCase();
       const isInput = activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select';
 
-      // Enter to skip to next input
       if (e.key === "Enter" && isInput && activeTag !== 'textarea') {
           e.preventDefault();
           const formElements = Array.from(document.querySelectorAll('input, select, textarea, button:not(:disabled)'));
@@ -934,10 +932,10 @@ export default function App() {
       </header>
 
       {/* INDEPENDENT SPLIT-SCREEN LAYOUT FOR TABLETS & PHONES */}
-      <main className="main-layout" style={{ flex: 1, display: "flex", flexDirection: isMobileSplit ? "column" : "row", overflowY: isMobileSplit ? "auto" : "hidden", overflowX: "hidden", backgroundColor: "#f1f5f9" }}>
+      <main className="main-layout" style={{ flex: 1, display: "flex", flexDirection: isMobileSplit ? "column" : "row", overflowY: isMobileSplit ? "auto" : "hidden", overflowX: "hidden", backgroundColor: "#f1f5f9", minHeight: 0 }}>
         
         {/* LEFT PANEL: Bill Sheet */}
-        <section style={{ flex: isMobileSplit ? "none" : "3", overflowY: isMobileSplit ? "visible" : "auto", padding: "20px" }}>
+        <section style={{ flex: isMobileSplit ? "none" : "3", overflow: isMobileSplit ? "visible" : "auto", padding: "20px", height: isMobileSplit ? "auto" : "100%" }}>
           <div id="bill-print-root" className="bill-sheet" style={{ "--print-scale-factor": (printScale / 100).toFixed(3), position: 'relative', zIndex: 1, margin: "0 auto" }}>
             {(txType === "sale" ? isPaymentDone : isBalancePaid) && <div className="watermark-done">FULLY PAID</div>}
             <div className="bill-header">
@@ -1029,7 +1027,7 @@ export default function App() {
         </section>
 
         {/* RIGHT PANEL: Controls Menu */}
-        <aside className="controls no-print" style={{ flex: isMobileSplit ? "none" : "2", overflowY: isMobileSplit ? "visible" : "auto", padding: "20px", backgroundColor: "white", borderLeft: isMobileSplit ? "none" : "1px solid #cbd5e1", borderTop: isMobileSplit ? "1px solid #cbd5e1" : "none" }}>
+        <aside className="controls no-print" style={{ flex: isMobileSplit ? "none" : "2", overflowY: isMobileSplit ? "visible" : "auto", overflowX: "hidden", padding: "20px", backgroundColor: "white", borderLeft: isMobileSplit ? "none" : "1px solid #cbd5e1", borderTop: isMobileSplit ? "1px solid #cbd5e1" : "none", height: isMobileSplit ? "auto" : "100%" }}>
           
           <div className="control-card action-grid">
             <Button onClick={saveBill} disabled={savingBill} style={{ backgroundColor: "#0f172a" }}>{savingBill ? "Saving..." : currentBillId ? `Update & Migrate (${editingDocNumber})` : "Save Bill"}</Button>
