@@ -1308,4 +1308,154 @@ export default function App() {
           <div style={{ padding: "15px" }}>
             <div style={{ marginBottom: "20px" }}>
               <Button onClick={handleBulkDownload} disabled={isBulkDownloading || (filteredRecentBills || []).length === 0} style={{ width: "100%", backgroundColor: "#0f172a", height: "auto", padding: "10px", display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", justifyContent: "center", fontSize: "1rem", boxSizing: "border-box" }}>
-                {isBulkDownloading ? "Generating PDF... Please Wait" : <><Download size={18} /> Download {(filteredRecentBills || []).length}
+                {isBulkDownloading ? "Generating PDF... Please Wait" : <><Download size={18} /> Download {(filteredRecentBills || []).length} Bills as PDF</>}
+              </Button>
+            </div>
+            
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "20px" }}>
+              <Input placeholder="Search Customer Name, Phone, or Bill No..." value={billSearchQuery} onChange={(e) => setBillSearchQuery(e.target.value)} />
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <select value={recentBranchFilter} onChange={(e) => setRecentBranchFilter(e.target.value)} className="native-select" style={{ flex: 1, minWidth: "120px" }}>
+                  <option value="ALL">All Branches</option>
+                  {(settings.branches || []).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+                <select value={recentModeFilter} onChange={(e) => setRecentModeFilter(e.target.value)} className="native-select" style={{ flex: 1, minWidth: "120px" }}>
+                  <option value="ALL">All Modes</option><option value="invoice">Invoices</option><option value="estimate">Estimates</option>
+                </select>
+                <select value={recentDateFilter} onChange={(e) => setRecentDateFilter(e.target.value)} className="native-select" style={{ flex: 1, minWidth: "120px" }}>
+                  <option value="ALL">All Time</option><option value="THIS_MONTH">This Month</option><option value="LAST_MONTH">Last Month</option><option value="CUSTOM">Custom Range</option>
+                </select>
+              </div>
+              {recentDateFilter === "CUSTOM" && (
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <Input type="date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} style={{ flex: 1 }} />
+                  <Input type="date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} style={{ flex: 1 }} />
+                </div>
+              )}
+            </div>
+
+            {loadingRecent ? (<p style={{ textAlign: "center", padding: "20px" }}>Loading recent bills...</p>) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                {(filteredRecentBills || []).length === 0 ? (<p style={{ textAlign: "center", color: "#64748b", padding: "20px" }}>No bills found matching criteria.</p>) : (
+                  (filteredRecentBills || []).map((bill) => (
+                    <div key={bill.id} className="recent-bill-card" style={{ padding: "15px", border: "1px solid #cbd5e1", borderRadius: "8px", backgroundColor: "#f8fafc" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                        <strong style={{ fontSize: "1.1rem", color: bill.mode === "invoice" ? "#dc2626" : "#2563eb" }}>{bill.document_number}</strong>
+                        <span style={{ fontSize: "0.85rem", color: "#475569" }}>{bill.date}</span>
+                      </div>
+                      <p style={{ margin: "0 0 5px 0", fontWeight: "bold" }}>{bill.customer_name || bill.customer?.name || "Unknown Customer"}</p>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", fontSize: "0.9rem" }}>
+                        <span>Total: <strong>₹{money(bill.totals?.grand_total || 0)}</strong></span>
+                        <span style={{ padding: "3px 8px", borderRadius: "12px", fontSize: "0.75rem", backgroundColor: (bill.tx_type === "sale" ? bill.is_payment_done : bill.is_balance_paid) ? "#dcfce7" : "#fef3c7", color: (bill.tx_type === "sale" ? bill.is_payment_done : bill.is_balance_paid) ? "#166534" : "#b45309" }}>
+                          {(bill.tx_type === "sale" ? bill.is_payment_done : bill.is_balance_paid) ? "PAID" : "PENDING"}
+                        </span>
+                      </div>
+                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                        <Button size="sm" onClick={() => loadBillForEditing(bill)} style={{ flex: 1, backgroundColor: "#0f172a" }}>Edit</Button>
+                        <Button size="sm" variant="outline" onClick={() => downloadPdf(`bulk-bill-${bill.document_number}`, bill.document_number)} style={{ flex: 1 }}>PDF</Button>
+                        <Button size="sm" variant="outline" onClick={() => handleQuickPaymentToggle(bill)} style={{ flex: 1 }}>{bill.is_payment_done ? "Mark Pending" : "Mark Paid"}</Button>
+                        <Button size="sm" variant="outline" onClick={() => handleDeleteBill(bill)} style={{ borderColor: "#ef4444", color: "#ef4444" }}>Del</Button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* SETTINGS DRAWER */}
+      {showSettings && (
+        <section className="side-drawer no-print" style={{ width: "100vw", maxWidth: "600px", boxSizing: "border-box", overflowY: "auto", right: 0 }}>
+          <div className="drawer-header" style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10, paddingBottom: "15px", borderBottom: "1px solid #e2e8f0" }}>
+            <h3>System Settings</h3>
+            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowSettings(false)}><ArrowLeft className="drawer-back-icon" /><span>Back</span></Button>
+          </div>
+          <div style={{ padding: "15px" }}>
+            <div style={{ display: "flex", gap: "10px", marginBottom: "20px", borderBottom: "1px solid #e2e8f0", paddingBottom: "10px", overflowX: "auto" }}>
+              <Button variant={settingsTab === "design" ? "default" : "ghost"} onClick={() => setSettingsTab("design")}>Design</Button>
+              <Button variant={settingsTab === "business" ? "default" : "ghost"} onClick={() => setSettingsTab("business")}>Business</Button>
+              <Button variant={settingsTab === "advanced" ? "default" : "ghost"} onClick={() => setSettingsTab("advanced")}>Advanced</Button>
+            </div>
+
+            {settingsTab === "design" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+                <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                  <h4>Print Scale Alignment</h4>
+                  <p style={{ fontSize: "0.85rem", color: "#64748b", marginBottom: "10px" }}>Adjust this if your printed bill cuts off or is too small. (Default 100%)</p>
+                  <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
+                    <input type="range" min="98" max="102" step="0.5" value={printScale} onChange={(e) => setPrintScale(Number(e.target.value))} style={{ flex: 1 }} />
+                    <strong style={{ minWidth: "50px", textAlign: "right" }}>{printScale}%</strong>
+                  </div>
+                </div>
+                
+                <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                  <h4>Custom Fonts</h4>
+                  <p style={{ fontSize: "0.85rem", color: "#64748b", marginBottom: "10px" }}>Upload a .ttf or .woff file to use custom fonts.</p>
+                  <Input type="file" accept=".ttf,.woff,.woff2" onChange={handleFontUpload} />
+                </div>
+
+                <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                  <h4>Logos & QR</h4>
+                  <label className="select-label">Shop Logo (PNG/JPG)</label>
+                  <Input type="file" accept="image/*" onChange={handleLogoUpload} style={{ marginBottom: "10px" }} />
+                  {logoUploadName && <p style={{ fontSize: "0.8rem", color: "#16a34a" }}>Selected: {logoUploadName}</p>}
+                  
+                  <label className="select-label" style={{ marginTop: "10px" }}>About Us QR (PNG/JPG)</label>
+                  <Input type="file" accept="image/*" onChange={handleAboutQrUpload} style={{ marginBottom: "10px" }} />
+                  {aboutUploadName && <p style={{ fontSize: "0.8rem", color: "#16a34a" }}>Selected: {aboutUploadName}</p>}
+                </div>
+
+                <DesignSettingRow title="Shop Name" fieldPrefix="shop_name" settings={settings} setSettings={setSettings} />
+                <DesignSettingRow title="Tagline" fieldPrefix="tagline" settings={settings} setSettings={setSettings} />
+                <DesignSettingRow title="Phone Numbers (Comma Separated)" fieldPrefix="phone" settings={settings} setSettings={setSettings} />
+                <DesignSettingRow title="Email Address" fieldPrefix="email" settings={settings} setSettings={setSettings} />
+                <DesignSettingRow title="Address Style" fieldPrefix="address" settings={settings} setSettings={setSettings} />
+              </div>
+            )}
+
+            {settingsTab === "business" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+                <label className="select-label">Today's Silver Rate (₹ per gram)</label>
+                <Input type="number" value={settings.silver_rate_per_gram} onChange={(e) => setSettings({ ...settings, silver_rate_per_gram: e.target.value })} />
+                <label className="select-label">Default Making Charge (₹ per gram)</label>
+                <Input type="number" value={settings.making_charge_per_gram} onChange={(e) => setSettings({ ...settings, making_charge_per_gram: e.target.value })} />
+                <label className="select-label">Flat MC for Items Below 5g (₹)</label>
+                <Input type="number" value={settings.flat_mc_below_5g} onChange={(e) => setSettings({ ...settings, flat_mc_below_5g: e.target.value })} />
+                <label className="select-label">Default HSN Code</label>
+                <Input value={settings.default_hsn} onChange={(e) => setSettings({ ...settings, default_hsn: e.target.value })} />
+              </div>
+            )}
+
+            {settingsTab === "advanced" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+                <div style={{ padding: "15px", backgroundColor: "#fef2f2", borderRadius: "8px", border: "1px solid #fecaca" }}>
+                  <h4 style={{ color: "#991b1b", margin: "0 0 10px 0" }}>Danger Zone</h4>
+                  <Button onClick={() => handleResetCounter("estimate")} style={{ width: "100%", marginBottom: "10px", backgroundColor: "#b91c1c", color: "white" }}>Reset Estimate Counter</Button>
+                  <Button onClick={() => handleResetCounter("invoice")} style={{ width: "100%", marginBottom: "10px", backgroundColor: "#b91c1c", color: "white" }}>Reset Invoice Counter</Button>
+                  <Button onClick={handleDeleteAllBills} style={{ width: "100%", backgroundColor: "#7f1d1d", color: "white" }}>WIPE ALL BILLS</Button>
+                </div>
+                
+                <div style={{ padding: "15px", backgroundColor: "#f0fdfa", borderRadius: "8px", border: "1px solid #ccfbf1" }}>
+                  <h4 style={{ color: "#0f766e", margin: "0 0 10px 0" }}>Data Backup & Storage</h4>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", fontSize: "0.85rem", color: "#0f766e" }}>
+                     <span>Storage Used: {(storageStats.used_bytes / 1024 / 1024).toFixed(2)} MB</span>
+                     <span>Limit: {(storageStats.quota_bytes / 1024 / 1024).toFixed(2)} MB</span>
+                  </div>
+                  <div style={{ width: "100%", height: "8px", backgroundColor: "#ccfbf1", borderRadius: "4px", marginBottom: "15px", overflow: "hidden" }}>
+                     <div style={{ height: "100%", width: `${storageStats.percentage}%`, backgroundColor: storageStats.percentage > 80 ? "#ef4444" : "#14b8a6" }}></div>
+                  </div>
+                  <Button onClick={handleBackupBills} style={{ width: "100%", backgroundColor: "#0f766e", color: "white" }}><Download size={16} style={{ marginRight: "8px" }} /> Download JSON Backup</Button>
+                </div>
+              </div>
+            )}
+
+            <Button onClick={saveSettings} style={{ width: "100%", marginTop: "20px", backgroundColor: "#0f172a", padding: "15px", fontSize: "1.1rem" }}>Save All Settings</Button>
+          </div>
+        </section>
+      )}
+
+    </div>
+  );
+}
