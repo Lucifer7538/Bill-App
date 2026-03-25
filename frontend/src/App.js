@@ -133,7 +133,9 @@ export default function App() {
         window.removeEventListener("afterprint", handleAfterPrint);
       };
   }, []);
-  const isMobileSplit = viewportWidth <= 820;
+  
+  // FIX: Updated breakpoint to 1024 to properly handle iPhone Landscape mode.
+  const isMobileSplit = viewportWidth <= 1024;
 
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
@@ -274,7 +276,6 @@ export default function App() {
     window.addEventListener("keydown", handleEsc); return () => window.removeEventListener("keydown", handleEsc);
   }, [showSettings, showAbout, showRecentBills, showLedger, showFeedbackModal]);
 
-  // KEYBOARD SHORTCUTS INTEGRATION
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
       const activeTag = document.activeElement?.tagName.toLowerCase();
@@ -574,7 +575,6 @@ export default function App() {
 
   const handleGlobalBranchChange = async (nextBranchId) => { setGlobalBranchId(nextBranchId); if (!currentBillId && checkIsBlank()) { setBillBranchId(nextBranchId); await reserveNumber(mode, nextBranchId); } };
 
-  // Branches Update Handlers
   const updateBranch = (index, field, value) => {
     const updatedBranches = [...(settings.branches || [])];
     updatedBranches[index] = { ...updatedBranches[index], [field]: value };
@@ -592,7 +592,6 @@ export default function App() {
     setSettings({ ...settings, branches: updatedBranches });
   };
 
-  // Shortcuts Update Handlers
   const addShortcut = () => {
     const newSc = { id: `custom_${Date.now()}`, action: "", keys: "", isSystem: false };
     setSettings(prev => ({ ...prev, shortcuts: [...(prev.shortcuts || defaultSettings.shortcuts), newSc] }));
@@ -742,10 +741,37 @@ export default function App() {
     if (publicBill === "NOT_FOUND" || !publicBill) return <div className="loading-screen">Bill not found or has been deleted.</div>;
 
     const isSale = publicBill.tx_type === "sale" || !publicBill.tx_type;
+    
+    // FOOLPROOF PAYMENT CHECK
+    const isPaid = isSale 
+      ? (publicBill.is_payment_done === true || publicBill.is_payment_done === 1 || String(publicBill.is_payment_done).toLowerCase() === "true") 
+      : (publicBill.is_balance_paid === true || publicBill.is_balance_paid === 1 || String(publicBill.is_balance_paid).toLowerCase() === "true");
+
     const pbBranch = (publicSettings?.branches || []).find(b => b.id === publicBill.branch_id) || (publicSettings?.branches || [])[0] || defaultSettings.branches[0];
 
+    // PUBLIC VIEW QR CALCULATION
+    let publicUpiAmountToPay = publicComputed.grandTotal;
+    if (!isPaid) {
+      if (isSale && publicBill.payment_method === "Split") {
+         publicUpiAmountToPay = Math.max(0, publicComputed.grandTotal - num(publicBill.split_cash));
+      } else if (!isSale) {
+         if (!publicBill.is_advance_paid) {
+            publicUpiAmountToPay = publicBill.advance_method === "Split" ? Math.max(0, num(publicBill.advance_amount) - num(publicBill.advance_split_cash)) : num(publicBill.advance_amount);
+            if (publicUpiAmountToPay <= 0) publicUpiAmountToPay = num(publicBill.advance_amount) || publicComputed.grandTotal;
+         } else if (!publicBill.is_balance_paid) {
+            const bal = Math.max(0, publicComputed.grandTotal - num(publicBill.advance_amount));
+            publicUpiAmountToPay = publicBill.balance_method === "Split" ? Math.max(0, bal - num(publicBill.balance_split_cash)) : bal;
+            if (publicUpiAmountToPay <= 0) publicUpiAmountToPay = bal;
+         }
+      }
+    }
+    const publicUpiId = publicBill.mode === "invoice" ? pbBranch.invoice_upi_id : pbBranch.estimate_upi_id;
+    const publicUpiUri = `upi://pay?pa=${publicUpiId}&pn=${encodeURIComponent(publicSettings?.shop_name || "Shop")}&am=${money(publicUpiAmountToPay)}&cu=INR&tn=Bill_${publicBill.document_number}`;
+    const publicDynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(publicUpiUri)}&size=220`;
+
+    // FIX: MinHeight 100dvh, height max-content, added paddingBottom to fix white space scroll bug
     return (
-      <div className="billing-app" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px' }}>
+      <div className="billing-app" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px', minHeight: '100dvh', height: 'max-content', backgroundColor: '#f1f5f9', overflowX: 'hidden', paddingBottom: '40px' }}>
         <Toaster position="bottom-right" />
         {showFeedbackModal && (
           <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
@@ -765,7 +791,7 @@ export default function App() {
         </div>
 
         <section id="public-bill-root" className="bill-sheet" style={{ "--print-scale-factor": 1, position: 'relative', zIndex: 1 }}>
-          {(isSale ? publicBill.is_payment_done : publicBill.is_balance_paid) && <div className="watermark-done">FULLY PAID</div>}
+          {isPaid && <div className="watermark-done">FULLY PAID</div>}
 
           <div className="bill-header">
             <div className="logo-area">
@@ -827,6 +853,15 @@ export default function App() {
                   <div className="totals-row" style={{ color: "#dc2626" }}><span>BALANCE DUE</span><strong>₹{money(Math.max(0, publicComputed.grandTotal - num(publicBill.advance_amount)))}</strong></div>
                 </>
               )}
+
+              {/* FIX: Dynamic QR added ONLY when unpaid. No payment buttons. */}
+              {!isPaid && publicUpiAmountToPay > 0 && (
+                <div className="payment-qr-box" style={{ textAlign: "center", marginTop: "20px", padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px dashed #cbd5e1" }}>
+                  <p className="scan-title" style={{ fontWeight: "bold", margin: "0 0 10px 0", color: "#0f172a", fontSize: "1.1rem" }}>Scan Here For Payment (₹{money(publicUpiAmountToPay)})</p>
+                  <img src={publicDynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" style={{ width: "200px", height: "200px", margin: "0 auto", display: "block" }} crossOrigin="anonymous" />
+                  <p className="upi-id" style={{ fontSize: "0.9rem", color: "#64748b", margin: "10px 0 0 0", fontWeight: "bold" }}>UPI: {publicUpiId}</p>
+                </div>
+              )}
             </div>
 
             <ConnectWithUs phoneLink={(publicSettings?.phone_numbers || [])[0]} />
@@ -853,7 +888,7 @@ export default function App() {
     );
   }
 
-  // --- LOGIN & LOADING SCREENS FOR MAIN DASHBOARD ---
+  // --- MAIN DASHBOARD RENDER ---
   if (checkingSession) {
     return (
       <div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
@@ -900,13 +935,13 @@ export default function App() {
         </div>
      );
   }
-
   return (
-    <div className="billing-app" style={isPrinting ? { height: "auto", overflow: "visible" } : { display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden", backgroundColor: "#f1f5f9" }}>
+    // FIX: 100dvh prevents massive scrolling bug
+    <div className="billing-app" style={isPrinting ? { height: "auto", overflow: "visible" } : { display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", backgroundColor: "#f1f5f9" }}>
       <Toaster position="bottom-right" />
 
       {/* INVISIBLE BULK PDF RENDERER */}
-      <div style={{ position: "absolute", zIndex: -9999, opacity: 0, pointerEvents: "none" }}>
+      <div style={{ position: "absolute", zIndex: -9999, opacity: 0, pointerEvents: "none", top: 0, left: 0, height: 0, overflow: "hidden" }}>
         {(filteredRecentBills || []).map(b => {
            const billBranch = (settings.branches || []).find(br => br.id === b.branch_id) || (settings.branches || [])[0] || defaultSettings.branches[0];
            const printedItems = (b.items || []).map((item, index) => {
@@ -1007,10 +1042,11 @@ export default function App() {
       </header>
 
       {/* INDEPENDENT SPLIT-SCREEN LAYOUT FOR TABLETS & PHONES */}
-      <main className="main-layout" style={isPrinting ? { height: "auto", overflow: "visible", display: "block" } : { flex: 1, display: "flex", flexDirection: isMobileSplit ? "column" : "row", overflowY: isMobileSplit ? "auto" : "hidden", overflowX: "hidden", backgroundColor: "#f1f5f9", minHeight: 0 }}>
+      {/* FIX: Height properties updated for mobile scrolling */}
+      <main className="main-layout" style={isPrinting ? { height: "auto", overflow: "visible", display: "block" } : { flex: 1, display: "flex", flexDirection: isMobileSplit ? "column" : "row", overflowY: isMobileSplit ? "auto" : "hidden", overflowX: "hidden", backgroundColor: "#f1f5f9", minHeight: 0, paddingBottom: isMobileSplit ? "40px" : "0" }}>
         
         {/* LEFT PANEL: Bill Sheet */}
-        <section style={isPrinting ? { padding: 0, margin: 0, overflow: "visible" } : { flex: isMobileSplit ? "none" : "3", overflow: isMobileSplit ? "visible" : "auto", padding: "20px", height: isMobileSplit ? "auto" : "100%" }}>
+        <section style={isPrinting ? { padding: 0, margin: 0, overflow: "visible" } : { flex: isMobileSplit ? "none" : "3", overflow: isMobileSplit ? "visible" : "auto", padding: "20px", height: isMobileSplit ? "max-content" : "100%" }}>
           <div id="bill-print-root" className="bill-sheet" style={{ "--print-scale-factor": (printScale / 100).toFixed(3), position: 'relative', zIndex: 1, margin: "0 auto" }}>
             {(txType === "sale" ? isPaymentDone : isBalancePaid) && <div className="watermark-done">FULLY PAID</div>}
             <div className="bill-header">
@@ -1102,7 +1138,7 @@ export default function App() {
         </section>
 
         {/* RIGHT PANEL: Controls Menu */}
-        <aside className="controls no-print" style={{ flex: isMobileSplit ? "none" : "2", overflowY: isMobileSplit ? "visible" : "auto", overflowX: "hidden", padding: "20px", backgroundColor: "white", borderLeft: isMobileSplit ? "none" : "1px solid #cbd5e1", borderTop: isMobileSplit ? "1px solid #cbd5e1" : "none", height: isMobileSplit ? "auto" : "100%" }}>
+        <aside className="controls no-print" style={{ flex: isMobileSplit ? "none" : "2", overflowY: isMobileSplit ? "visible" : "auto", overflowX: "hidden", padding: "20px", backgroundColor: "white", borderLeft: isMobileSplit ? "none" : "1px solid #cbd5e1", borderTop: isMobileSplit ? "1px solid #cbd5e1" : "none", height: isMobileSplit ? "max-content" : "100%" }}>
           
           <div className="control-card">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
