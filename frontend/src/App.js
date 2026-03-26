@@ -16,8 +16,6 @@ const createItem = (defaultHsn = "") => ({
   id: `${Date.now()}-${Math.random()}`, description: "", hsn: defaultHsn, weight: "", quantity: "1", rate_override: "", amount_override: "", mc_override: ""
 });
 
-// FIX: Updated default shortcuts to use Alt to avoid browser closing tabs (Ctrl+W) 
-// and to allow triggering safely inside input fields.
 const defaultSettings = {
   shop_name: "Jalaram Jewellers", tagline: "The Silver Specialist", phone_numbers: ["+91 9583221115", "+91 9776177296", "+91 7538977527"], email: "jalaramjewellers26@gmail.com",
   shop_name_color: "#000000", shop_name_size: 26, shop_name_font: "sans-serif", shop_name_align: "center",
@@ -28,13 +26,13 @@ const defaultSettings = {
   silver_rate_per_gram: 240, making_charge_per_gram: 15, flat_mc_below_5g: 150, default_hsn: "7113",
   formula_note: "Line total = Weight x (Silver rate per gram + Making charge per gram)", logo_data_url: "", about_qr_data_url: STATIC_ABOUT_QR_URL, custom_fonts: [],
   shortcuts: [
-    { id: "save_bill", action: "Save Bill", keys: "Alt + S", isSystem: true },
-    { id: "add_item", action: "Add new item row", keys: "Alt + A", isSystem: true },
-    { id: "new_bill", action: "New blank bill", keys: "Alt + N", isSystem: true },
-    { id: "share_wa", action: "Share via WhatsApp", keys: "Alt + W", isSystem: true },
-    { id: "focus_payment", action: "Jump to Payment Method", keys: "Alt + P", isSystem: true },
-    { id: "open_ledger", action: "Open Ledger/Vaults", keys: "Alt + L", isSystem: true },
-    { id: "open_recent", action: "Open Recent Bills", keys: "Alt + R", isSystem: true }
+    { id: "save_bill", action: "Save Bill", keys: "Ctrl + S", isSystem: true },
+    { id: "add_item", action: "Add new item row", keys: "Ctrl + Shift + R", isSystem: true },
+    { id: "new_bill", action: "New blank bill", keys: "Shift + N", isSystem: true },
+    { id: "share_wa", action: "Share via WhatsApp", keys: "Shift + W", isSystem: true },
+    { id: "focus_payment", action: "Jump to Payment Method", keys: "Shift + P", isSystem: true },
+    { id: "open_ledger", action: "Open Ledger/Vaults", keys: "Ctrl + W", isSystem: true },
+    { id: "open_recent", action: "Open Recent Bills", keys: "Ctrl + R", isSystem: true }
   ],
   branches: [
     { id: "B1", name: "Branch 1 (Old Town)", address: "Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2", map_url: "https://g.page/r/CVvnomQZn7zxEBE/review", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", gstin: "21AAUFJ1925F1ZH", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 },
@@ -136,7 +134,8 @@ export default function App() {
       };
   }, []);
   
-  const isMobileSplit = viewportWidth <= 1024; // Fixes iPhone 14/15 Landscape mode
+  // FIX: Updated breakpoint to 1024px to properly handle iPhone Landscape mode.
+  const isMobileSplit = viewportWidth <= 1024;
 
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
@@ -277,13 +276,12 @@ export default function App() {
     window.addEventListener("keydown", handleEsc); return () => window.removeEventListener("keydown", handleEsc);
   }, [showSettings, showAbout, showRecentBills, showLedger, showFeedbackModal]);
 
-  // FIX: Completely rebuilt Keyboard Shortcuts Logic
+  // FIX: Aggressive keyboard shortcut capture block
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
       const activeTag = document.activeElement?.tagName.toLowerCase();
       const isInput = activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select';
 
-      // Enter key moves to next input field
       if (e.key === "Enter" && isInput && activeTag !== 'textarea') {
           e.preventDefault();
           const formElements = Array.from(document.querySelectorAll('input, select, textarea, button:not(:disabled)'));
@@ -294,44 +292,38 @@ export default function App() {
           return;
       }
 
-      // Ignore standard typing in input boxes unless Ctrl, Alt, or Meta is held
-      if (isInput && !e.ctrlKey && !e.metaKey && !e.altKey) return; 
-
       const scList = settings.shortcuts || defaultSettings.shortcuts;
-      
       const checkKey = (actionId) => {
           const sc = scList.find(s => s.id === actionId);
           if (!sc || !sc.keys) return false;
-          const parts = sc.keys.toLowerCase().split('+').map(p => p.trim());
           
+          const parts = sc.keys.toLowerCase().split('+').map(p => p.trim());
           const needsCtrl = parts.includes('ctrl') || parts.includes('cmd');
           const needsShift = parts.includes('shift');
-          const needsAlt = parts.includes('alt') || parts.includes('option');
-          
+          const needsAlt = parts.includes('alt');
           const keyPart = parts[parts.length - 1]; 
           const ctrlPressed = e.ctrlKey || e.metaKey;
-          
-          // Fallbacks to handle Mac OSX alt/option symbol characters (e.g. typing å instead of a)
-          const pressedKey = e.key.toLowerCase();
-          const pressedCode = e.code ? e.code.toLowerCase().replace('key', '') : '';
 
-          return (!!ctrlPressed === needsCtrl) && 
-                 (!!e.shiftKey === needsShift) && 
-                 (!!e.altKey === needsAlt) && 
-                 (pressedKey === keyPart || pressedCode === keyPart);
+          const keyPressed = e.key ? e.key.toLowerCase() : "";
+
+          return (!!ctrlPressed === needsCtrl) && (!!e.shiftKey === needsShift) && (!!e.altKey === needsAlt) && (keyPressed === keyPart);
       };
-      
-      if (checkKey('save_bill')) { e.preventDefault(); saveBill(); return; }
-      if (checkKey('add_item')) { e.preventDefault(); setItems(prev => [...prev, createItem(settings.default_hsn)]); markDirty(); return; }
-      if (checkKey('new_bill')) { e.preventDefault(); handleNewBillClick(); return; }
-      if (checkKey('share_wa')) { e.preventDefault(); shareWhatsApp(); return; }
-      if (checkKey('open_ledger')) { e.preventDefault(); setShowLedger(true); return; }
-      if (checkKey('open_recent')) { e.preventDefault(); setShowRecentBills(true); return; }
-      if (checkKey('focus_payment')) { e.preventDefault(); document.getElementById('paymentMethodSelect')?.focus(); return; }
+
+      if (isInput && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          return; 
+      }
+
+      if (checkKey('save_bill')) { e.preventDefault(); e.stopPropagation(); saveBill(); return; }
+      if (checkKey('add_item')) { e.preventDefault(); e.stopPropagation(); setItems(prev => [...prev, createItem(settings.default_hsn)]); markDirty(); return; }
+      if (checkKey('new_bill')) { e.preventDefault(); e.stopPropagation(); handleNewBillClick(); return; }
+      if (checkKey('share_wa')) { e.preventDefault(); e.stopPropagation(); shareWhatsApp(); return; }
+      if (checkKey('open_ledger')) { e.preventDefault(); e.stopPropagation(); setShowLedger(true); return; }
+      if (checkKey('open_recent')) { e.preventDefault(); e.stopPropagation(); setShowRecentBills(true); return; }
+      if (checkKey('focus_payment')) { e.preventDefault(); e.stopPropagation(); document.getElementById('paymentMethodSelect')?.focus(); return; }
     };
-    
-    document.addEventListener('keydown', handleGlobalKeyDown);
-    return () => document.removeEventListener('keydown', handleGlobalKeyDown);
+
+    document.addEventListener('keydown', handleGlobalKeyDown, true);
+    return () => document.removeEventListener('keydown', handleGlobalKeyDown, true);
   }); 
 
   useEffect(() => { localStorage.setItem("jj_print_scale", String(clampPrintScale(printScale))); }, [printScale]);
@@ -449,16 +441,8 @@ export default function App() {
     let dbData = response.data || {};
     if (!dbData.branches) dbData.branches = defaultSettings.branches;
     let localFonts = []; const localFontsRaw = localStorage.getItem("jj_custom_fonts"); if (localFontsRaw) { try { localFonts = JSON.parse(localFontsRaw); } catch (e) {} }
-    
-    // FIX: Migration - Quietly fix broken shortcuts from older saves
-    let loadedShortcuts = dbData.shortcuts || defaultSettings.shortcuts;
-    if (loadedShortcuts.some(sc => sc.keys === "Ctrl + W" || sc.keys === "Shift + N")) {
-        loadedShortcuts = defaultSettings.shortcuts; // Overwrite with the fixed Alt-based defaults
-    }
-
-    const newSettings = { ...defaultSettings, ...dbData, logo_data_url: savedLogo || dbData.logo_data_url || "", about_qr_data_url: savedAboutQr || dbData.about_qr_data_url || STATIC_ABOUT_QR_URL, custom_fonts: dbData.custom_fonts || localFonts, shortcuts: loadedShortcuts };
+    const newSettings = { ...defaultSettings, ...dbData, logo_data_url: savedLogo || dbData.logo_data_url || "", about_qr_data_url: savedAboutQr || dbData.about_qr_data_url || STATIC_ABOUT_QR_URL, custom_fonts: dbData.custom_fonts || localFonts, shortcuts: dbData.shortcuts || defaultSettings.shortcuts };
     setSettings(newSettings);
-    
     if (!(newSettings.branches || []).find(b => b.id === globalBranchId)) { setGlobalBranchId((newSettings.branches || [])[0].id); setBillBranchId((newSettings.branches || [])[0].id); }
     setItems((prev) => { if (prev.length === 1 && !prev[0].description && !prev[0].weight && !prev[0].hsn) return [{ ...prev[0], hsn: newSettings.default_hsn }]; return prev; });
     setSettingsLoaded(true);
@@ -493,7 +477,8 @@ export default function App() {
     }, 250);
     return () => clearTimeout(timer);
   }, [customer.phone, customer.name, token, isPublicView, authHeaders]);
-
+// ----- END OF PART 1 -----
+// ----- START OF PART 2 -----
   const computed = useMemo(() => {
     const baseSilverRate = num(settings.silver_rate_per_gram);
     const baseMCPerGram = num(settings.making_charge_per_gram);
@@ -758,14 +743,14 @@ export default function App() {
   const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
   const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
 
-  // --- PUBLIC VIEW ---
+  // --- PUBLIC VIEW WITH FIXES APPLIED ---
   if (isPublicView) {
     if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
     if (publicBill === "NOT_FOUND" || !publicBill) return <div className="loading-screen">Bill not found or has been deleted.</div>;
 
     const isSale = publicBill.tx_type === "sale" || !publicBill.tx_type;
     
-    // FOOLPROOF PAYMENT CHECK
+    // FIX: FOOLPROOF PAYMENT CHECK
     const isPaid = isSale 
       ? (publicBill.is_payment_done === true || publicBill.is_payment_done === 1 || String(publicBill.is_payment_done).toLowerCase() === "true") 
       : (publicBill.is_balance_paid === true || publicBill.is_balance_paid === 1 || String(publicBill.is_balance_paid).toLowerCase() === "true");
@@ -792,6 +777,7 @@ export default function App() {
     const publicUpiUri = `upi://pay?pa=${publicUpiId}&pn=${encodeURIComponent(publicSettings?.shop_name || "Shop")}&am=${money(publicUpiAmountToPay)}&cu=INR&tn=Bill_${publicBill.document_number}`;
     const publicDynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(publicUpiUri)}&size=220`;
 
+    // FIX: MinHeight 100dvh, height max-content, added paddingBottom to prevent infinite mobile scrolling
     return (
       <div className="billing-app" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px', minHeight: '100dvh', height: 'max-content', backgroundColor: '#f1f5f9', overflowX: 'hidden', paddingBottom: '40px' }}>
         <Toaster position="bottom-right" />
@@ -876,6 +862,7 @@ export default function App() {
                 </>
               )}
 
+              {/* FIX: Dynamic QR added ONLY when unpaid. No payment buttons. */}
               {!isPaid && publicUpiAmountToPay > 0 && (
                 <div className="payment-qr-box" style={{ textAlign: "center", marginTop: "20px", padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px dashed #cbd5e1" }}>
                   <p className="scan-title" style={{ fontWeight: "bold", margin: "0 0 10px 0", color: "#0f172a", fontSize: "1.1rem" }}>Scan Here For Payment (₹{money(publicUpiAmountToPay)})</p>
@@ -909,7 +896,7 @@ export default function App() {
     );
   }
 
-  // --- MAIN DASHBOARD RENDER ---
+  // --- LOGIN & LOADING SCREENS FOR MAIN DASHBOARD ---
   if (checkingSession) {
     return (
       <div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
@@ -956,7 +943,9 @@ export default function App() {
         </div>
      );
   }
+
   return (
+    // FIX: 100dvh applied to main wrapper to prevent scrolling bugs
     <div className="billing-app" style={isPrinting ? { height: "auto", overflow: "visible" } : { display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", backgroundColor: "#f1f5f9" }}>
       <Toaster position="bottom-right" />
 
@@ -1034,6 +1023,7 @@ export default function App() {
 
       {/* TOP HEADER */}
       <header className="top-bar no-print" style={{ zIndex: 50, position: "relative", flexShrink: 0, minHeight: "65px", height: "auto", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 20px", flexWrap: "wrap", gap: "10px" }}>
+        {/* Left Side: Brand, Branch, and inline Mode Toggle */}
         <div className="brand-block" style={{ display: "flex", alignItems: "center", gap: "15px", flexWrap: "nowrap" }}>
           <div><h1 className="brand-title" style={{ margin: 0, fontSize: "1.2rem", color: "white" }}>{settings.shop_name}</h1></div>
           
@@ -1049,6 +1039,7 @@ export default function App() {
           </div>
         </div>
         
+        {/* Right Side: Status and Actions */}
         <div className="top-actions" style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.85rem", color: cloudStatus.enabled ? "#4ade80" : "#facc15", marginRight: "10px" }}>
              <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: cloudStatus.enabled ? "#4ade80" : "#facc15" }} />
@@ -1060,6 +1051,7 @@ export default function App() {
       </header>
 
       {/* INDEPENDENT SPLIT-SCREEN LAYOUT FOR TABLETS & PHONES */}
+      {/* FIX: Height max-content and paddingBottom added here for proper mobile layout handling */}
       <main className="main-layout" style={isPrinting ? { height: "auto", overflow: "visible", display: "block" } : { flex: 1, display: "flex", flexDirection: isMobileSplit ? "column" : "row", overflowY: isMobileSplit ? "auto" : "hidden", overflowX: "hidden", backgroundColor: "#f1f5f9", minHeight: 0, paddingBottom: isMobileSplit ? "40px" : "0" }}>
         
         {/* LEFT PANEL: Bill Sheet */}
@@ -1639,4 +1631,3 @@ export default function App() {
     </div>
   );
 }
-
