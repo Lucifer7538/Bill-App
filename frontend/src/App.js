@@ -134,7 +134,7 @@ export default function App() {
       };
   }, []);
   
-  // FIX: Updated breakpoint to 1024px for iPhone Landscape
+  // FIX: Updated breakpoint to 1024px to properly handle iPhone Landscape mode.
   const isMobileSplit = viewportWidth <= 1024;
 
   const [isDirty, setIsDirty] = useState(false);
@@ -276,13 +276,12 @@ export default function App() {
     window.addEventListener("keydown", handleEsc); return () => window.removeEventListener("keydown", handleEsc);
   }, [showSettings, showAbout, showRecentBills, showLedger, showFeedbackModal]);
 
-  // FIX: Bulletproof Keyboard Shortcuts (Reads physical keys)
+  // FIX: Bulletproof Keyboard Shortcuts with System actions
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
       const activeTag = document.activeElement?.tagName.toLowerCase();
       const isInput = activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select';
 
-      // 1. Enter key logic for jumping between inputs
       if (e.key === "Enter" && isInput && activeTag !== 'textarea') {
           e.preventDefault();
           const formElements = Array.from(document.querySelectorAll('input, select, textarea, button:not(:disabled)'));
@@ -293,7 +292,6 @@ export default function App() {
           return;
       }
 
-      // 2. Ignore basic typing inside input boxes
       if (isInput && !e.ctrlKey && !e.metaKey && !e.altKey) {
           return; 
       }
@@ -314,7 +312,6 @@ export default function App() {
           const shiftPressed = e.shiftKey;
           const altPressed = e.altKey;
 
-          // Reads physical key code, bypassing Mac/Win symbol injection
           const keyFromKey = e.key ? e.key.toLowerCase() : "";
           const keyFromCode = e.code ? e.code.toLowerCase().replace("key", "").replace("digit", "") : "";
 
@@ -323,7 +320,6 @@ export default function App() {
           return (ctrlPressed === needsCtrl) && (shiftPressed === needsShift) && (altPressed === needsAlt) && keyMatches;
       };
 
-      // 3. Trigger actions and aggressively stop the browser
       if (checkKey('save_bill')) { e.preventDefault(); e.stopPropagation(); saveBill(); return; }
       if (checkKey('add_item')) { e.preventDefault(); e.stopPropagation(); setItems(prev => [...prev, createItem(settings.default_hsn)]); markDirty(); return; }
       if (checkKey('new_bill')) { e.preventDefault(); e.stopPropagation(); handleNewBillClick(); return; }
@@ -445,6 +441,7 @@ export default function App() {
     }
   }, [showSettings, token, isPublicView, authHeaders]);
 
+  // FIX: Healing Load Settings (Restores missing System Shortcuts)
   const loadSettings = async () => {
     const response = await axios.get(`${API}/settings`, { headers: authHeaders });
     const savedLogo = localStorage.getItem("jj_logo_data_url");
@@ -452,7 +449,28 @@ export default function App() {
     let dbData = response.data || {};
     if (!dbData.branches) dbData.branches = defaultSettings.branches;
     let localFonts = []; const localFontsRaw = localStorage.getItem("jj_custom_fonts"); if (localFontsRaw) { try { localFonts = JSON.parse(localFontsRaw); } catch (e) {} }
-    const newSettings = { ...defaultSettings, ...dbData, logo_data_url: savedLogo || dbData.logo_data_url || "", about_qr_data_url: savedAboutQr || dbData.about_qr_data_url || STATIC_ABOUT_QR_URL, custom_fonts: dbData.custom_fonts || localFonts, shortcuts: dbData.shortcuts || defaultSettings.shortcuts };
+
+    let mergedShortcuts = defaultSettings.shortcuts;
+    if (dbData.shortcuts && dbData.shortcuts.length > 0) {
+        const customOnly = dbData.shortcuts.filter(sc => !sc.isSystem);
+        const systemUpdated = defaultSettings.shortcuts.map(sys => {
+            const savedSys = dbData.shortcuts.find(s => s.id === sys.id);
+            return savedSys ? savedSys : sys;
+        });
+        mergedShortcuts = [...systemUpdated, ...customOnly];
+    } else {
+        mergedShortcuts = defaultSettings.shortcuts;
+    }
+
+    const newSettings = { 
+      ...defaultSettings, 
+      ...dbData, 
+      logo_data_url: savedLogo || dbData.logo_data_url || "", 
+      about_qr_data_url: savedAboutQr || dbData.about_qr_data_url || STATIC_ABOUT_QR_URL, 
+      custom_fonts: dbData.custom_fonts || localFonts, 
+      shortcuts: mergedShortcuts 
+    };
+    
     setSettings(newSettings);
     if (!(newSettings.branches || []).find(b => b.id === globalBranchId)) { setGlobalBranchId((newSettings.branches || [])[0].id); setBillBranchId((newSettings.branches || [])[0].id); }
     setItems((prev) => { if (prev.length === 1 && !prev[0].description && !prev[0].weight && !prev[0].hsn) return [{ ...prev[0], hsn: newSettings.default_hsn }]; return prev; });
@@ -488,8 +506,7 @@ export default function App() {
     }, 250);
     return () => clearTimeout(timer);
   }, [customer.phone, customer.name, token, isPublicView, authHeaders]);
-// ----- END OF PART 1 -----
-// ----- START OF PART 2 -----
+
   const computed = useMemo(() => {
     const baseSilverRate = num(settings.silver_rate_per_gram);
     const baseMCPerGram = num(settings.making_charge_per_gram);
@@ -1623,7 +1640,7 @@ export default function App() {
                   <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                     {(settings.shortcuts || defaultSettings.shortcuts).map((sc, index) => (
                       <div key={sc.id} style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-                         <Input value={sc.keys} onChange={(e) => updateShortcut(index, 'keys', e.target.value)} placeholder="Keys (e.g. Ctrl+S)" style={{ width: "130px", fontWeight: "bold" }} />
+                         <Input value={sc.keys} onChange={(e) => updateShortcut(index, 'keys', e.target.value)} placeholder="Keys (e.g. Alt+S)" style={{ width: "130px", fontWeight: "bold" }} />
                          <Input value={sc.action} onChange={(e) => updateShortcut(index, 'action', e.target.value)} placeholder="Action / Description" disabled={sc.isSystem} />
                          {!sc.isSystem && <Button size="sm" variant="outline" onClick={() => removeShortcut(index)} style={{ borderColor: "#ef4444", color: "#ef4444", padding: "0 8px" }}>X</Button>}
                       </div>
@@ -1642,4 +1659,3 @@ export default function App() {
     </div>
   );
 }
-// ----- END OF PART 2 -----
