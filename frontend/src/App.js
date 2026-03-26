@@ -134,7 +134,7 @@ export default function App() {
       };
   }, []);
   
-  // FIX: Updated breakpoint to 1024px to properly handle iPhone Landscape mode.
+  // FIX: Updated breakpoint to 1024px for iPhone Landscape
   const isMobileSplit = viewportWidth <= 1024;
 
   const [isDirty, setIsDirty] = useState(false);
@@ -276,12 +276,13 @@ export default function App() {
     window.addEventListener("keydown", handleEsc); return () => window.removeEventListener("keydown", handleEsc);
   }, [showSettings, showAbout, showRecentBills, showLedger, showFeedbackModal]);
 
-  // FIX: Aggressive keyboard shortcut capture block
+  // FIX: Bulletproof Keyboard Shortcuts (Reads physical keys)
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
       const activeTag = document.activeElement?.tagName.toLowerCase();
       const isInput = activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select';
 
+      // 1. Enter key logic for jumping between inputs
       if (e.key === "Enter" && isInput && activeTag !== 'textarea') {
           e.preventDefault();
           const formElements = Array.from(document.querySelectorAll('input, select, textarea, button:not(:disabled)'));
@@ -292,7 +293,13 @@ export default function App() {
           return;
       }
 
+      // 2. Ignore basic typing inside input boxes
+      if (isInput && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          return; 
+      }
+
       const scList = settings.shortcuts || defaultSettings.shortcuts;
+      
       const checkKey = (actionId) => {
           const sc = scList.find(s => s.id === actionId);
           if (!sc || !sc.keys) return false;
@@ -302,17 +309,21 @@ export default function App() {
           const needsShift = parts.includes('shift');
           const needsAlt = parts.includes('alt');
           const keyPart = parts[parts.length - 1]; 
+          
           const ctrlPressed = e.ctrlKey || e.metaKey;
+          const shiftPressed = e.shiftKey;
+          const altPressed = e.altKey;
 
-          const keyPressed = e.key ? e.key.toLowerCase() : "";
+          // Reads physical key code, bypassing Mac/Win symbol injection
+          const keyFromKey = e.key ? e.key.toLowerCase() : "";
+          const keyFromCode = e.code ? e.code.toLowerCase().replace("key", "").replace("digit", "") : "";
 
-          return (!!ctrlPressed === needsCtrl) && (!!e.shiftKey === needsShift) && (!!e.altKey === needsAlt) && (keyPressed === keyPart);
+          const keyMatches = (keyFromKey === keyPart || keyFromCode === keyPart);
+
+          return (ctrlPressed === needsCtrl) && (shiftPressed === needsShift) && (altPressed === needsAlt) && keyMatches;
       };
 
-      if (isInput && !e.ctrlKey && !e.metaKey && !e.altKey) {
-          return; 
-      }
-
+      // 3. Trigger actions and aggressively stop the browser
       if (checkKey('save_bill')) { e.preventDefault(); e.stopPropagation(); saveBill(); return; }
       if (checkKey('add_item')) { e.preventDefault(); e.stopPropagation(); setItems(prev => [...prev, createItem(settings.default_hsn)]); markDirty(); return; }
       if (checkKey('new_bill')) { e.preventDefault(); e.stopPropagation(); handleNewBillClick(); return; }
@@ -322,8 +333,8 @@ export default function App() {
       if (checkKey('focus_payment')) { e.preventDefault(); e.stopPropagation(); document.getElementById('paymentMethodSelect')?.focus(); return; }
     };
 
-    document.addEventListener('keydown', handleGlobalKeyDown, true);
-    return () => document.removeEventListener('keydown', handleGlobalKeyDown, true);
+    window.addEventListener('keydown', handleGlobalKeyDown, true);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
   }); 
 
   useEffect(() => { localStorage.setItem("jj_print_scale", String(clampPrintScale(printScale))); }, [printScale]);
@@ -1631,3 +1642,4 @@ export default function App() {
     </div>
   );
 }
+// ----- END OF PART 2 -----
