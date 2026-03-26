@@ -26,13 +26,18 @@ const defaultSettings = {
   silver_rate_per_gram: 240, making_charge_per_gram: 15, flat_mc_below_5g: 150, default_hsn: "7113",
   formula_note: "Line total = Weight x (Silver rate per gram + Making charge per gram)", logo_data_url: "", about_qr_data_url: STATIC_ABOUT_QR_URL, custom_fonts: [],
   shortcuts: [
-    { id: "save_bill", action: "Save Bill", keys: "Ctrl + S", isSystem: true },
-    { id: "add_item", action: "Add new item row", keys: "Ctrl + Shift + R", isSystem: true },
-    { id: "new_bill", action: "New blank bill", keys: "Shift + N", isSystem: true },
-    { id: "share_wa", action: "Share via WhatsApp", keys: "Shift + W", isSystem: true },
-    { id: "focus_payment", action: "Jump to Payment Method", keys: "Shift + P", isSystem: true },
-    { id: "open_ledger", action: "Open Ledger/Vaults", keys: "Ctrl + W", isSystem: true },
-    { id: "open_recent", action: "Open Recent Bills", keys: "Ctrl + R", isSystem: true }
+    { id: "save_bill", action: "Save Bill", keys: "alt + s", isSystem: true },
+    { id: "add_item", action: "Add new item row", keys: "alt + a", isSystem: true },
+    { id: "new_bill", action: "New blank bill", keys: "alt + n", isSystem: true },
+    { id: "share_wa", action: "Share via WhatsApp", keys: "alt + w", isSystem: true },
+    { id: "focus_customer", action: "Jump to Customer Name", keys: "alt + c", isSystem: true },
+    { id: "focus_item", action: "Jump to Item Description", keys: "alt + i", isSystem: true },
+    { id: "focus_discount", action: "Jump to Discount", keys: "alt + d", isSystem: true },
+    { id: "focus_payment", action: "Jump to Payment Method", keys: "alt + p", isSystem: true },
+    { id: "open_ledger", action: "Open Ledger/Vaults", keys: "alt + l", isSystem: true },
+    { id: "open_recent", action: "Open Recent Bills", keys: "alt + r", isSystem: true },
+    { id: "download_pdf", action: "Download PDF", keys: "alt + f", isSystem: true },
+    { id: "print_bill", action: "Print Bill", keys: "alt + b", isSystem: true }
   ],
   branches: [
     { id: "B1", name: "Branch 1 (Old Town)", address: "Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2", map_url: "https://g.page/r/CVvnomQZn7zxEBE/review", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", gstin: "21AAUFJ1925F1ZH", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 },
@@ -134,7 +139,6 @@ export default function App() {
       };
   }, []);
   
-  // FIX: Updated breakpoint to 1024px to properly handle iPhone Landscape mode.
   const isMobileSplit = viewportWidth <= 1024;
 
   const [isDirty, setIsDirty] = useState(false);
@@ -276,7 +280,6 @@ export default function App() {
     window.addEventListener("keydown", handleEsc); return () => window.removeEventListener("keydown", handleEsc);
   }, [showSettings, showAbout, showRecentBills, showLedger, showFeedbackModal]);
 
-  // FIX: Bulletproof Keyboard Shortcuts with System actions
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
       const activeTag = document.activeElement?.tagName.toLowerCase();
@@ -327,6 +330,17 @@ export default function App() {
       if (checkKey('open_ledger')) { e.preventDefault(); e.stopPropagation(); setShowLedger(true); return; }
       if (checkKey('open_recent')) { e.preventDefault(); e.stopPropagation(); setShowRecentBills(true); return; }
       if (checkKey('focus_payment')) { e.preventDefault(); e.stopPropagation(); document.getElementById('paymentMethodSelect')?.focus(); return; }
+      
+      if (checkKey('focus_customer')) { e.preventDefault(); e.stopPropagation(); document.getElementById('customerNameInput')?.focus(); return; }
+      if (checkKey('focus_item')) { 
+          e.preventDefault(); e.stopPropagation(); 
+          const itemInputs = document.querySelectorAll('.item-desc-input'); 
+          if(itemInputs.length > 0) itemInputs[itemInputs.length - 1].focus(); 
+          return; 
+      }
+      if (checkKey('focus_discount')) { e.preventDefault(); e.stopPropagation(); document.getElementById('discountInput')?.focus(); return; }
+      if (checkKey('download_pdf')) { e.preventDefault(); e.stopPropagation(); downloadPdf("bill-print-root", documentNumber || mode); return; }
+      if (checkKey('print_bill')) { e.preventDefault(); e.stopPropagation(); window.print(); return; }
     };
 
     window.addEventListener('keydown', handleGlobalKeyDown, true);
@@ -441,7 +455,6 @@ export default function App() {
     }
   }, [showSettings, token, isPublicView, authHeaders]);
 
-  // FIX: Healing Load Settings (Restores missing System Shortcuts)
   const loadSettings = async () => {
     const response = await axios.get(`${API}/settings`, { headers: authHeaders });
     const savedLogo = localStorage.getItem("jj_logo_data_url");
@@ -506,7 +519,6 @@ export default function App() {
     }, 250);
     return () => clearTimeout(timer);
   }, [customer.phone, customer.name, token, isPublicView, authHeaders]);
-
   const computed = useMemo(() => {
     const baseSilverRate = num(settings.silver_rate_per_gram);
     const baseMCPerGram = num(settings.making_charge_per_gram);
@@ -771,21 +783,18 @@ export default function App() {
   const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
   const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
 
-  // --- PUBLIC VIEW WITH FIXES APPLIED ---
   if (isPublicView) {
     if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
     if (publicBill === "NOT_FOUND" || !publicBill) return <div className="loading-screen">Bill not found or has been deleted.</div>;
 
     const isSale = publicBill.tx_type === "sale" || !publicBill.tx_type;
     
-    // FIX: FOOLPROOF PAYMENT CHECK
     const isPaid = isSale 
       ? (publicBill.is_payment_done === true || publicBill.is_payment_done === 1 || String(publicBill.is_payment_done).toLowerCase() === "true") 
       : (publicBill.is_balance_paid === true || publicBill.is_balance_paid === 1 || String(publicBill.is_balance_paid).toLowerCase() === "true");
 
     const pbBranch = (publicSettings?.branches || []).find(b => b.id === publicBill.branch_id) || (publicSettings?.branches || [])[0] || defaultSettings.branches[0];
 
-    // PUBLIC VIEW QR CALCULATION
     let publicUpiAmountToPay = publicComputed.grandTotal;
     if (!isPaid) {
       if (isSale && publicBill.payment_method === "Split") {
@@ -805,7 +814,6 @@ export default function App() {
     const publicUpiUri = `upi://pay?pa=${publicUpiId}&pn=${encodeURIComponent(publicSettings?.shop_name || "Shop")}&am=${money(publicUpiAmountToPay)}&cu=INR&tn=Bill_${publicBill.document_number}`;
     const publicDynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(publicUpiUri)}&size=220`;
 
-    // FIX: MinHeight 100dvh, height max-content, added paddingBottom to prevent infinite mobile scrolling
     return (
       <div className="billing-app" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px', minHeight: '100dvh', height: 'max-content', backgroundColor: '#f1f5f9', overflowX: 'hidden', paddingBottom: '40px' }}>
         <Toaster position="bottom-right" />
@@ -890,7 +898,6 @@ export default function App() {
                 </>
               )}
 
-              {/* FIX: Dynamic QR added ONLY when unpaid. No payment buttons. */}
               {!isPaid && publicUpiAmountToPay > 0 && (
                 <div className="payment-qr-box" style={{ textAlign: "center", marginTop: "20px", padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px dashed #cbd5e1" }}>
                   <p className="scan-title" style={{ fontWeight: "bold", margin: "0 0 10px 0", color: "#0f172a", fontSize: "1.1rem" }}>Scan Here For Payment (₹{money(publicUpiAmountToPay)})</p>
@@ -924,7 +931,6 @@ export default function App() {
     );
   }
 
-  // --- LOGIN & LOADING SCREENS FOR MAIN DASHBOARD ---
   if (checkingSession) {
     return (
       <div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
@@ -973,7 +979,6 @@ export default function App() {
   }
 
   return (
-    // FIX: 100dvh applied to main wrapper to prevent scrolling bugs
     <div className="billing-app" style={isPrinting ? { height: "auto", overflow: "visible" } : { display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", backgroundColor: "#f1f5f9" }}>
       <Toaster position="bottom-right" />
 
@@ -1051,7 +1056,6 @@ export default function App() {
 
       {/* TOP HEADER */}
       <header className="top-bar no-print" style={{ zIndex: 50, position: "relative", flexShrink: 0, minHeight: "65px", height: "auto", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 20px", flexWrap: "wrap", gap: "10px" }}>
-        {/* Left Side: Brand, Branch, and inline Mode Toggle */}
         <div className="brand-block" style={{ display: "flex", alignItems: "center", gap: "15px", flexWrap: "nowrap" }}>
           <div><h1 className="brand-title" style={{ margin: 0, fontSize: "1.2rem", color: "white" }}>{settings.shop_name}</h1></div>
           
@@ -1067,7 +1071,6 @@ export default function App() {
           </div>
         </div>
         
-        {/* Right Side: Status and Actions */}
         <div className="top-actions" style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.85rem", color: cloudStatus.enabled ? "#4ade80" : "#facc15", marginRight: "10px" }}>
              <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: cloudStatus.enabled ? "#4ade80" : "#facc15" }} />
@@ -1078,8 +1081,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* INDEPENDENT SPLIT-SCREEN LAYOUT FOR TABLETS & PHONES */}
-      {/* FIX: Height max-content and paddingBottom added here for proper mobile layout handling */}
       <main className="main-layout" style={isPrinting ? { height: "auto", overflow: "visible", display: "block" } : { flex: 1, display: "flex", flexDirection: isMobileSplit ? "column" : "row", overflowY: isMobileSplit ? "auto" : "hidden", overflowX: "hidden", backgroundColor: "#f1f5f9", minHeight: 0, paddingBottom: isMobileSplit ? "40px" : "0" }}>
         
         {/* LEFT PANEL: Bill Sheet */}
@@ -1193,7 +1194,7 @@ export default function App() {
               <Input value={documentNumber} onChange={(e) => { setDocumentNumber(e.target.value); markDirty(); }} placeholder="e.g. INV-0212" disabled={!!currentBillId} style={{ fontWeight: "bold", color: "var(--brand)", backgroundColor: currentBillId ? "#f1f5f9" : "white" }} />
             </div>
 
-            <Input value={customer.name} onChange={(e) => { setCustomer((prev) => ({ ...prev, name: e.target.value })); markDirty(); }} placeholder="Customer name" />
+            <Input id="customerNameInput" value={customer.name} onChange={(e) => { setCustomer((prev) => ({ ...prev, name: e.target.value })); markDirty(); }} placeholder="Customer name" />
             <Input value={customer.phone} onChange={(e) => { setCustomer((prev) => ({ ...prev, phone: e.target.value })); markDirty(); }} placeholder="Phone" />
             <Input value={customer.address} onChange={(e) => { setCustomer((prev) => ({ ...prev, address: e.target.value })); markDirty(); }} placeholder="Address" />
             <Input value={customer.email} onChange={(e) => { setCustomer((prev) => ({ ...prev, email: e.target.value })); markDirty(); }} placeholder="Email" />
@@ -1214,7 +1215,7 @@ export default function App() {
             <h3>Item Lines</h3>
             {(items || []).map((item) => (
               <div key={item.id} className="item-row-editor">
-                <Input value={item.description} onChange={(e) => updateItem(item.id, "description", e.target.value)} placeholder="Description" />
+                <Input className="item-desc-input" value={item.description} onChange={(e) => updateItem(item.id, "description", e.target.value)} placeholder="Description" />
                 <Input value={item.hsn} onChange={(e) => updateItem(item.id, "hsn", e.target.value)} placeholder="HSN" />
                 <Input value={item.weight} onChange={(e) => updateItem(item.id, "weight", e.target.value)} placeholder="Weight" />
                 <Input value={item.quantity} onChange={(e) => updateItem(item.id, "quantity", e.target.value)} placeholder="Qty" />
@@ -1229,7 +1230,7 @@ export default function App() {
 
           <div className="control-card">
             <h3>Adjustments</h3>
-            <Input value={discount} onChange={(e) => { setDiscount(e.target.value); markDirty(); }} placeholder="Discount" />
+            <Input id="discountInput" value={discount} onChange={(e) => { setDiscount(e.target.value); markDirty(); }} placeholder="Discount" />
             <Input value={exchange} onChange={(e) => { setExchange(e.target.value); markDirty(); }} placeholder="Exchange" />
             <Input value={manualRoundOff} onChange={(e) => { setManualRoundOff(e.target.value); markDirty(); }} placeholder="Manual round off (optional)" />
           </div>
