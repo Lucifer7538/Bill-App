@@ -45,7 +45,7 @@ const defaultSettings = {
   ]
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => new Date().toLocaleDateString('en-GB');
 const num = (val) => { if (val === null || val === undefined || val === "") return 0; const parsed = Number.parseFloat(val); return Number.isFinite(parsed) ? parsed : 0; };
 const money = (val) => num(val).toFixed(2);
 const clampPrintScale = (value) => Math.min(102, Math.max(98, value));
