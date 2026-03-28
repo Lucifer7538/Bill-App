@@ -46,7 +46,24 @@ const defaultSettings = {
   ]
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+// FORMAT DATE AS DD-MM-YYYY
+const today = () => {
+  const d = new Date();
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  return `${day}-${month}-${d.getFullYear()}`;
+};
+
+// SAFE DATE PARSER FOR DD-MM-YYYY
+const parseBillDate = (dStr) => {
+  if (!dStr) return new Date();
+  const p = dStr.split("-");
+  if (p.length === 3 && p[0].length === 2) {
+    return new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]));
+  }
+  return new Date(dStr);
+};
+
 const num = (val) => { if (val === null || val === undefined || val === "") return 0; const parsed = Number.parseFloat(val); return Number.isFinite(parsed) ? parsed : 0; };
 const money = (val) => num(val).toFixed(2);
 const clampPrintScale = (value) => Math.min(102, Math.max(98, value));
@@ -170,13 +187,12 @@ export default function App() {
   const [isNumberLoading, setIsNumberLoading] = useState(false);
   const [billDate, setBillDate] = useState(today());
 
-  // POINTS SYSTEM ADDED TO CUSTOMER STATE
   const [customer, setCustomer] = useState({ name: "", phone: "", address: "", email: "", points: 0 });
   const [suggestions, setSuggestions] = useState([]);
   const [items, setItems] = useState([createItem()]);
   const [discount, setDiscount] = useState("0");
   const [exchange, setExchange] = useState("0");
-  const [redeemedPoints, setRedeemedPoints] = useState(""); // POINTS SYSTEM
+  const [redeemedPoints, setRedeemedPoints] = useState("");
   const [manualRoundOff, setManualRoundOff] = useState("");
   const [notes, setNotes] = useState("");
 
@@ -383,22 +399,35 @@ export default function App() {
   const filteredRecentBills = useMemo(() => {
     return (recentBillsList || []).filter(bill => {
       if (recentModeFilter !== "ALL" && bill.mode !== recentModeFilter) return false;
+      
+      // FIX: Proper logic to read DD-MM-YYYY formats in filters
       if (recentDateFilter === "THIS_MONTH") {
-        const billMonth = new Date(bill.date).getMonth(); const billYear = new Date(bill.date).getFullYear(); const now = new Date();
-        if (billMonth !== now.getMonth() || billYear !== now.getFullYear()) return false;
+        const billDateObj = parseBillDate(bill.date);
+        const now = new Date();
+        if (billDateObj.getMonth() !== now.getMonth() || billDateObj.getFullYear() !== now.getFullYear()) return false;
       } 
       else if (recentDateFilter === "LAST_MONTH") {
-        const billDateObj = new Date(bill.date); const now = new Date(); const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const billDateObj = parseBillDate(bill.date);
+        const now = new Date();
+        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         if (billDateObj.getMonth() !== lastMonth.getMonth() || billDateObj.getFullYear() !== lastMonth.getFullYear()) return false;
       } 
       else if (recentDateFilter === "CUSTOM") {
-        if (customStartDate && bill.date < customStartDate) return false;
-        if (customEndDate && bill.date > customEndDate) return false;
+        const fixBillDate = (dStr) => {
+            if(!dStr) return "";
+            const p = dStr.split("-");
+            if (p.length === 3 && p[0].length === 2) return `${p[2]}-${p[1]}-${p[0]}`;
+            return dStr;
+        };
+        const bDate = fixBillDate(bill.date);
+        if (customStartDate && bDate < customStartDate) return false;
+        if (customEndDate && bDate > customEndDate) return false;
       }
       return true;
     });
   }, [recentBillsList, recentModeFilter, recentDateFilter, customStartDate, customEndDate]);
-
+// ----- END OF PART 1 -----
+// ----- START OF PART 2 -----
   const handleBulkDownload = async () => {
     if ((filteredRecentBills || []).length === 0) { toast.error("No bills to download!"); return; }
     if ((filteredRecentBills || []).length > 20) { if (!window.confirm(`Generate PDF with ${filteredRecentBills.length} pages? This might take a minute.`)) return; }
@@ -533,7 +562,7 @@ export default function App() {
 
     const mapped = (items || []).map((item, index) => {
       const weight = num(item.weight);
-      totalWeight += weight; // POINTS: Calculate total weight
+      totalWeight += weight;
       const quantity = Math.max(num(item.quantity || 1), 1);
       const silverRate = item.rate_override !== "" ? num(item.rate_override) : baseSilverRate;
 
@@ -559,7 +588,6 @@ export default function App() {
     const gstApplied = mode === "invoice" ? cgst + sgst + igst : 0;
     const mdr = paymentMethod === "Card" ? (taxable + gstApplied) * 0.02 : 0;
     
-    // POINTS: Earned calculation (1g = 1 point) and Redeem logic (1 pt = ₹1)
     const earnedPoints = Math.floor(totalWeight);
     const appliedRedeemedPoints = num(redeemedPoints);
 
@@ -665,7 +693,6 @@ export default function App() {
         balance_method: balanceMethod, balance_split_cash: num(balanceSplitCash), is_balance_paid: isBalancePaid,
         discount: num(discount), exchange: num(exchange), round_off: manualRoundOff === "" ? null : num(manualRoundOff), notes,
         
-        // POINTS: Send the points data to backend
         redeemed_points: num(redeemedPoints),
         earned_points: computed.earnedPoints,
 
@@ -734,8 +761,6 @@ export default function App() {
       if (isAdvancePaid && !isBalancePaid && (balanceMethod === "UPI" || balanceMethod === "Split")) { const bal = Math.max(0, computed.grandTotal - num(advanceAmount)); return balanceMethod === "Split" ? Math.max(0, bal - num(balanceSplitCash)) : bal; }
       return 0;
   };
-// ----- END OF PART 1 -----
-// ----- START OF PART 2 -----
   const upiAmountToPay = getUpiAmount(); const showDashboardUpi = upiAmountToPay > 0;
   const upiId = mode === "invoice" ? activeBillBranch.invoice_upi_id : activeBillBranch.estimate_upi_id;
   const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
@@ -1172,7 +1197,7 @@ export default function App() {
             <Input value={customer.phone} onChange={(e) => { setCustomer((prev) => ({ ...prev, phone: e.target.value })); markDirty(); }} placeholder="Phone" />
             <Input value={customer.address} onChange={(e) => { setCustomer((prev) => ({ ...prev, address: e.target.value })); markDirty(); }} placeholder="Address" />
             <Input value={customer.email} onChange={(e) => { setCustomer((prev) => ({ ...prev, email: e.target.value })); markDirty(); }} placeholder="Email" />
-            <Input type="text" value={billDate} onChange={(e) => { setBillDate(e.target.value); markDirty(); }} placeholder="YYYY-MM-DD" />
+            <Input type="text" value={billDate} onChange={(e) => { setBillDate(e.target.value); markDirty(); }} placeholder="DD-MM-YYYY" />
 
             {(suggestions || []).length > 0 && (
               <div className="suggestions">
