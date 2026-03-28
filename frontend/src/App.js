@@ -33,6 +33,7 @@ const defaultSettings = {
     { id: "focus_customer", action: "Jump to Customer Name", keys: "alt + c", isSystem: true },
     { id: "focus_item", action: "Jump to Item Description", keys: "alt + i", isSystem: true },
     { id: "focus_discount", action: "Jump to Discount", keys: "alt + d", isSystem: true },
+    { id: "focus_redeem", action: "Jump to Redeem Points", keys: "alt + v", isSystem: true },
     { id: "focus_payment", action: "Jump to Payment Method", keys: "alt + p", isSystem: true },
     { id: "open_ledger", action: "Open Ledger/Vaults", keys: "alt + l", isSystem: true },
     { id: "open_recent", action: "Open Recent Bills", keys: "alt + r", isSystem: true },
@@ -45,7 +46,7 @@ const defaultSettings = {
   ]
 };
 
-const today = () => new Date().toLocaleDateString('en-GB');
+const today = () => new Date().toISOString().slice(0, 10);
 const num = (val) => { if (val === null || val === undefined || val === "") return 0; const parsed = Number.parseFloat(val); return Number.isFinite(parsed) ? parsed : 0; };
 const money = (val) => num(val).toFixed(2);
 const clampPrintScale = (value) => Math.min(102, Math.max(98, value));
@@ -169,11 +170,13 @@ export default function App() {
   const [isNumberLoading, setIsNumberLoading] = useState(false);
   const [billDate, setBillDate] = useState(today());
 
-  const [customer, setCustomer] = useState({ name: "", phone: "", address: "", email: "" });
+  // POINTS SYSTEM ADDED TO CUSTOMER STATE
+  const [customer, setCustomer] = useState({ name: "", phone: "", address: "", email: "", points: 0 });
   const [suggestions, setSuggestions] = useState([]);
   const [items, setItems] = useState([createItem()]);
   const [discount, setDiscount] = useState("0");
   const [exchange, setExchange] = useState("0");
+  const [redeemedPoints, setRedeemedPoints] = useState(""); // POINTS SYSTEM
   const [manualRoundOff, setManualRoundOff] = useState("");
   const [notes, setNotes] = useState("");
 
@@ -339,6 +342,7 @@ export default function App() {
           return; 
       }
       if (checkKey('focus_discount')) { e.preventDefault(); e.stopPropagation(); document.getElementById('discountInput')?.focus(); return; }
+      if (checkKey('focus_redeem')) { e.preventDefault(); e.stopPropagation(); document.getElementById('redeemedPointsInput')?.focus(); return; }
       if (checkKey('download_pdf')) { e.preventDefault(); e.stopPropagation(); downloadPdf("bill-print-root", documentNumber || mode); return; }
       if (checkKey('print_bill')) { e.preventDefault(); e.stopPropagation(); window.print(); return; }
     };
@@ -519,13 +523,17 @@ export default function App() {
     }, 250);
     return () => clearTimeout(timer);
   }, [customer.phone, customer.name, token, isPublicView, authHeaders]);
+
   const computed = useMemo(() => {
     const baseSilverRate = num(settings.silver_rate_per_gram);
     const baseMCPerGram = num(settings.making_charge_per_gram);
     const flatMCBelow5g = num(settings.flat_mc_below_5g);
 
+    let totalWeight = 0;
+
     const mapped = (items || []).map((item, index) => {
       const weight = num(item.weight);
+      totalWeight += weight; // POINTS: Calculate total weight
       const quantity = Math.max(num(item.quantity || 1), 1);
       const silverRate = item.rate_override !== "" ? num(item.rate_override) : baseSilverRate;
 
@@ -550,20 +558,26 @@ export default function App() {
     const igst = 0;
     const gstApplied = mode === "invoice" ? cgst + sgst + igst : 0;
     const mdr = paymentMethod === "Card" ? (taxable + gstApplied) * 0.02 : 0;
-    const baseTotal = taxable + gstApplied + mdr - num(discount) - num(exchange);
+    
+    // POINTS: Earned calculation (1g = 1 point) and Redeem logic (1 pt = ₹1)
+    const earnedPoints = Math.floor(totalWeight);
+    const appliedRedeemedPoints = num(redeemedPoints);
+
+    const baseTotal = taxable + gstApplied + mdr - num(discount) - num(exchange) - appliedRedeemedPoints;
     const autoRound = Math.round(baseTotal) - baseTotal;
     const roundOff = manualRoundOff === "" ? autoRound : num(manualRoundOff);
     const grandTotal = baseTotal + roundOff;
-    return { items: mapped, baseSilverRate, subtotal, taxable, cgst, sgst, igst, mdr, roundOff, grandTotal };
-  }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff]);
+    
+    return { items: mapped, baseSilverRate, subtotal, taxable, cgst, sgst, igst, mdr, roundOff, grandTotal, totalWeight, earnedPoints, redeemedPoints: appliedRedeemedPoints };
+  }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff, redeemedPoints]);
 
   const updateItem = (id, key, value) => { markDirty(); setItems((prev) => prev.map((item) => (item.id === id ? { ...item, [key]: value } : item))); };
 
   const checkIsBlank = () => { return !customer.name.trim() && !customer.phone.trim() && !customer.address.trim() && !(items || []).some(i => i.description.trim() || i.weight.trim() || i.amount_override.trim()) && (!discount || discount === "0") && (!exchange || exchange === "0") && !paymentMethod && !advanceMethod && !advanceAmount && !splitCash; };
 
   const clearBill = async (nextMode = mode, nextBranch = billBranchId) => {
-    setCurrentBillId(null); setEditingDocNumber(null); setItems([createItem(settings.default_hsn)]); setCustomer({ name: "", phone: "", address: "", email: "" });
-    setSuggestions([]); setDiscount("0"); setExchange("0"); setManualRoundOff("");
+    setCurrentBillId(null); setEditingDocNumber(null); setItems([createItem(settings.default_hsn)]); setCustomer({ name: "", phone: "", address: "", email: "", points: 0 });
+    setSuggestions([]); setDiscount("0"); setExchange("0"); setRedeemedPoints(""); setManualRoundOff("");
     setTxType("sale"); setPaymentMethod(""); setSplitCash(""); setIsPaymentDone(false); setAdvanceAmount(""); setAdvanceMethod(""); setAdvanceSplitCash(""); setIsAdvancePaid(false); setBalanceMethod(""); setBalanceSplitCash(""); setIsBalancePaid(false); setNotes("");
     setBillDate(today()); setIsDirty(false); await reserveNumber(nextMode, nextBranch); goToBillTop();
   };
@@ -575,11 +589,12 @@ export default function App() {
 
   const loadBillForEditing = (bill) => {
     setCurrentBillId(bill.id); setEditingDocNumber(bill.document_number); setMode(bill.mode); setBillBranchId(bill.branch_id || (settings.branches || [])[0].id); setDocumentNumber(bill.document_number); setBillDate(bill.date || today());
-    setCustomer({ name: bill.customer_name || bill.customer?.name || "", phone: bill.customer_phone || bill.customer?.phone || "", address: bill.customer_address || bill.customer?.address || "", email: bill.customer_email || bill.customer?.email || "" });
+    setCustomer({ name: bill.customer_name || bill.customer?.name || "", phone: bill.customer_phone || bill.customer?.phone || "", address: bill.customer_address || bill.customer?.address || "", email: bill.customer_email || bill.customer?.email || "", points: bill.customer?.points || 0 });
     setTxType(bill.tx_type || "sale"); setPaymentMethod(bill.payment_method || ""); setSplitCash(bill.split_cash !== null && bill.split_cash !== undefined ? String(bill.split_cash) : ""); setIsPaymentDone(bill.is_payment_done || false); 
     setAdvanceAmount(bill.advance_amount ? String(bill.advance_amount) : ""); setAdvanceMethod(bill.advance_method || ""); setAdvanceSplitCash(bill.advance_split_cash ? String(bill.advance_split_cash) : ""); setIsAdvancePaid(bill.is_advance_paid || false);
     setBalanceMethod(bill.balance_method || ""); setBalanceSplitCash(bill.balance_split_cash ? String(bill.balance_split_cash) : ""); setIsBalancePaid(bill.is_balance_paid || false);
     setNotes(bill.notes || ""); setDiscount(bill.discount ? String(bill.discount) : (bill.totals?.discount ? String(bill.totals.discount) : "0")); setExchange(bill.exchange ? String(bill.exchange) : (bill.totals?.exchange ? String(bill.totals.exchange) : "0")); setManualRoundOff(bill.totals?.round_off !== null && bill.totals?.round_off !== undefined ? String(bill.totals.round_off) : "");
+    setRedeemedPoints(bill.redeemed_points ? String(bill.redeemed_points) : "");
     const loadedItems = (bill.items || []).map((item) => ({ id: `${Date.now()}-${Math.random()}`, description: item.description || "", hsn: item.hsn || "", weight: item.weight ? String(item.weight) : "", quantity: item.quantity ? String(item.quantity) : "1", mc_override: item.mc_override !== null && item.mc_override !== undefined ? String(item.mc_override) : "", rate_override: item.rate_override !== null && item.rate_override !== undefined ? String(item.rate_override) : "", amount_override: item.amount_override !== null && item.amount_override !== undefined ? String(item.amount_override) : "", }));
     setItems(loadedItems.length > 0 ? loadedItems : [createItem(settings.default_hsn)]); setIsDirty(false); setShowRecentBills(false); setShowLedger(false); toast.success(`Loaded ${bill.document_number} for editing`); goToBillTop();
   };
@@ -622,68 +637,20 @@ export default function App() {
   };
 
   const handleGlobalBranchChange = async (nextBranchId) => { setGlobalBranchId(nextBranchId); if (!currentBillId && checkIsBlank()) { setBillBranchId(nextBranchId); await reserveNumber(mode, nextBranchId); } };
-
-  const updateBranch = (index, field, value) => {
-    const updatedBranches = [...(settings.branches || [])];
-    updatedBranches[index] = { ...updatedBranches[index], [field]: value };
-    setSettings({ ...settings, branches: updatedBranches });
-  };
-  const addBranch = () => {
-    const newId = `B${Date.now()}`;
-    const newBranch = { id: newId, name: `New Branch`, address: "", map_url: "#", invoice_upi_id: "", estimate_upi_id: "", gstin: "", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 };
-    setSettings({ ...settings, branches: [...(settings.branches || []), newBranch] });
-  };
-  const removeBranch = (index) => {
-    if ((settings.branches || []).length <= 1) { toast.error("You must have at least one branch."); return; }
-    if (!window.confirm("Remove this branch from settings?")) return;
-    const updatedBranches = (settings.branches || []).filter((_, i) => i !== index);
-    setSettings({ ...settings, branches: updatedBranches });
-  };
-
-  const addShortcut = () => {
-    const newSc = { id: `custom_${Date.now()}`, action: "", keys: "", isSystem: false };
-    setSettings(prev => ({ ...prev, shortcuts: [...(prev.shortcuts || defaultSettings.shortcuts), newSc] }));
-  };
-  const updateShortcut = (index, field, value) => {
-    const list = [...(settings.shortcuts || defaultSettings.shortcuts)];
-    list[index] = { ...list[index], [field]: value };
-    setSettings(prev => ({ ...prev, shortcuts: list }));
-  };
-  const removeShortcut = (index) => {
-    const list = [...(settings.shortcuts || defaultSettings.shortcuts)];
-    list.splice(index, 1);
-    setSettings(prev => ({ ...prev, shortcuts: list }));
-  };
-
-  const handleLogin = async (event) => {
-    event.preventDefault(); setLoggingIn(true);
-    try { const response = await axios.post(`${API}/auth/login`, { passcode }, { timeout: 15000 }); localStorage.setItem("jj_auth_token", response.data.access_token); setToken(response.data.access_token); setPasscode(""); toast.success("Logged in successfully"); } 
-    catch (error) { if (error?.response?.status === 401) { toast.error("Wrong passcode."); } else { toast.error("Server is waking up. Please wait 15-20 seconds and try again."); } } finally { setLoggingIn(false); }
-  };
-
+  const updateBranch = (index, field, value) => { const updatedBranches = [...(settings.branches || [])]; updatedBranches[index] = { ...updatedBranches[index], [field]: value }; setSettings({ ...settings, branches: updatedBranches }); };
+  const addBranch = () => { const newId = `B${Date.now()}`; const newBranch = { id: newId, name: `New Branch`, address: "", map_url: "#", invoice_upi_id: "", estimate_upi_id: "", gstin: "", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 }; setSettings({ ...settings, branches: [...(settings.branches || []), newBranch] }); };
+  const removeBranch = (index) => { if ((settings.branches || []).length <= 1) { toast.error("You must have at least one branch."); return; } if (!window.confirm("Remove this branch from settings?")) return; const updatedBranches = (settings.branches || []).filter((_, i) => i !== index); setSettings({ ...settings, branches: updatedBranches }); };
+  const addShortcut = () => { const newSc = { id: `custom_${Date.now()}`, action: "", keys: "", isSystem: false }; setSettings(prev => ({ ...prev, shortcuts: [...(prev.shortcuts || defaultSettings.shortcuts), newSc] })); };
+  const updateShortcut = (index, field, value) => { const list = [...(settings.shortcuts || defaultSettings.shortcuts)]; list[index] = { ...list[index], [field]: value }; setSettings(prev => ({ ...prev, shortcuts: list })); };
+  const removeShortcut = (index) => { const list = [...(settings.shortcuts || defaultSettings.shortcuts)]; list.splice(index, 1); setSettings(prev => ({ ...prev, shortcuts: list })); };
+  const handleLogin = async (event) => { event.preventDefault(); setLoggingIn(true); try { const response = await axios.post(`${API}/auth/login`, { passcode }, { timeout: 15000 }); localStorage.setItem("jj_auth_token", response.data.access_token); setToken(response.data.access_token); setPasscode(""); toast.success("Logged in successfully"); } catch (error) { if (error?.response?.status === 401) { toast.error("Wrong passcode."); } else { toast.error("Server is waking up. Please wait 15-20 seconds and try again."); } } finally { setLoggingIn(false); } };
   const handleLogout = () => { localStorage.removeItem("jj_auth_token"); setToken(""); setGatewayPassed(false); setSettingsLoaded(false); };
-
   const optimizeImageDataUrl = async (file) => { const reader = new FileReader(); const original = await new Promise((resolve, reject) => { reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); }); const image = new Image(); await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; image.src = original; }); const ratio = Math.min(420 / image.width, 420 / image.height, 1); const targetWidth = Math.round(image.width * ratio); const targetHeight = Math.round(image.height * ratio); const canvas = document.createElement("canvas"); canvas.width = targetWidth; canvas.height = targetHeight; const context = canvas.getContext("2d"); context.drawImage(image, 0, 0, targetWidth, targetHeight); return canvas.toDataURL("image/png", 0.92); };
   const handleLogoUpload = async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const dataUrl = await optimizeImageDataUrl(file); localStorage.setItem("jj_logo_data_url", dataUrl); setSettings((prev) => ({ ...prev, logo_data_url: dataUrl })); setLogoUploadName(file.name); toast.success("Logo uploaded successfully."); } catch { toast.error("Logo upload failed."); } };
   const handleAboutQrUpload = async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const dataUrl = await optimizeImageDataUrl(file); localStorage.setItem("jj_about_qr_data_url", dataUrl); setSettings((prev) => ({ ...prev, about_qr_data_url: dataUrl })); setAboutUploadName(file.name); toast.success("About QR updated."); } catch { toast.error("QR upload failed."); } };
   const saveSettings = async () => { try { await axios.put(`${API}/settings`, settings, { headers: authHeaders }); toast.success("Settings saved."); } catch { toast.error("Could not save settings."); } };
-
-  const submitLedgerLog = async () => {
-    if (!logAmount || isNaN(logAmount) || num(logAmount) <= 0) { toast.error("Please enter a valid amount."); return; }
-    if (!logReason.trim()) { toast.error("Please enter a reason/remark."); return; }
-    setSubmittingLog(true);
-    try {
-      const payload = { branch_id: globalBranchId, reason: logReason, cash_change: 0, estimate_bank_change: 0, invoice_bank_change: 0 };
-      const amt = num(logAmount); const keyMap = { "cash": "cash_change", "estimate_bank": "estimate_bank_change", "invoice_bank": "invoice_bank_change" };
-      if (logType === "expense") payload[keyMap[logSourceVault]] = -amt; else if (logType === "add") payload[keyMap[logSourceVault]] = amt; else if (logType === "exchange") { if (logSourceVault === logTargetVault) { toast.error("Cannot exchange into the same vault."); setSubmittingLog(false); return; } payload[keyMap[logSourceVault]] = -amt; payload[keyMap[logTargetVault]] = amt; }
-      await axios.post(`${API}/settings/ledger/adjust`, payload, { headers: authHeaders }); toast.success("Transaction logged successfully!"); setShowLogForm(false); setLogAmount(""); setLogReason(""); await loadSettings(); await fetchLedgerHistory();
-    } catch (error) { toast.error("Ledger update failed."); } finally { setSubmittingLog(false); }
-  };
-
-  const saveBalances = async () => {
-    try { const payload = { branch_id: globalBranchId, cash_balance: num(manualCash), estimate_bank_balance: num(manualEstBank), invoice_bank_balance: num(manualInvBank) }; await axios.put(`${API}/settings/balances`, payload, { headers: authHeaders }); setSettings(prev => { const updatedBranches = (prev.branches || []).map(b => b.id === globalBranchId ? { ...b, ...payload } : b); return { ...prev, branches: updatedBranches }; }); setEditingBalances(false); toast.success(`Ledger balances for ${activeGlobalBranch.name} manually updated!`); } 
-    catch { toast.error("Failed to update balances."); }
-  };
+  const submitLedgerLog = async () => { if (!logAmount || isNaN(logAmount) || num(logAmount) <= 0) { toast.error("Please enter a valid amount."); return; } if (!logReason.trim()) { toast.error("Please enter a reason/remark."); return; } setSubmittingLog(true); try { const payload = { branch_id: globalBranchId, reason: logReason, cash_change: 0, estimate_bank_change: 0, invoice_bank_change: 0 }; const amt = num(logAmount); const keyMap = { "cash": "cash_change", "estimate_bank": "estimate_bank_change", "invoice_bank": "invoice_bank_change" }; if (logType === "expense") payload[keyMap[logSourceVault]] = -amt; else if (logType === "add") payload[keyMap[logSourceVault]] = amt; else if (logType === "exchange") { if (logSourceVault === logTargetVault) { toast.error("Cannot exchange into the same vault."); setSubmittingLog(false); return; } payload[keyMap[logSourceVault]] = -amt; payload[keyMap[logTargetVault]] = amt; } await axios.post(`${API}/settings/ledger/adjust`, payload, { headers: authHeaders }); toast.success("Transaction logged successfully!"); setShowLogForm(false); setLogAmount(""); setLogReason(""); await loadSettings(); await fetchLedgerHistory(); } catch (error) { toast.error("Ledger update failed."); } finally { setSubmittingLog(false); } };
+  const saveBalances = async () => { try { const payload = { branch_id: globalBranchId, cash_balance: num(manualCash), estimate_bank_balance: num(manualEstBank), invoice_bank_balance: num(manualInvBank) }; await axios.put(`${API}/settings/balances`, payload, { headers: authHeaders }); setSettings(prev => { const updatedBranches = (prev.branches || []).map(b => b.id === globalBranchId ? { ...b, ...payload } : b); return { ...prev, branches: updatedBranches }; }); setEditingBalances(false); toast.success(`Ledger balances for ${activeGlobalBranch.name} manually updated!`); } catch { toast.error("Failed to update balances."); } };
 
   const saveBill = async () => {
     if (txType === "sale" && !paymentMethod) { toast.error("Please select a payment method."); return; }
@@ -697,6 +664,11 @@ export default function App() {
         advance_amount: num(advanceAmount), advance_method: advanceMethod, advance_split_cash: num(advanceSplitCash), is_advance_paid: isAdvancePaid,
         balance_method: balanceMethod, balance_split_cash: num(balanceSplitCash), is_balance_paid: isBalancePaid,
         discount: num(discount), exchange: num(exchange), round_off: manualRoundOff === "" ? null : num(manualRoundOff), notes,
+        
+        // POINTS: Send the points data to backend
+        redeemed_points: num(redeemedPoints),
+        earned_points: computed.earnedPoints,
+
         items: computed.items.map((item) => ({ description: item.description, hsn: item.hsn, weight: num(item.weight), quantity: num(item.quantity), mc_override: item.mc_override === "" ? null : num(item.mc_override), rate_override: item.rate_override === "" ? null : num(item.rate_override), amount_override: item.amount_override === "" ? null : num(item.amount_override), rate: item.rate, amount: item.amount, sl_no: item.slNo })),
         totals: { grand_total: computed.grandTotal, subtotal: computed.subtotal }
       };
@@ -707,26 +679,7 @@ export default function App() {
     } catch (error) { toast.error("Failed to save bill."); } finally { setSavingBill(false); }
   };
 
-  const downloadPdf = async (elementId, filename) => {
-    toast.info("Preparing PDF..."); const node = document.getElementById(elementId); if (!node) return;
-    try {
-      const canvas = await html2canvas(node, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#ffffff", windowWidth: 1024,
-        onclone: (clonedDoc) => {
-          const clonedNode = clonedDoc.getElementById(elementId);
-          if (clonedNode) { 
-             clonedNode.style.transform = "none"; 
-             clonedNode.style.width = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.minWidth = "800px"; 
-             clonedNode.style.position = "absolute"; clonedNode.style.top = "0"; clonedNode.style.left = "0"; 
-             clonedNode.style.margin = "0"; clonedNode.style.padding = "20px"; clonedNode.style.boxSizing = "border-box";
-             const images = clonedNode.getElementsByTagName('img'); for (let img of images) img.crossOrigin = "anonymous"; 
-          }
-        }
-      });
-      const imageData = canvas.toDataURL("image/png", 1.0); const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" }); const pageWidth = pdf.internal.pageSize.getWidth(); const pageHeight = (canvas.height * pageWidth) / canvas.width;
-      pdf.addImage(imageData, "PNG", 0, 0, pageWidth, pageHeight); pdf.save(`${filename}.pdf`); toast.success("PDF Downloaded Successfully");
-    } catch (error) { toast.error("Failed to download PDF."); }
-  };
-
+  const downloadPdf = async (elementId, filename) => { toast.info("Preparing PDF..."); const node = document.getElementById(elementId); if (!node) return; try { const canvas = await html2canvas(node, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#ffffff", windowWidth: 1024, onclone: (clonedDoc) => { const clonedNode = clonedDoc.getElementById(elementId); if (clonedNode) { clonedNode.style.transform = "none"; clonedNode.style.width = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.position = "absolute"; clonedNode.style.top = "0"; clonedNode.style.left = "0"; clonedNode.style.margin = "0"; clonedNode.style.padding = "20px"; clonedNode.style.boxSizing = "border-box"; const images = clonedNode.getElementsByTagName('img'); for (let img of images) img.crossOrigin = "anonymous"; } } }); const imageData = canvas.toDataURL("image/png", 1.0); const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" }); const pageWidth = pdf.internal.pageSize.getWidth(); const pageHeight = (canvas.height * pageWidth) / canvas.width; pdf.addImage(imageData, "PNG", 0, 0, pageWidth, pageHeight); pdf.save(`${filename}.pdf`); toast.success("PDF Downloaded Successfully"); } catch (error) { toast.error("Failed to download PDF."); } };
   const shareWhatsApp = () => { const link = `${window.location.origin}/?view=${documentNumber}`; const text = `Hello ${customer.name || "Customer"},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`; let cleanedPhone = customer.phone.replace(/\D/g, ""); if (cleanedPhone.length === 10) cleanedPhone = `91${cleanedPhone}`; window.open(`https://wa.me/${cleanedPhone}?text=${encodeURIComponent(text)}`, "_blank"); };
   const shareEmail = () => { const link = `${window.location.origin}/?view=${documentNumber}`; const subject = `${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber}`; const body = `Dear ${customer.name || "Customer"},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`; window.location.href = `mailto:${customer.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; };
   const goToBillTop = () => { document.getElementById("bill-print-root")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
@@ -738,9 +691,11 @@ export default function App() {
   const publicComputed = useMemo(() => {
     if (!publicBill || !publicSettings) return { items: [], taxable: 0, cgst: 0, sgst: 0, igst: 0, mdr: 0, roundOff: 0, grandTotal: 0, discount: 0, exchange: 0 };
     const baseSilverRate = num(publicSettings.silver_rate_per_gram); const baseMCPerGram = num(publicSettings.making_charge_per_gram); const flatMCBelow5g = num(publicSettings.flat_mc_below_5g);
+    let totalWeight = 0;
 
     const mapped = (publicBill.items || []).map((item, index) => {
-      const weight = num(item.weight); const quantity = Math.max(num(item.quantity || 1), 1);
+      const weight = num(item.weight); totalWeight += weight;
+      const quantity = Math.max(num(item.quantity || 1), 1);
       const silverRate = (item.rate_override !== undefined && item.rate_override !== null && item.rate_override !== "") ? num(item.rate_override) : baseSilverRate;
       let mcAmount = 0;
       if (item.mc_override !== undefined && item.mc_override !== null && item.mc_override !== "") { mcAmount = weight * num(item.mc_override); } 
@@ -761,15 +716,16 @@ export default function App() {
     const gstApplied = publicBill.mode === "invoice" ? cgst + sgst + igst : 0;
     const discount = num(publicBill.discount || publicBill.totals?.discount || 0); const exchange = num(publicBill.exchange || publicBill.totals?.exchange || 0);
     const mdr = publicBill.payment_method === "Card" ? (taxable + gstApplied) * 0.02 : 0;
-    const baseTotal = taxable + gstApplied + mdr - discount - exchange; const autoRound = Math.round(baseTotal) - baseTotal;
+    
+    const earnedPoints = publicBill.earned_points !== undefined ? num(publicBill.earned_points) : Math.floor(totalWeight);
+    const redeemedPoints = num(publicBill.redeemed_points || 0);
+
+    const baseTotal = taxable + gstApplied + mdr - discount - exchange - redeemedPoints; 
+    const autoRound = Math.round(baseTotal) - baseTotal;
     const roundOff = publicBill.round_off !== undefined && publicBill.round_off !== null ? num(publicBill.round_off) : (publicBill.totals?.round_off !== undefined && publicBill.totals?.round_off !== null ? num(publicBill.totals?.round_off) : autoRound);
     const grandTotal = publicBill.totals?.grand_total !== undefined && publicBill.totals?.grand_total !== null ? num(publicBill.totals.grand_total) : (baseTotal + roundOff);
 
-    return { 
-      items: mapped, taxable: publicBill.totals?.taxable_amount || publicBill.totals?.subtotal || taxable, 
-      cgst: publicBill.totals?.cgst ?? cgst, sgst: publicBill.totals?.sgst ?? sgst, igst: publicBill.totals?.igst ?? igst, 
-      mdr: publicBill.totals?.mdr ?? mdr, roundOff, grandTotal, discount, exchange 
-    };
+    return { items: mapped, taxable: publicBill.totals?.taxable_amount || publicBill.totals?.subtotal || taxable, cgst: publicBill.totals?.cgst ?? cgst, sgst: publicBill.totals?.sgst ?? sgst, igst: publicBill.totals?.igst ?? igst, mdr: publicBill.totals?.mdr ?? mdr, roundOff, grandTotal, discount, exchange, earnedPoints, redeemedPoints };
   }, [publicBill, publicSettings]);
 
   const getUpiAmount = () => {
@@ -778,6 +734,8 @@ export default function App() {
       if (isAdvancePaid && !isBalancePaid && (balanceMethod === "UPI" || balanceMethod === "Split")) { const bal = Math.max(0, computed.grandTotal - num(advanceAmount)); return balanceMethod === "Split" ? Math.max(0, bal - num(balanceSplitCash)) : bal; }
       return 0;
   };
+// ----- END OF PART 1 -----
+// ----- START OF PART 2 -----
   const upiAmountToPay = getUpiAmount(); const showDashboardUpi = upiAmountToPay > 0;
   const upiId = mode === "invoice" ? activeBillBranch.invoice_upi_id : activeBillBranch.estimate_upi_id;
   const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
@@ -788,11 +746,7 @@ export default function App() {
     if (publicBill === "NOT_FOUND" || !publicBill) return <div className="loading-screen">Bill not found or has been deleted.</div>;
 
     const isSale = publicBill.tx_type === "sale" || !publicBill.tx_type;
-    
-    const isPaid = isSale 
-      ? (publicBill.is_payment_done === true || publicBill.is_payment_done === 1 || String(publicBill.is_payment_done).toLowerCase() === "true") 
-      : (publicBill.is_balance_paid === true || publicBill.is_balance_paid === 1 || String(publicBill.is_balance_paid).toLowerCase() === "true");
-
+    const isPaid = isSale ? (publicBill.is_payment_done === true || publicBill.is_payment_done === 1 || String(publicBill.is_payment_done).toLowerCase() === "true") : (publicBill.is_balance_paid === true || publicBill.is_balance_paid === 1 || String(publicBill.is_balance_paid).toLowerCase() === "true");
     const pbBranch = (publicSettings?.branches || []).find(b => b.id === publicBill.branch_id) || (publicSettings?.branches || [])[0] || defaultSettings.branches[0];
 
     let publicUpiAmountToPay = publicComputed.grandTotal;
@@ -887,6 +841,7 @@ export default function App() {
               ) : (
                 <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(publicComputed.discount)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(publicComputed.exchange)}</strong></div></>
               )}
+              {publicComputed.redeemedPoints > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED</span><strong style={{color:"#16a34a"}}>- ₹{money(publicComputed.redeemedPoints)}</strong></div>}
               <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(publicComputed.mdr)}</strong></div>
               <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(publicComputed.roundOff)}</strong></div>
               <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(publicComputed.grandTotal)}</strong></div>
@@ -906,6 +861,12 @@ export default function App() {
                 </div>
               )}
             </div>
+
+            {publicComputed.earnedPoints > 0 && (
+              <div style={{ textAlign: "center", marginTop: "15px", padding: "10px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px dashed #22c55e", color: "#166534", fontWeight: "bold", fontSize: "0.9rem" }}>
+                🎉 You earned {publicComputed.earnedPoints} Loyalty Points on this bill!
+              </div>
+            )}
 
             <ConnectWithUs phoneLink={(publicSettings?.phone_numbers || [])[0]} />
 
@@ -1042,11 +1003,17 @@ export default function App() {
                     ) : (
                       <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(b.totals?.discount || 0)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(b.totals?.exchange || 0)}</strong></div></>
                     )}
+                    {b.redeemed_points > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED</span><strong style={{color:"#16a34a"}}>- ₹{money(b.redeemed_points)}</strong></div>}
                     <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(b.totals?.grand_total || 0)}</strong></div>
                     {b.tx_type && b.tx_type !== "sale" && (
                       <><div className="totals-row" style={{ marginTop: "10px", color: "#16a34a" }}><span>ADVANCE RECEIVED</span><strong>₹{money(b.advance_amount)}</strong></div><div className="totals-row" style={{ color: "#dc2626" }}><span>BALANCE DUE</span><strong>₹{money(Math.max(0, num(b.totals?.grand_total || 0) - num(b.advance_amount)))}</strong></div></>
                     )}
                   </div>
+                  {b.earned_points > 0 && (
+                    <div style={{ textAlign: "center", marginTop: "15px", padding: "10px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px dashed #22c55e", color: "#166534", fontWeight: "bold", fontSize: "0.9rem" }}>
+                      🎉 You earned {b.earned_points} Loyalty Points on this bill!
+                    </div>
+                  )}
                 </div>
                 <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
              </section>
@@ -1054,7 +1021,6 @@ export default function App() {
         })}
       </div>
 
-      {/* TOP HEADER */}
       <header className="top-bar no-print" style={{ zIndex: 50, position: "relative", flexShrink: 0, minHeight: "65px", height: "auto", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 20px", flexWrap: "wrap", gap: "10px" }}>
         <div className="brand-block" style={{ display: "flex", alignItems: "center", gap: "15px", flexWrap: "nowrap" }}>
           <div><h1 className="brand-title" style={{ margin: 0, fontSize: "1.2rem", color: "white" }}>{settings.shop_name}</h1></div>
@@ -1083,7 +1049,6 @@ export default function App() {
 
       <main className="main-layout" style={isPrinting ? { height: "auto", overflow: "visible", display: "block" } : { flex: 1, display: "flex", flexDirection: isMobileSplit ? "column" : "row", overflowY: isMobileSplit ? "auto" : "hidden", overflowX: "hidden", backgroundColor: "#f1f5f9", minHeight: 0, paddingBottom: isMobileSplit ? "40px" : "0" }}>
         
-        {/* LEFT PANEL: Bill Sheet */}
         <section style={isPrinting ? { padding: 0, margin: 0, overflow: "visible" } : { flex: isMobileSplit ? "none" : "3", overflow: isMobileSplit ? "visible" : "auto", padding: "20px", height: isMobileSplit ? "max-content" : "100%" }}>
           <div id="bill-print-root" className="bill-sheet" style={{ "--print-scale-factor": (printScale / 100).toFixed(3), position: 'relative', zIndex: 1, margin: "0 auto" }}>
             {(txType === "sale" ? isPaymentDone : isBalancePaid) && <div className="watermark-done">FULLY PAID</div>}
@@ -1139,6 +1104,7 @@ export default function App() {
                 ) : (
                   <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(discount)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(exchange)}</strong></div></>
                 )}
+                {computed.redeemedPoints > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED</span><strong style={{color:"#16a34a"}}>- ₹{money(computed.redeemedPoints)}</strong></div>}
                 <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(computed.mdr)}</strong></div>
                 <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(computed.roundOff)}</strong></div>
                 <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(computed.grandTotal)}</strong></div>
@@ -1159,6 +1125,12 @@ export default function App() {
                 )}
               </div>
 
+              {computed.earnedPoints > 0 && (
+                <div style={{ textAlign: "center", marginTop: "15px", padding: "10px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px dashed #22c55e", color: "#166534", fontWeight: "bold", fontSize: "0.9rem" }}>
+                  🎉 You earned {computed.earnedPoints} Loyalty Points on this bill!
+                </div>
+              )}
+
               {mode === "invoice" ? (
                 <div className="declaration">
                   <p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p>
@@ -1175,7 +1147,6 @@ export default function App() {
           </div>
         </section>
 
-        {/* RIGHT PANEL: Controls Menu */}
         <aside className="controls no-print" style={{ flex: isMobileSplit ? "none" : "2", overflowY: isMobileSplit ? "visible" : "auto", overflowX: "hidden", padding: "20px", backgroundColor: "white", borderLeft: isMobileSplit ? "none" : "1px solid #cbd5e1", borderTop: isMobileSplit ? "1px solid #cbd5e1" : "none", height: isMobileSplit ? "max-content" : "100%" }}>
           
           <div className="control-card">
@@ -1194,6 +1165,9 @@ export default function App() {
               <Input value={documentNumber} onChange={(e) => { setDocumentNumber(e.target.value); markDirty(); }} placeholder="e.g. INV-0212" disabled={!!currentBillId} style={{ fontWeight: "bold", color: "var(--brand)", backgroundColor: currentBillId ? "#f1f5f9" : "white" }} />
             </div>
 
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginBottom: "5px", color: "#16a34a", fontWeight: "bold" }}>
+               <span>{customer.name ? `Loyalty Points: ${customer.points}` : ""}</span>
+            </div>
             <Input id="customerNameInput" value={customer.name} onChange={(e) => { setCustomer((prev) => ({ ...prev, name: e.target.value })); markDirty(); }} placeholder="Customer name" />
             <Input value={customer.phone} onChange={(e) => { setCustomer((prev) => ({ ...prev, phone: e.target.value })); markDirty(); }} placeholder="Phone" />
             <Input value={customer.address} onChange={(e) => { setCustomer((prev) => ({ ...prev, address: e.target.value })); markDirty(); }} placeholder="Address" />
@@ -1203,7 +1177,7 @@ export default function App() {
             {(suggestions || []).length > 0 && (
               <div className="suggestions">
                 {(suggestions || []).map((entry) => (
-                  <button key={entry.id} type="button" className="suggestion-item" onClick={() => { setCustomer({ name: entry.name, phone: entry.phone, address: entry.address, email: entry.email }); setSuggestions([]); markDirty(); }}>
+                  <button key={entry.id} type="button" className="suggestion-item" onClick={() => { setCustomer({ name: entry.name, phone: entry.phone, address: entry.address, email: entry.email, points: entry.points || 0 }); setSuggestions([]); markDirty(); }}>
                     {entry.name} · {entry.phone}
                   </button>
                 ))}
@@ -1230,6 +1204,7 @@ export default function App() {
 
           <div className="control-card">
             <h3>Adjustments</h3>
+            <Input id="redeemedPointsInput" type="number" value={redeemedPoints} onChange={(e) => { setRedeemedPoints(e.target.value); markDirty(); }} placeholder={`Redeem Points (Max: ${customer.points || 0})`} />
             <Input id="discountInput" value={discount} onChange={(e) => { setDiscount(e.target.value); markDirty(); }} placeholder="Discount" />
             <Input value={exchange} onChange={(e) => { setExchange(e.target.value); markDirty(); }} placeholder="Exchange" />
             <Input value={manualRoundOff} onChange={(e) => { setManualRoundOff(e.target.value); markDirty(); }} placeholder="Manual round off (optional)" />
@@ -1660,3 +1635,4 @@ export default function App() {
     </div>
   );
 }
+// ----- END OF PART 2 -----
