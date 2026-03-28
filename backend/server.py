@@ -182,16 +182,25 @@ async def save_bill(payload: dict, _=Depends(require_auth)):
 
     c_name = payload.get("customer_name", "").strip()
     c_phone = payload.get("customer_phone", "").strip()
+    
+    # LOYALTY POINTS LOGIC (Earned - Redeemed)
+    earned_pts = safe_float(payload.get("earned_points", 0))
+    redeemed_pts = safe_float(payload.get("redeemed_points", 0))
+    points_diff = earned_pts - redeemed_pts
+
     if c_name or c_phone:
         query = {"phone": c_phone} if c_phone else {"name": c_name}
         await customers_collection.update_one(
             query,
-            {"$set": {
-                "name": c_name, "phone": c_phone,
-                "address": payload.get("customer_address", ""),
-                "email": payload.get("customer_email", ""),
-                "updated_at": now_iso()
-            }},
+            {
+                "$set": {
+                    "name": c_name, "phone": c_phone,
+                    "address": payload.get("customer_address", ""),
+                    "email": payload.get("customer_email", ""),
+                    "updated_at": now_iso()
+                },
+                "$inc": {"points": points_diff} # Auto-add/subtract points
+            },
             upsert=True
         )
 
@@ -212,18 +221,29 @@ async def update_bill_by_id(bill_id: str, payload: dict, _=Depends(require_auth)
         new_val = int(match.group())
         await counters_collection.update_one({"mode": payload.get("mode"), "branch_id": payload.get("branch_id")}, {"$set": {"value": new_val}}, upsert=True)
 
+    # LOYALTY POINTS LOGIC (Calculate difference if they edit the bill)
+    old_earned = safe_float(existing.get("earned_points", 0))
+    old_redeemed = safe_float(existing.get("redeemed_points", 0))
+    new_earned = safe_float(payload.get("earned_points", 0))
+    new_redeemed = safe_float(payload.get("redeemed_points", 0))
+    points_diff = (new_earned - old_earned) - (new_redeemed - old_redeemed)
+
     c_name = payload.get("customer_name", "").strip()
     c_phone = payload.get("customer_phone", "").strip()
+    
     if c_name or c_phone:
         query = {"phone": c_phone} if c_phone else {"name": c_name}
         await customers_collection.update_one(
             query,
-            {"$set": {
-                "name": c_name, "phone": c_phone,
-                "address": payload.get("customer_address", ""),
-                "email": payload.get("customer_email", ""),
-                "updated_at": now_iso()
-            }},
+            {
+                "$set": {
+                    "name": c_name, "phone": c_phone,
+                    "address": payload.get("customer_address", ""),
+                    "email": payload.get("customer_email", ""),
+                    "updated_at": now_iso()
+                },
+                "$inc": {"points": points_diff}
+            },
             upsert=True
         )
 
@@ -262,6 +282,18 @@ async def delete_bill(document_number: str, _=Depends(require_auth)):
     if bill:
         c, eb, ib = get_bill_ledger_values(bill)
         await apply_ledger_diff(bill.get("branch_id"), -c, -eb, -ib, f"DELETE/REFUND: {document_number}")
+        
+        # LOYALTY POINTS LOGIC (Refund points if bill is deleted)
+        earned_pts = safe_float(bill.get("earned_points", 0))
+        redeemed_pts = safe_float(bill.get("redeemed_points", 0))
+        points_revert = redeemed_pts - earned_pts 
+
+        c_name = bill.get("customer_name", "").strip()
+        c_phone = bill.get("customer_phone", "").strip()
+        if c_name or c_phone:
+            query = {"phone": c_phone} if c_phone else {"name": c_name}
+            await customers_collection.update_one(query, {"$inc": {"points": points_revert}})
+
     await bills_collection.delete_one({"document_number": document_number})
     return {"message": "Deleted"}
 
