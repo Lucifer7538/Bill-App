@@ -24,6 +24,7 @@ const defaultSettings = {
   phone_color: "#475569", phone_size: 13, phone_font: "sans-serif", phone_align: "center",
   email_color: "#475569", email_size: 13, email_font: "sans-serif", email_align: "center",
   silver_rate_per_gram: 240, making_charge_per_gram: 15, flat_mc_below_5g: 150, default_hsn: "7113",
+  loyalty_points_per_gram: 1, loyalty_point_value_rs: 1, // NEW: Loyalty configuration
   formula_note: "Line total = Weight x (Silver rate per gram + Making charge per gram)", logo_data_url: "", about_qr_data_url: STATIC_ABOUT_QR_URL, custom_fonts: [],
   shortcuts: [
     { id: "save_bill", action: "Save Bill", keys: "alt + s", isSystem: true },
@@ -46,7 +47,6 @@ const defaultSettings = {
   ]
 };
 
-// FORMAT DATE AS DD-MM-YYYY
 const today = () => {
   const d = new Date();
   const day = String(d.getDate()).padStart(2, "0");
@@ -54,7 +54,6 @@ const today = () => {
   return `${day}-${month}-${d.getFullYear()}`;
 };
 
-// SAFE DATE PARSER FOR DD-MM-YYYY
 const parseBillDate = (dStr) => {
   if (!dStr) return new Date();
   const p = dStr.split("-");
@@ -75,8 +74,9 @@ const FontSelectOptions = ({ customFonts }) => (
   <><option value="sans-serif">Sans-serif</option><option value="Arial, Helvetica, sans-serif">Arial</option><option value="'Times New Roman', Times, serif">Times New Roman</option><option value="'Courier New', Courier, monospace">Courier New</option><option value="Georgia, serif">Georgia</option><option value="'Trebuchet MS', sans-serif">Trebuchet MS</option><option value="'Brush Script MT', cursive">Brush Script MT (Cursive)</option>{customFonts?.map(f => (<option key={f.name} value={`'${f.name}'`}>{f.name} (Custom)</option>))}</>
 );
 
+// UPDATE: Added no-print and html2canvas ignore so it disappears on PDF/Print
 const ConnectWithUs = ({ phoneLink, instaLink = "https://www.instagram.com/jalaram_jewellers_?igsh=MWZnNmlzMTYyOWNzeA%3D%3D&utm_source=qr" }) => (
-  <div style={{ marginTop: "25px", borderTop: "1px dashed #e2e8f0", paddingTop: "20px" }}>
+  <div className="no-print" data-html2canvas-ignore="true" style={{ marginTop: "25px", borderTop: "1px dashed #e2e8f0", paddingTop: "20px" }}>
     <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Connect With Us:</p>
     <div style={{ display: 'flex', gap: '10px' }}>
       <a href="https://chat.whatsapp.com/FHoih8XtTXGLtPvHWx7MO6?mode=gi_t" target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "12px", backgroundColor: "#25D366", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}><span style={{ fontSize: "1.2rem" }}>💬</span> WhatsApp</a>
@@ -399,8 +399,6 @@ export default function App() {
   const filteredRecentBills = useMemo(() => {
     return (recentBillsList || []).filter(bill => {
       if (recentModeFilter !== "ALL" && bill.mode !== recentModeFilter) return false;
-      
-      // FIX: Proper logic to read DD-MM-YYYY formats in filters
       if (recentDateFilter === "THIS_MONTH") {
         const billDateObj = parseBillDate(bill.date);
         const now = new Date();
@@ -557,6 +555,10 @@ export default function App() {
     const baseSilverRate = num(settings.silver_rate_per_gram);
     const baseMCPerGram = num(settings.making_charge_per_gram);
     const flatMCBelow5g = num(settings.flat_mc_below_5g);
+    
+    // NEW LOYALTY SETTINGS
+    const ptPerGram = num(settings.loyalty_points_per_gram !== undefined ? settings.loyalty_points_per_gram : 1);
+    const rsPerPt = num(settings.loyalty_point_value_rs !== undefined ? settings.loyalty_point_value_rs : 1);
 
     let totalWeight = 0;
 
@@ -588,15 +590,16 @@ export default function App() {
     const gstApplied = mode === "invoice" ? cgst + sgst + igst : 0;
     const mdr = paymentMethod === "Card" ? (taxable + gstApplied) * 0.02 : 0;
     
-    const earnedPoints = Math.floor(totalWeight);
+    const earnedPoints = Math.floor(totalWeight * ptPerGram);
     const appliedRedeemedPoints = num(redeemedPoints);
+    const appliedRedeemedValue = appliedRedeemedPoints * rsPerPt;
 
-    const baseTotal = taxable + gstApplied + mdr - num(discount) - num(exchange) - appliedRedeemedPoints;
+    const baseTotal = taxable + gstApplied + mdr - num(discount) - num(exchange) - appliedRedeemedValue;
     const autoRound = Math.round(baseTotal) - baseTotal;
     const roundOff = manualRoundOff === "" ? autoRound : num(manualRoundOff);
     const grandTotal = baseTotal + roundOff;
     
-    return { items: mapped, baseSilverRate, subtotal, taxable, cgst, sgst, igst, mdr, roundOff, grandTotal, totalWeight, earnedPoints, redeemedPoints: appliedRedeemedPoints };
+    return { items: mapped, baseSilverRate, subtotal, taxable, cgst, sgst, igst, mdr, roundOff, grandTotal, totalWeight, earnedPoints, redeemedPoints: appliedRedeemedPoints, redeemedValue: appliedRedeemedValue };
   }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff, redeemedPoints]);
 
   const updateItem = (id, key, value) => { markDirty(); setItems((prev) => prev.map((item) => (item.id === id ? { ...item, [key]: value } : item))); };
@@ -718,6 +721,10 @@ export default function App() {
   const publicComputed = useMemo(() => {
     if (!publicBill || !publicSettings) return { items: [], taxable: 0, cgst: 0, sgst: 0, igst: 0, mdr: 0, roundOff: 0, grandTotal: 0, discount: 0, exchange: 0 };
     const baseSilverRate = num(publicSettings.silver_rate_per_gram); const baseMCPerGram = num(publicSettings.making_charge_per_gram); const flatMCBelow5g = num(publicSettings.flat_mc_below_5g);
+    
+    const ptPerGram = num(publicSettings.loyalty_points_per_gram !== undefined ? publicSettings.loyalty_points_per_gram : 1);
+    const rsPerPt = num(publicSettings.loyalty_point_value_rs !== undefined ? publicSettings.loyalty_point_value_rs : 1);
+
     let totalWeight = 0;
 
     const mapped = (publicBill.items || []).map((item, index) => {
@@ -744,15 +751,16 @@ export default function App() {
     const discount = num(publicBill.discount || publicBill.totals?.discount || 0); const exchange = num(publicBill.exchange || publicBill.totals?.exchange || 0);
     const mdr = publicBill.payment_method === "Card" ? (taxable + gstApplied) * 0.02 : 0;
     
-    const earnedPoints = publicBill.earned_points !== undefined ? num(publicBill.earned_points) : Math.floor(totalWeight);
+    const earnedPoints = publicBill.earned_points !== undefined ? num(publicBill.earned_points) : Math.floor(totalWeight * ptPerGram);
     const redeemedPoints = num(publicBill.redeemed_points || 0);
+    const redeemedValue = redeemedPoints * rsPerPt;
 
-    const baseTotal = taxable + gstApplied + mdr - discount - exchange - redeemedPoints; 
+    const baseTotal = taxable + gstApplied + mdr - discount - exchange - redeemedValue; 
     const autoRound = Math.round(baseTotal) - baseTotal;
     const roundOff = publicBill.round_off !== undefined && publicBill.round_off !== null ? num(publicBill.round_off) : (publicBill.totals?.round_off !== undefined && publicBill.totals?.round_off !== null ? num(publicBill.totals?.round_off) : autoRound);
     const grandTotal = publicBill.totals?.grand_total !== undefined && publicBill.totals?.grand_total !== null ? num(publicBill.totals.grand_total) : (baseTotal + roundOff);
 
-    return { items: mapped, taxable: publicBill.totals?.taxable_amount || publicBill.totals?.subtotal || taxable, cgst: publicBill.totals?.cgst ?? cgst, sgst: publicBill.totals?.sgst ?? sgst, igst: publicBill.totals?.igst ?? igst, mdr: publicBill.totals?.mdr ?? mdr, roundOff, grandTotal, discount, exchange, earnedPoints, redeemedPoints };
+    return { items: mapped, taxable: publicBill.totals?.taxable_amount || publicBill.totals?.subtotal || taxable, cgst: publicBill.totals?.cgst ?? cgst, sgst: publicBill.totals?.sgst ?? sgst, igst: publicBill.totals?.igst ?? igst, mdr: publicBill.totals?.mdr ?? mdr, roundOff, grandTotal, discount, exchange, earnedPoints, redeemedPoints, redeemedValue };
   }, [publicBill, publicSettings]);
 
   const getUpiAmount = () => {
@@ -866,7 +874,7 @@ export default function App() {
               ) : (
                 <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(publicComputed.discount)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(publicComputed.exchange)}</strong></div></>
               )}
-              {publicComputed.redeemedPoints > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED</span><strong style={{color:"#16a34a"}}>- ₹{money(publicComputed.redeemedPoints)}</strong></div>}
+              {publicComputed.redeemedPoints > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED ({publicComputed.redeemedPoints} pts)</span><strong style={{color:"#16a34a"}}>- ₹{money(publicComputed.redeemedValue)}</strong></div>}
               <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(publicComputed.mdr)}</strong></div>
               <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(publicComputed.roundOff)}</strong></div>
               <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(publicComputed.grandTotal)}</strong></div>
@@ -879,7 +887,7 @@ export default function App() {
               )}
 
               {!isPaid && publicUpiAmountToPay > 0 && (
-                <div className="payment-qr-box" style={{ textAlign: "center", marginTop: "20px", padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px dashed #cbd5e1" }}>
+                <div className="payment-qr-box no-print" data-html2canvas-ignore="true" style={{ textAlign: "center", marginTop: "20px", padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px dashed #cbd5e1" }}>
                   <p className="scan-title" style={{ fontWeight: "bold", margin: "0 0 10px 0", color: "#0f172a", fontSize: "1.1rem" }}>Scan Here For Payment (₹{money(publicUpiAmountToPay)})</p>
                   <img src={publicDynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" style={{ width: "200px", height: "200px", margin: "0 auto", display: "block" }} crossOrigin="anonymous" />
                   <p className="upi-id" style={{ fontSize: "0.9rem", color: "#64748b", margin: "10px 0 0 0", fontWeight: "bold" }}>UPI: {publicUpiId}</p>
@@ -898,14 +906,14 @@ export default function App() {
             {publicBill.mode === "invoice" ? (
               <div className="declaration">
                 <p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p>
-                <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                <div className="no-print" data-html2canvas-ignore="true" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
                   <div onClick={() => { if(pbBranch.map_url && pbBranch.map_url !== "#") window.open(pbBranch.map_url, "_blank"); else toast.info("Feedback link not set for this branch yet!"); }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
                 </div>
               </div>
             ) : (
               <div className="policies">
                 <p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul>
-                <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                <div className="no-print" data-html2canvas-ignore="true" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
                   <div onClick={() => { if(pbBranch.map_url && pbBranch.map_url !== "#") window.open(pbBranch.map_url, "_blank"); else toast.info("Feedback link not set for this branch yet!"); }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
                 </div>
               </div>
@@ -972,6 +980,8 @@ export default function App() {
       <div style={{ position: "absolute", zIndex: -9999, opacity: 0, pointerEvents: "none", top: 0, left: 0, height: 0, overflow: "hidden" }}>
         {(filteredRecentBills || []).map(b => {
            const billBranch = (settings.branches || []).find(br => br.id === b.branch_id) || (settings.branches || [])[0] || defaultSettings.branches[0];
+           const rsPerPt = num(settings.loyalty_point_value_rs !== undefined ? settings.loyalty_point_value_rs : 1);
+           
            const printedItems = (b.items || []).map((item, index) => {
              const rate = (item.rate !== undefined && item.rate !== null) ? num(item.rate) : (item.rate_override ? num(item.rate_override) : 0);
              const amount = (item.amount !== undefined && item.amount !== null) ? num(item.amount) : (item.amount_override ? num(item.amount_override) : 0);
@@ -1028,7 +1038,7 @@ export default function App() {
                     ) : (
                       <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(b.totals?.discount || 0)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(b.totals?.exchange || 0)}</strong></div></>
                     )}
-                    {b.redeemed_points > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED</span><strong style={{color:"#16a34a"}}>- ₹{money(b.redeemed_points)}</strong></div>}
+                    {num(b.redeemed_points) > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED ({b.redeemed_points} pts)</span><strong style={{color:"#16a34a"}}>- ₹{money(num(b.redeemed_points) * rsPerPt)}</strong></div>}
                     <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(b.totals?.grand_total || 0)}</strong></div>
                     {b.tx_type && b.tx_type !== "sale" && (
                       <><div className="totals-row" style={{ marginTop: "10px", color: "#16a34a" }}><span>ADVANCE RECEIVED</span><strong>₹{money(b.advance_amount)}</strong></div><div className="totals-row" style={{ color: "#dc2626" }}><span>BALANCE DUE</span><strong>₹{money(Math.max(0, num(b.totals?.grand_total || 0) - num(b.advance_amount)))}</strong></div></>
@@ -1129,7 +1139,7 @@ export default function App() {
                 ) : (
                   <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(discount)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(exchange)}</strong></div></>
                 )}
-                {computed.redeemedPoints > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED</span><strong style={{color:"#16a34a"}}>- ₹{money(computed.redeemedPoints)}</strong></div>}
+                {computed.redeemedPoints > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED ({computed.redeemedPoints} pts)</span><strong style={{color:"#16a34a"}}>- ₹{money(computed.redeemedValue)}</strong></div>}
                 <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(computed.mdr)}</strong></div>
                 <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(computed.roundOff)}</strong></div>
                 <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(computed.grandTotal)}</strong></div>
@@ -1142,7 +1152,7 @@ export default function App() {
                 )}
 
                 {showDashboardUpi && (
-                  <div className="payment-qr-box">
+                  <div className="payment-qr-box no-print" data-html2canvas-ignore="true">
                     <p className="scan-title">Scan Here For Payment (₹{money(upiAmountToPay)})</p>
                     <img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" crossOrigin="anonymous" />
                     <p className="upi-id">UPI: {upiId}</p>
@@ -1159,12 +1169,16 @@ export default function App() {
               {mode === "invoice" ? (
                 <div className="declaration">
                   <p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p>
-                  <div className="about-qr"><p className="section-title">About Us QR</p>{(settings.about_qr_data_url || STATIC_ABOUT_QR_URL) && <img src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="About us QR" className="about-qr-image" crossOrigin="anonymous" />}</div>
+                  <div className="no-print" data-html2canvas-ignore="true" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                    <div onClick={() => { if(activeBillBranch.map_url && activeBillBranch.map_url !== "#") window.open(activeBillBranch.map_url, "_blank"); else toast.info("Feedback link not set for this branch yet!"); }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
+                  </div>
                 </div>
               ) : (
                 <div className="policies">
                   <p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul>
-                  <div className="about-qr"><p className="section-title">About Us QR</p>{(settings.about_qr_data_url || STATIC_ABOUT_QR_URL) && <img src={settings.about_qr_data_url || STATIC_ABOUT_QR_URL} alt="About us QR" className="about-qr-image" crossOrigin="anonymous" />}</div>
+                  <div className="no-print" data-html2canvas-ignore="true" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                    <div onClick={() => { if(activeBillBranch.map_url && activeBillBranch.map_url !== "#") window.open(activeBillBranch.map_url, "_blank"); else toast.info("Feedback link not set for this branch yet!"); }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
+                  </div>
                 </div>
               )}
             </div>
@@ -1572,6 +1586,16 @@ export default function App() {
                   <Input value={settings.default_hsn} onChange={(e) => setSettings({ ...settings, default_hsn: e.target.value })} />
                 </div>
 
+                {/* NEW: Loyalty Points System Settings */}
+                <div style={{ padding: "15px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px solid #bbf7d0" }}>
+                  <h4 style={{ margin: "0 0 15px 0", color: "#16a34a" }}>Loyalty Points System</h4>
+                  <label className="select-label">Points Earned Per 1 Gram</label>
+                  <Input type="number" value={settings.loyalty_points_per_gram !== undefined ? settings.loyalty_points_per_gram : 1} onChange={(e) => setSettings({ ...settings, loyalty_points_per_gram: e.target.value })} style={{ marginBottom: "10px" }} />
+                  
+                  <label className="select-label">Rupees (₹) Discount Per 1 Point</label>
+                  <Input type="number" value={settings.loyalty_point_value_rs !== undefined ? settings.loyalty_point_value_rs : 1} onChange={(e) => setSettings({ ...settings, loyalty_point_value_rs: e.target.value })} style={{ marginBottom: "10px" }} />
+                </div>
+
                 <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
                   <h4 style={{ margin: "0 0 15px 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     Branch Management
@@ -1590,7 +1614,8 @@ export default function App() {
                       <label className="select-label">Branch Address</label>
                       <Input value={branch.address} onChange={(e) => updateBranch(index, 'address', e.target.value)} style={{ marginBottom: "10px" }} />
                       
-                      <label className="select-label">Google Maps Feedback URL</label>
+                      {/* UPDATE: Google Maps Link label renamed */}
+                      <label className="select-label">Google Maps Location URL</label>
                       <Input value={branch.map_url} onChange={(e) => updateBranch(index, 'map_url', e.target.value)} style={{ marginBottom: "10px" }} />
                       
                       <label className="select-label">GSTIN Number (Optional)</label>
