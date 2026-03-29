@@ -35,6 +35,7 @@ const defaultSettings = {
     { id: "focus_item", action: "Jump to Item Description", keys: "alt + i", isSystem: true },
     { id: "focus_discount", action: "Jump to Discount", keys: "alt + d", isSystem: true },
     { id: "focus_redeem", action: "Jump to Redeem Points", keys: "alt + v", isSystem: true },
+    { id: "focus_credit", action: "Jump to Use Credit", keys: "alt + u", isSystem: true },
     { id: "focus_payment", action: "Jump to Payment Method", keys: "alt + p", isSystem: true },
     { id: "open_ledger", action: "Open Ledger/Vaults", keys: "alt + l", isSystem: true },
     { id: "open_recent", action: "Open Recent Bills", keys: "alt + r", isSystem: true },
@@ -186,12 +187,18 @@ export default function App() {
   const [isNumberLoading, setIsNumberLoading] = useState(false);
   const [billDate, setBillDate] = useState(today());
 
-  const [customer, setCustomer] = useState({ name: "", phone: "", address: "", email: "", points: 0 });
+  // ADDED STORE CREDIT & BONUS POINTS
+  const [customer, setCustomer] = useState({ name: "", phone: "", address: "", email: "", points: 0, credit: 0 });
+  const [bonusPoints, setBonusPoints] = useState("");
+  
   const [suggestions, setSuggestions] = useState([]);
   const [items, setItems] = useState([createItem()]);
+  
   const [discount, setDiscount] = useState("0");
   const [exchange, setExchange] = useState("0");
   const [redeemedPoints, setRedeemedPoints] = useState("");
+  const [appliedCredit, setAppliedCredit] = useState("");
+  const [savedCredit, setSavedCredit] = useState("");
   const [manualRoundOff, setManualRoundOff] = useState("");
   const [notes, setNotes] = useState("");
 
@@ -358,6 +365,7 @@ export default function App() {
       }
       if (checkKey('focus_discount')) { e.preventDefault(); e.stopPropagation(); document.getElementById('discountInput')?.focus(); return; }
       if (checkKey('focus_redeem')) { e.preventDefault(); e.stopPropagation(); document.getElementById('redeemedPointsInput')?.focus(); return; }
+      if (checkKey('focus_credit')) { e.preventDefault(); e.stopPropagation(); document.getElementById('appliedCreditInput')?.focus(); return; }
       if (checkKey('download_pdf')) { e.preventDefault(); e.stopPropagation(); downloadPdf("bill-print-root", documentNumber || mode); return; }
       if (checkKey('print_bill')) { e.preventDefault(); e.stopPropagation(); window.print(); return; }
     };
@@ -551,6 +559,7 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [customer.phone, customer.name, token, isPublicView, authHeaders]);
 
+  // CALCULATIONS UPDATE: Handles Applied/Saved Credits and Bonus Points
   const computed = useMemo(() => {
     const baseSilverRate = num(settings.silver_rate_per_gram);
     const baseMCPerGram = num(settings.making_charge_per_gram);
@@ -589,25 +598,28 @@ export default function App() {
     const gstApplied = mode === "invoice" ? cgst + sgst + igst : 0;
     const mdr = paymentMethod === "Card" ? (taxable + gstApplied) * 0.02 : 0;
     
-    const earnedPoints = Math.floor(totalWeight * ptPerGram);
+    const bonusPointsVal = num(bonusPoints);
+    const earnedPoints = Math.floor(totalWeight * ptPerGram) + bonusPointsVal;
     const appliedRedeemedPoints = num(redeemedPoints);
     const appliedRedeemedValue = appliedRedeemedPoints * rsPerPt;
+    const appliedCreditVal = num(appliedCredit);
+    const savedCreditVal = num(savedCredit);
 
-    const baseTotal = taxable + gstApplied + mdr - num(discount) - num(exchange) - appliedRedeemedValue;
+    const baseTotal = taxable + gstApplied + mdr - num(discount) - num(exchange) - appliedRedeemedValue - appliedCreditVal + savedCreditVal;
     const autoRound = Math.round(baseTotal) - baseTotal;
     const roundOff = manualRoundOff === "" ? autoRound : num(manualRoundOff);
     const grandTotal = baseTotal + roundOff;
     
-    return { items: mapped, baseSilverRate, subtotal, taxable, cgst, sgst, igst, mdr, roundOff, grandTotal, totalWeight, earnedPoints, redeemedPoints: appliedRedeemedPoints, redeemedValue: appliedRedeemedValue };
-  }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff, redeemedPoints]);
+    return { items: mapped, baseSilverRate, subtotal, taxable, cgst, sgst, igst, mdr, roundOff, grandTotal, totalWeight, earnedPoints, redeemedPoints: appliedRedeemedPoints, redeemedValue: appliedRedeemedValue, appliedCredit: appliedCreditVal, savedCredit: savedCreditVal, bonusPoints: bonusPointsVal };
+  }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff, redeemedPoints, appliedCredit, savedCredit, bonusPoints]);
 
   const updateItem = (id, key, value) => { markDirty(); setItems((prev) => prev.map((item) => (item.id === id ? { ...item, [key]: value } : item))); };
 
   const checkIsBlank = () => { return !customer.name.trim() && !customer.phone.trim() && !customer.address.trim() && !(items || []).some(i => i.description.trim() || i.weight.trim() || i.amount_override.trim()) && (!discount || discount === "0") && (!exchange || exchange === "0") && !paymentMethod && !advanceMethod && !advanceAmount && !splitCash; };
 
   const clearBill = async (nextMode = mode, nextBranch = billBranchId) => {
-    setCurrentBillId(null); setEditingDocNumber(null); setItems([createItem(settings.default_hsn)]); setCustomer({ name: "", phone: "", address: "", email: "", points: 0 });
-    setSuggestions([]); setDiscount("0"); setExchange("0"); setRedeemedPoints(""); setManualRoundOff("");
+    setCurrentBillId(null); setEditingDocNumber(null); setItems([createItem(settings.default_hsn)]); setCustomer({ name: "", phone: "", address: "", email: "", points: 0, credit: 0 });
+    setSuggestions([]); setDiscount("0"); setExchange("0"); setRedeemedPoints(""); setAppliedCredit(""); setSavedCredit(""); setBonusPoints(""); setManualRoundOff("");
     setTxType("sale"); setPaymentMethod(""); setSplitCash(""); setIsPaymentDone(false); setAdvanceAmount(""); setAdvanceMethod(""); setAdvanceSplitCash(""); setIsAdvancePaid(false); setBalanceMethod(""); setBalanceSplitCash(""); setIsBalancePaid(false); setNotes("");
     setBillDate(today()); setIsDirty(false); await reserveNumber(nextMode, nextBranch); goToBillTop();
   };
@@ -619,12 +631,15 @@ export default function App() {
 
   const loadBillForEditing = (bill) => {
     setCurrentBillId(bill.id); setEditingDocNumber(bill.document_number); setMode(bill.mode); setBillBranchId(bill.branch_id || (settings.branches || [])[0].id); setDocumentNumber(bill.document_number); setBillDate(bill.date || today());
-    setCustomer({ name: bill.customer_name || bill.customer?.name || "", phone: bill.customer_phone || bill.customer?.phone || "", address: bill.customer_address || bill.customer?.address || "", email: bill.customer_email || bill.customer?.email || "", points: bill.customer?.points || 0 });
+    setCustomer({ name: bill.customer_name || bill.customer?.name || "", phone: bill.customer_phone || bill.customer?.phone || "", address: bill.customer_address || bill.customer?.address || "", email: bill.customer_email || bill.customer?.email || "", points: bill.customer?.points || 0, credit: bill.customer?.credit || 0 });
     setTxType(bill.tx_type || "sale"); setPaymentMethod(bill.payment_method || ""); setSplitCash(bill.split_cash !== null && bill.split_cash !== undefined ? String(bill.split_cash) : ""); setIsPaymentDone(bill.is_payment_done || false); 
     setAdvanceAmount(bill.advance_amount ? String(bill.advance_amount) : ""); setAdvanceMethod(bill.advance_method || ""); setAdvanceSplitCash(bill.advance_split_cash ? String(bill.advance_split_cash) : ""); setIsAdvancePaid(bill.is_advance_paid || false);
     setBalanceMethod(bill.balance_method || ""); setBalanceSplitCash(bill.balance_split_cash ? String(bill.balance_split_cash) : ""); setIsBalancePaid(bill.is_balance_paid || false);
     setNotes(bill.notes || ""); setDiscount(bill.discount ? String(bill.discount) : (bill.totals?.discount ? String(bill.totals.discount) : "0")); setExchange(bill.exchange ? String(bill.exchange) : (bill.totals?.exchange ? String(bill.totals.exchange) : "0")); setManualRoundOff(bill.totals?.round_off !== null && bill.totals?.round_off !== undefined ? String(bill.totals.round_off) : "");
     setRedeemedPoints(bill.redeemed_points ? String(bill.redeemed_points) : "");
+    setAppliedCredit(bill.applied_credit ? String(bill.applied_credit) : "");
+    setSavedCredit(bill.saved_credit ? String(bill.saved_credit) : "");
+    setBonusPoints(bill.bonus_points ? String(bill.bonus_points) : "");
     const loadedItems = (bill.items || []).map((item) => ({ id: `${Date.now()}-${Math.random()}`, description: item.description || "", hsn: item.hsn || "", weight: item.weight ? String(item.weight) : "", quantity: item.quantity ? String(item.quantity) : "1", mc_override: item.mc_override !== null && item.mc_override !== undefined ? String(item.mc_override) : "", rate_override: item.rate_override !== null && item.rate_override !== undefined ? String(item.rate_override) : "", amount_override: item.amount_override !== null && item.amount_override !== undefined ? String(item.amount_override) : "", }));
     setItems(loadedItems.length > 0 ? loadedItems : [createItem(settings.default_hsn)]); setIsDirty(false); setShowRecentBills(false); setShowLedger(false); toast.success(`Loaded ${bill.document_number} for editing`); goToBillTop();
   };
@@ -698,8 +713,12 @@ export default function App() {
         balance_method: balanceMethod, balance_split_cash: num(balanceSplitCash), is_balance_paid: isBalancePaid,
         discount: num(discount), exchange: num(exchange), round_off: manualRoundOff === "" ? null : num(manualRoundOff), notes,
         
+        // PAYLOAD EXTENDED TO SEND ALL CREDIT AND BONUS DATA TO BACKEND
         redeemed_points: num(redeemedPoints),
         earned_points: computed.earnedPoints,
+        applied_credit: computed.appliedCredit,
+        saved_credit: computed.savedCredit,
+        bonus_points: computed.bonusPoints,
 
         items: computed.items.map((item) => ({ description: item.description, hsn: item.hsn, weight: num(item.weight), quantity: num(item.quantity), mc_override: item.mc_override === "" ? null : num(item.mc_override), rate_override: item.rate_override === "" ? null : num(item.rate_override), amount_override: item.amount_override === "" ? null : num(item.amount_override), rate: item.rate, amount: item.amount, sl_no: item.slNo })),
         totals: { grand_total: computed.grandTotal, subtotal: computed.subtotal }
@@ -753,16 +772,19 @@ export default function App() {
     const discount = num(publicBill.discount || publicBill.totals?.discount || 0); const exchange = num(publicBill.exchange || publicBill.totals?.exchange || 0);
     const mdr = publicBill.payment_method === "Card" ? (taxable + gstApplied) * 0.02 : 0;
     
-    const earnedPoints = publicBill.earned_points !== undefined ? num(publicBill.earned_points) : Math.floor(totalWeight * ptPerGram);
+    const bonusPointsVal = num(publicBill.bonus_points || 0);
+    const earnedPoints = publicBill.earned_points !== undefined ? num(publicBill.earned_points) : (Math.floor(totalWeight * ptPerGram) + bonusPointsVal);
     const redeemedPoints = num(publicBill.redeemed_points || 0);
     const redeemedValue = redeemedPoints * rsPerPt;
+    const appliedCreditVal = num(publicBill.applied_credit || 0);
+    const savedCreditVal = num(publicBill.saved_credit || 0);
 
-    const baseTotal = taxable + gstApplied + mdr - discount - exchange - redeemedValue; 
+    const baseTotal = taxable + gstApplied + mdr - discount - exchange - redeemedValue - appliedCreditVal + savedCreditVal; 
     const autoRound = Math.round(baseTotal) - baseTotal;
     const roundOff = publicBill.round_off !== undefined && publicBill.round_off !== null ? num(publicBill.round_off) : (publicBill.totals?.round_off !== undefined && publicBill.totals?.round_off !== null ? num(publicBill.totals?.round_off) : autoRound);
     const grandTotal = publicBill.totals?.grand_total !== undefined && publicBill.totals?.grand_total !== null ? num(publicBill.totals.grand_total) : (baseTotal + roundOff);
 
-    return { items: mapped, taxable: publicBill.totals?.taxable_amount || publicBill.totals?.subtotal || taxable, cgst: publicBill.totals?.cgst ?? cgst, sgst: publicBill.totals?.sgst ?? sgst, igst: publicBill.totals?.igst ?? igst, mdr: publicBill.totals?.mdr ?? mdr, roundOff, grandTotal, discount, exchange, earnedPoints, redeemedPoints, redeemedValue };
+    return { items: mapped, taxable: publicBill.totals?.taxable_amount || publicBill.totals?.subtotal || taxable, cgst: publicBill.totals?.cgst ?? cgst, sgst: publicBill.totals?.sgst ?? sgst, igst: publicBill.totals?.igst ?? igst, mdr: publicBill.totals?.mdr ?? mdr, roundOff, grandTotal, discount, exchange, earnedPoints, redeemedPoints, redeemedValue, appliedCredit: appliedCreditVal, savedCredit: savedCreditVal };
   }, [publicBill, publicSettings]);
 
   const getUpiAmount = () => {
@@ -839,7 +861,6 @@ export default function App() {
 
             <div className="contact-area">
               <div className="contact-address" style={{ fontFamily: publicSettings?.address_font || "sans-serif", display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '8px', alignItems: publicSettings?.address_align === 'left' ? 'flex-start' : publicSettings?.address_align === 'right' ? 'flex-end' : 'center', textAlign: publicSettings?.address_align || "center" }}>
-                  {/* UPDATE: Using location_url for Map click */}
                   <a href={pbBranch.location_url && pbBranch.location_url !== "#" ? pbBranch.location_url : "#"} target="_blank" rel="noopener noreferrer" style={{ color: publicSettings?.address_color || "#475569", fontSize: `${publicSettings?.address_size || 14}px`, textDecoration: 'none' }}>{pbBranch.address}</a>
               </div>
               <div style={{ width: "100%", textAlign: publicSettings?.phone_align || "center", fontFamily: publicSettings?.phone_font || "sans-serif", fontSize: `${publicSettings?.phone_size || 13}px`, marginBottom: "4px" }}>
@@ -878,8 +899,10 @@ export default function App() {
                 <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(publicComputed.discount)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(publicComputed.exchange)}</strong></div></>
               )}
               {num(publicComputed.redeemedPoints) > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED ({publicComputed.redeemedPoints} pts)</span><strong style={{color:"#16a34a"}}>- ₹{money(publicComputed.redeemedValue)}</strong></div>}
+              {publicComputed.appliedCredit > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>STORE CREDIT APPLIED</span><strong style={{color:"#16a34a"}}>- ₹{money(publicComputed.appliedCredit)}</strong></div>}
               <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(publicComputed.mdr)}</strong></div>
               <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(publicComputed.roundOff)}</strong></div>
+              {publicComputed.savedCredit > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(publicComputed.savedCredit)}</strong></div>}
               <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(publicComputed.grandTotal)}</strong></div>
 
               {publicBill.tx_type && publicBill.tx_type !== "sale" && (
@@ -909,7 +932,6 @@ export default function App() {
             {publicBill.mode === "invoice" ? (
               <div className="declaration">
                 <p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p>
-                {/* UPDATE: Added no-print and ignore for feedback buttons */}
                 <div className="no-print" data-html2canvas-ignore="true" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
                   <div onClick={() => { if(pbBranch.map_url && pbBranch.map_url !== "#") window.open(pbBranch.map_url, "_blank"); else toast.info("Feedback link not set for this branch yet!"); }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
                 </div>
@@ -980,7 +1002,6 @@ export default function App() {
     <div className="billing-app" style={isPrinting ? { height: "auto", overflow: "visible" } : { display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", backgroundColor: "#f1f5f9" }}>
       <Toaster position="bottom-right" />
 
-      {/* INVISIBLE BULK PDF RENDERER */}
       <div style={{ position: "absolute", zIndex: -9999, opacity: 0, pointerEvents: "none", top: 0, left: 0, height: 0, overflow: "hidden" }}>
         {(filteredRecentBills || []).map(b => {
            const billBranch = (settings.branches || []).find(br => br.id === b.branch_id) || (settings.branches || [])[0] || defaultSettings.branches[0];
@@ -1043,7 +1064,12 @@ export default function App() {
                       <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(b.totals?.discount || 0)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(b.totals?.exchange || 0)}</strong></div></>
                     )}
                     {num(b.redeemed_points) > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED ({b.redeemed_points} pts)</span><strong style={{color:"#16a34a"}}>- ₹{money(num(b.redeemed_points) * rsPerPt)}</strong></div>}
+                    {num(b.applied_credit) > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>STORE CREDIT APPLIED</span><strong style={{color:"#16a34a"}}>- ₹{money(b.applied_credit)}</strong></div>}
+                    <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(b.totals?.mdr || 0)}</strong></div>
+                    <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(b.totals?.round_off !== undefined ? b.totals.round_off : 0)}</strong></div>
+                    {num(b.saved_credit) > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(b.saved_credit)}</strong></div>}
                     <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(b.totals?.grand_total || 0)}</strong></div>
+                    
                     {b.tx_type && b.tx_type !== "sale" && (
                       <><div className="totals-row" style={{ marginTop: "10px", color: "#16a34a" }}><span>ADVANCE RECEIVED</span><strong>₹{money(b.advance_amount)}</strong></div><div className="totals-row" style={{ color: "#dc2626" }}><span>BALANCE DUE</span><strong>₹{money(Math.max(0, num(b.totals?.grand_total || 0) - num(b.advance_amount)))}</strong></div></>
                     )}
@@ -1104,7 +1130,6 @@ export default function App() {
 
               <div className="contact-area">
                 <div className="contact-address" style={{ fontFamily: settings.address_font || "sans-serif", display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '8px', alignItems: settings.address_align === 'left' ? 'flex-start' : settings.address_align === 'right' ? 'flex-end' : 'center', textAlign: settings.address_align || "center" }}>
-                    {/* UPDATE: Using location_url for Map click */}
                     <a href={activeBillBranch.location_url && activeBillBranch.location_url !== "#" ? activeBillBranch.location_url : "#"} target="_blank" rel="noopener noreferrer" style={{ color: settings.address_color || "#475569", fontSize: `${settings.address_size || 14}px`, textDecoration: 'none' }}>{activeBillBranch.address}</a>
                 </div>
                 <div style={{ width: "100%", textAlign: settings.phone_align || "center", fontFamily: settings.phone_font || "sans-serif", fontSize: `${settings.phone_size || 13}px`, marginBottom: "4px" }}>
@@ -1145,8 +1170,10 @@ export default function App() {
                   <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(discount)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(exchange)}</strong></div></>
                 )}
                 {computed.redeemedPoints > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED ({computed.redeemedPoints} pts)</span><strong style={{color:"#16a34a"}}>- ₹{money(computed.redeemedValue)}</strong></div>}
+                {computed.appliedCredit > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>STORE CREDIT APPLIED</span><strong style={{color:"#16a34a"}}>- ₹{money(computed.appliedCredit)}</strong></div>}
                 <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(computed.mdr)}</strong></div>
                 <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(computed.roundOff)}</strong></div>
+                {computed.savedCredit > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(computed.savedCredit)}</strong></div>}
                 <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(computed.grandTotal)}</strong></div>
 
                 {txType !== "sale" && (
@@ -1210,18 +1237,19 @@ export default function App() {
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginBottom: "5px", color: "#16a34a", fontWeight: "bold" }}>
-               <span>{customer.name ? `Loyalty Points: ${customer.points}` : ""}</span>
+               <span>{customer.name ? `Loyalty Points: ${customer.points} | Store Credit: ₹${money(customer.credit)}` : ""}</span>
             </div>
             <Input id="customerNameInput" value={customer.name} onChange={(e) => { setCustomer((prev) => ({ ...prev, name: e.target.value })); markDirty(); }} placeholder="Customer name" />
             <Input value={customer.phone} onChange={(e) => { setCustomer((prev) => ({ ...prev, phone: e.target.value })); markDirty(); }} placeholder="Phone" />
             <Input value={customer.address} onChange={(e) => { setCustomer((prev) => ({ ...prev, address: e.target.value })); markDirty(); }} placeholder="Address" />
             <Input value={customer.email} onChange={(e) => { setCustomer((prev) => ({ ...prev, email: e.target.value })); markDirty(); }} placeholder="Email" />
             <Input type="text" value={billDate} onChange={(e) => { setBillDate(e.target.value); markDirty(); }} placeholder="DD-MM-YYYY" />
+            <Input type="number" value={bonusPoints} onChange={(e) => { setBonusPoints(e.target.value); markDirty(); }} placeholder="🎁 Assign Bonus/Welcome Points (Optional)" style={{ marginTop: "5px", borderColor: "#22c55e", backgroundColor: "#f0fdf4" }} />
 
             {(suggestions || []).length > 0 && (
               <div className="suggestions">
                 {(suggestions || []).map((entry) => (
-                  <button key={entry.id} type="button" className="suggestion-item" onClick={() => { setCustomer({ name: entry.name, phone: entry.phone, address: entry.address, email: entry.email, points: entry.points || 0 }); setSuggestions([]); markDirty(); }}>
+                  <button key={entry.id} type="button" className="suggestion-item" onClick={() => { setCustomer({ name: entry.name, phone: entry.phone, address: entry.address, email: entry.email, points: entry.points || 0, credit: entry.credit || 0 }); setSuggestions([]); markDirty(); }}>
                     {entry.name} · {entry.phone}
                   </button>
                 ))}
@@ -1247,10 +1275,12 @@ export default function App() {
           </div>
 
           <div className="control-card">
-            <h3>Adjustments</h3>
+            <h3>Adjustments & Credits</h3>
+            <Input id="appliedCreditInput" type="number" value={appliedCredit} onChange={(e) => { setAppliedCredit(e.target.value); markDirty(); }} placeholder={`Use Store Credit (Max: ₹${money(customer.credit || 0)})`} />
             <Input id="redeemedPointsInput" type="number" value={redeemedPoints} onChange={(e) => { setRedeemedPoints(e.target.value); markDirty(); }} placeholder={`Redeem Points (Max: ${customer.points || 0})`} />
             <Input id="discountInput" value={discount} onChange={(e) => { setDiscount(e.target.value); markDirty(); }} placeholder="Discount" />
-            <Input value={exchange} onChange={(e) => { setExchange(e.target.value); markDirty(); }} placeholder="Exchange" />
+            <Input value={exchange} onChange={(e) => { setExchange(e.target.value); markDirty(); }} placeholder="Exchange Amount" />
+            <Input value={savedCredit} onChange={(e) => { setSavedCredit(e.target.value); markDirty(); }} placeholder="Save as Store Credit (For negative totals)" />
             <Input value={manualRoundOff} onChange={(e) => { setManualRoundOff(e.target.value); markDirty(); }} placeholder="Manual round off (optional)" />
           </div>
 
