@@ -10,6 +10,7 @@ import "@/App.css";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL ? BACKEND_URL.replace(/\/$/, '') : ""}/api`;
+const STATIC_ABOUT_QR_URL = process.env.REACT_APP_ABOUT_QR_URL;
 
 const createItem = (defaultHsn = "") => ({
   id: `${Date.now()}-${Math.random()}`, description: "", hsn: defaultHsn, weight: "", quantity: "1", rate_override: "", amount_override: "", mc_override: ""
@@ -24,7 +25,7 @@ const defaultSettings = {
   email_color: "#475569", email_size: 13, email_font: "sans-serif", email_align: "center",
   silver_rate_per_gram: 240, making_charge_per_gram: 15, flat_mc_below_5g: 150, default_hsn: "7113",
   loyalty_points_per_gram: 1, loyalty_point_value_rs: 1,
-  formula_note: "Line total = Weight x (Silver rate per gram + Making charge per gram)", logo_data_url: "", custom_fonts: [],
+  formula_note: "Line total = Weight x (Silver rate per gram + Making charge per gram)", logo_data_url: "", about_qr_data_url: STATIC_ABOUT_QR_URL, custom_fonts: [],
   shortcuts: [
     { id: "save_bill", action: "Save Bill", keys: "alt + s", isSystem: true },
     { id: "add_item", action: "Add new item row", keys: "alt + a", isSystem: true },
@@ -72,24 +73,35 @@ const FontSelectOptions = ({ customFonts }) => (
   <><option value="sans-serif">Sans-serif</option><option value="Arial, Helvetica, sans-serif">Arial</option><option value="'Times New Roman', Times, serif">Times New Roman</option><option value="'Courier New', Courier, monospace">Courier New</option><option value="Georgia, serif">Georgia</option><option value="'Trebuchet MS', sans-serif">Trebuchet MS</option><option value="'Brush Script MT', cursive">Brush Script MT (Cursive)</option>{customFonts?.map(f => (<option key={f.name} value={`'${f.name}'`}>{f.name} (Custom)</option>))}</>
 );
 
-const FooterLinksAndQRs = ({ branch }) => {
+const FooterLinksAndQRs = ({ branch, allBranches }) => {
   if (!branch) return null;
   return (
     <div style={{ marginTop: "25px", borderTop: "1px dashed #e2e8f0", paddingTop: "20px" }}>
       <div className="no-print" data-html2canvas-ignore="true">
         <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Connect & Review:</p>
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '15px' }}>
           {branch.whatsapp_url && (<a href={branch.whatsapp_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#25D366", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>💬 WhatsApp</a>)}
           {branch.instagram_url && (<a href={branch.instagram_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", background: "linear-gradient(45deg, #f09433 0%, #dc2743 50%, #bc1888 100%)", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>📸 Instagram</a>)}
           {branch.map_url && (<a href={branch.map_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>⭐ Feedback</a>)}
           {branch.about_url && (<a href={branch.about_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#3b82f6", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>ℹ️ About Us</a>)}
         </div>
+        
+        <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Visit Our Branches:</p>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+          {(allBranches || []).map(b => b.location_url && (
+            <a key={b.id} href={b.location_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#0f172a", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>📍 {b.name}</a>
+          ))}
+        </div>
       </div>
-      <div className="print-only" style={{ display: 'flex', justifyContent: 'center', gap: '15px', flexWrap: 'wrap', alignItems: 'center' }}>
+      
+      <div className="print-only" style={{ display: 'flex', justifyContent: 'center', gap: '15px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
         {branch.whatsapp_url && (<div style={{ textAlign: 'center' }}><img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.whatsapp_url)}&size=100`} alt="WA QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} /><p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>WhatsApp</p></div>)}
         {branch.instagram_url && (<div style={{ textAlign: 'center' }}><img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.instagram_url)}&size=100`} alt="Insta QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} /><p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>Instagram</p></div>)}
-        {branch.map_url && (<div style={{ textAlign: 'center' }}><img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.map_url)}&size=100`} alt="Feedback QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} /><p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>Leave Feedback</p></div>)}
+        {branch.map_url && (<div style={{ textAlign: 'center' }}><img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.map_url)}&size=100`} alt="Feedback QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} /><p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>Feedback</p></div>)}
         {branch.about_url && (<div style={{ textAlign: 'center' }}><img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.about_url)}&size=100`} alt="About QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} /><p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>About Us</p></div>)}
+        {(allBranches || []).map(b => b.location_url && (
+            <div key={`qr-${b.id}`} style={{ textAlign: 'center' }}><img src={`https://quickchart.io/qr?text=${encodeURIComponent(b.location_url)}&size=100`} alt={`${b.name} QR`} crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} /><p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>{b.name}</p></div>
+        ))}
       </div>
     </div>
   );
@@ -140,8 +152,6 @@ const GLOBAL_PRINT_CSS = `
   .no-print { display: none !important; }
 }
 `;
-// --- END OF PART 1 ---
-// --- START OF PART 2 ---
 export default function App() {
   const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
   const [isPrinting, setIsPrinting] = useState(false);
@@ -168,6 +178,7 @@ export default function App() {
   const [publicBill, setPublicBill] = useState(null);
   const [publicSettings, setPublicSettings] = useState(null);
   const [publicLoading, setPublicLoading] = useState(false);
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
 
   const [passcode, setPasscode] = useState("");
   const [token, setToken] = useState(localStorage.getItem("jj_auth_token") || "");
@@ -217,6 +228,7 @@ export default function App() {
 
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState("design"); 
+  const [showAbout, setShowAbout] = useState(false);
   const [showRecentBills, setShowRecentBills] = useState(false);
   const [recentBillsList, setRecentBillsList] = useState([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
@@ -246,6 +258,7 @@ export default function App() {
   const [savingBill, setSavingBill] = useState(false);
   const [printScale, setPrintScale] = useState(getInitialPrintScale);
   const [logoUploadName, setLogoUploadName] = useState("");
+  const [aboutUploadName, setAboutUploadName] = useState("");
   const [cloudStatus, setCloudStatus] = useState({ provider: "supabase", enabled: false, mode: "loading" });
   
   const authHeaders = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
@@ -294,10 +307,10 @@ export default function App() {
   useEffect(() => {
     const handleEsc = (event) => {
       if (event.key !== "Escape") return;
-      setShowSettings(false); setShowRecentBills(false); setShowLedger(false);
+      setShowSettings(false); setShowAbout(false); setShowRecentBills(false); setShowLedger(false); setShowFeedbackModal(false);
     };
     window.addEventListener("keydown", handleEsc); return () => window.removeEventListener("keydown", handleEsc);
-  }, [showSettings, showRecentBills, showLedger]);
+  }, [showSettings, showAbout, showRecentBills, showLedger, showFeedbackModal]);
 
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
@@ -349,8 +362,6 @@ export default function App() {
   }); 
 
   useEffect(() => { localStorage.setItem("jj_print_scale", String(clampPrintScale(printScale))); }, [printScale]);
-// --- END OF PART 2 ---
-// --- START OF PART 3 ---
   useEffect(() => {
     if (isPublicView) return; 
     const verify = async () => {
@@ -426,11 +437,10 @@ export default function App() {
             if (clonedNode) {
               clonedNode.style.display = "block"; clonedNode.style.transform = "none";
               clonedNode.style.width = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.maxWidth = "800px"; 
+              clonedNode.style.height = "max-content"; // Fix for white screen
               clonedNode.style.padding = "20px"; clonedNode.style.boxSizing = "border-box";
-              const noPrint = clonedDoc.querySelectorAll('.no-print');
-              noPrint.forEach(el => el.style.display = 'none');
-              const printOnly = clonedDoc.querySelectorAll('.print-only');
-              printOnly.forEach(el => { el.style.position = 'static'; el.style.width = '100%'; el.style.height = 'auto'; el.style.opacity = '1'; el.style.visibility = 'visible'; el.style.display = 'flex'; });
+              const noPrint = clonedDoc.querySelectorAll('.no-print'); noPrint.forEach(el => el.style.display = 'none');
+              const printOnly = clonedDoc.querySelectorAll('.print-only'); printOnly.forEach(el => { el.style.position = 'static'; el.style.width = '100%'; el.style.height = 'auto'; el.style.opacity = '1'; el.style.visibility = 'visible'; el.style.display = 'flex'; });
               const images = clonedNode.getElementsByTagName('img'); for (let img of images) img.crossOrigin = "anonymous";
             }
           }
@@ -533,6 +543,7 @@ export default function App() {
       const weight = num(item.weight); totalWeight += weight;
       const quantity = Math.max(num(item.quantity || 1), 1);
       const silverRate = item.rate_override !== "" ? num(item.rate_override) : baseSilverRate;
+
       let mcAmount = 0;
       if (item.mc_override !== "") { mcAmount = weight * num(item.mc_override); } 
       else if (flatMCBelow5g > 0 && weight > 0 && weight < 5) { mcAmount = flatMCBelow5g; } 
@@ -638,7 +649,6 @@ export default function App() {
   const handleLogout = () => { localStorage.removeItem("jj_auth_token"); setToken(""); setGatewayPassed(false); setSettingsLoaded(false); };
   const optimizeImageDataUrl = async (file) => { const reader = new FileReader(); const original = await new Promise((resolve, reject) => { reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); }); const image = new Image(); await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; image.src = original; }); const ratio = Math.min(420 / image.width, 420 / image.height, 1); const targetWidth = Math.round(image.width * ratio); const targetHeight = Math.round(image.height * ratio); const canvas = document.createElement("canvas"); canvas.width = targetWidth; canvas.height = targetHeight; const context = canvas.getContext("2d"); context.drawImage(image, 0, 0, targetWidth, targetHeight); return canvas.toDataURL("image/png", 0.92); };
   const handleLogoUpload = async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const dataUrl = await optimizeImageDataUrl(file); localStorage.setItem("jj_logo_data_url", dataUrl); setSettings((prev) => ({ ...prev, logo_data_url: dataUrl })); setLogoUploadName(file.name); toast.success("Logo uploaded successfully."); } catch { toast.error("Logo upload failed."); } };
-  
   const saveSettings = async () => { try { await axios.put(`${API}/settings`, settings, { headers: authHeaders }); toast.success("Settings saved."); } catch { toast.error("Could not save settings."); } };
   const submitLedgerLog = async () => { if (!logAmount || isNaN(logAmount) || num(logAmount) <= 0) { toast.error("Please enter a valid amount."); return; } if (!logReason.trim()) { toast.error("Please enter a reason/remark."); return; } setSubmittingLog(true); try { const payload = { branch_id: globalBranchId, reason: logReason, cash_change: 0, estimate_bank_change: 0, invoice_bank_change: 0 }; const amt = num(logAmount); const keyMap = { "cash": "cash_change", "estimate_bank": "estimate_bank_change", "invoice_bank": "invoice_bank_change" }; if (logType === "expense") payload[keyMap[logSourceVault]] = -amt; else if (logType === "add") payload[keyMap[logSourceVault]] = amt; else if (logType === "exchange") { if (logSourceVault === logTargetVault) { toast.error("Cannot exchange into the same vault."); setSubmittingLog(false); return; } payload[keyMap[logSourceVault]] = -amt; payload[keyMap[logTargetVault]] = amt; } await axios.post(`${API}/settings/ledger/adjust`, payload, { headers: authHeaders }); toast.success("Transaction logged successfully!"); setShowLogForm(false); setLogAmount(""); setLogReason(""); await loadSettings(); await fetchLedgerHistory(); } catch (error) { toast.error("Ledger update failed."); } finally { setSubmittingLog(false); } };
   const saveBalances = async () => { try { const payload = { branch_id: globalBranchId, cash_balance: num(manualCash), estimate_bank_balance: num(manualEstBank), invoice_bank_balance: num(manualInvBank) }; await axios.put(`${API}/settings/balances`, payload, { headers: authHeaders }); setSettings(prev => { const updatedBranches = (prev.branches || []).map(b => b.id === globalBranchId ? { ...b, ...payload } : b); return { ...prev, branches: updatedBranches }; }); setEditingBalances(false); toast.success(`Ledger balances for ${activeGlobalBranch.name} manually updated!`); } catch { toast.error("Failed to update balances."); } };
@@ -676,7 +686,9 @@ export default function App() {
         onclone: (clonedDoc) => { 
           const clonedNode = clonedDoc.getElementById(elementId); 
           if (clonedNode) { 
-            clonedNode.style.transform = "none"; clonedNode.style.width = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.position = "absolute"; clonedNode.style.top = "0"; clonedNode.style.left = "0"; clonedNode.style.margin = "0"; clonedNode.style.padding = "20px"; clonedNode.style.boxSizing = "border-box"; 
+            clonedNode.style.transform = "none"; clonedNode.style.width = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.minWidth = "800px"; 
+            clonedNode.style.position = "relative"; clonedNode.style.top = "auto"; clonedNode.style.left = "auto"; 
+            clonedNode.style.margin = "0"; clonedNode.style.padding = "20px"; clonedNode.style.height = "max-content"; clonedNode.style.boxSizing = "border-box"; 
             const noPrint = clonedNode.querySelectorAll('.no-print'); noPrint.forEach(el => el.style.display = 'none');
             const printOnly = clonedNode.querySelectorAll('.print-only'); printOnly.forEach(el => { el.style.position = 'static'; el.style.width = '100%'; el.style.height = 'auto'; el.style.opacity = '1'; el.style.visibility = 'visible'; el.style.display = 'flex'; });
             const images = clonedNode.getElementsByTagName('img'); for (let img of images) img.crossOrigin = "anonymous"; 
@@ -694,8 +706,7 @@ export default function App() {
   const todaysTotalCash = (todayBills || []).filter(b => b.is_payment_done).reduce((sum, b) => sum + (b.payment_method === 'Cash' ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_cash) : 0), 0);
   const todaysTotalEstBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'estimate').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
   const todaysTotalInvBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'invoice').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
-// --- END OF PART 3 ---
-// --- START OF PART 4 ---
+ // --- START OF PART 4 ---
   const publicComputed = useMemo(() => {
     if (!publicBill || !publicSettings) return { items: [], taxable: 0, cgst: 0, sgst: 0, igst: 0, mdr: 0, roundOff: 0, grandTotal: 0, discount: 0, exchange: 0 };
     const baseSilverRate = num(publicSettings.silver_rate_per_gram); const baseMCPerGram = num(publicSettings.making_charge_per_gram); const flatMCBelow5g = num(publicSettings.flat_mc_below_5g);
@@ -785,7 +796,6 @@ export default function App() {
       <div className="billing-app" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px', minHeight: '100dvh', height: 'max-content', backgroundColor: '#f1f5f9', overflowX: 'hidden', paddingBottom: '40px' }}>
         <Toaster position="bottom-right" />
         <style>{GLOBAL_PRINT_CSS}</style>
-        
         {showFeedbackModal && (
           <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
             <div style={{ backgroundColor: "white", padding: "30px", borderRadius: "16px", width: "100%", maxWidth: "380px", textAlign: "center", boxShadow: "0 10px 25px rgba(0,0,0,0.2)" }}>
@@ -893,9 +903,7 @@ export default function App() {
               )}
             </div>
             
-            {/* NEW: Universal Connect & Review Box (Buttons on web, QRs on Print) */}
-            <FooterLinksAndQRs branch={pbBranch} />
-            
+            <FooterLinksAndQRs branch={pbBranch} allBranches={publicSettings?.branches} />
           </div>
           <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
         </section>
@@ -955,7 +963,6 @@ export default function App() {
       <Toaster position="bottom-right" />
       <style>{GLOBAL_PRINT_CSS}</style>
 
-      {/* INVISIBLE BULK PDF RENDERER */}
       <div style={{ position: "absolute", zIndex: -9999, opacity: 0, pointerEvents: "none", top: 0, left: 0, height: 0, overflow: "hidden" }}>
         {(filteredRecentBills || []).map(b => {
            const billBranch = (settings.branches || []).find(br => br.id === b.branch_id) || (settings.branches || [])[0] || defaultSettings.branches[0];
@@ -1041,7 +1048,7 @@ export default function App() {
                       <><p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></>
                     )}
                   </div>
-                  <FooterLinksAndQRs branch={billBranch} />
+                  <FooterLinksAndQRs branch={billBranch} allBranches={settings.branches} />
                 </div>
                 <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
              </section>
@@ -1169,7 +1176,7 @@ export default function App() {
                 )}
               </div>
               
-              <FooterLinksAndQRs branch={activeBillBranch} />
+              <FooterLinksAndQRs branch={activeBillBranch} allBranches={settings.branches} />
 
             </div>
             <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
@@ -1684,4 +1691,3 @@ export default function App() {
     </div>
   );
 }
-// --- END OF PART 4 ---
