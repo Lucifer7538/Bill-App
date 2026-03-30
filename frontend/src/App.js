@@ -187,7 +187,6 @@ export default function App() {
   const [isNumberLoading, setIsNumberLoading] = useState(false);
   const [billDate, setBillDate] = useState(today());
 
-  // ADDED STORE CREDIT & BONUS POINTS
   const [customer, setCustomer] = useState({ name: "", phone: "", address: "", email: "", points: 0, credit: 0 });
   const [bonusPoints, setBonusPoints] = useState("");
   
@@ -329,22 +328,17 @@ export default function App() {
       const checkKey = (actionId) => {
           const sc = scList.find(s => s.id === actionId);
           if (!sc || !sc.keys) return false;
-          
           const parts = sc.keys.toLowerCase().split('+').map(p => p.trim());
           const needsCtrl = parts.includes('ctrl') || parts.includes('cmd');
           const needsShift = parts.includes('shift');
           const needsAlt = parts.includes('alt');
           const keyPart = parts[parts.length - 1]; 
-          
           const ctrlPressed = e.ctrlKey || e.metaKey;
           const shiftPressed = e.shiftKey;
           const altPressed = e.altKey;
-
           const keyFromKey = e.key ? e.key.toLowerCase() : "";
           const keyFromCode = e.code ? e.code.toLowerCase().replace("key", "").replace("digit", "") : "";
-
           const keyMatches = (keyFromKey === keyPart || keyFromCode === keyPart);
-
           return (ctrlPressed === needsCtrl) && (shiftPressed === needsShift) && (altPressed === needsAlt) && keyMatches;
       };
 
@@ -355,7 +349,6 @@ export default function App() {
       if (checkKey('open_ledger')) { e.preventDefault(); e.stopPropagation(); setShowLedger(true); return; }
       if (checkKey('open_recent')) { e.preventDefault(); e.stopPropagation(); setShowRecentBills(true); return; }
       if (checkKey('focus_payment')) { e.preventDefault(); e.stopPropagation(); document.getElementById('paymentMethodSelect')?.focus(); return; }
-      
       if (checkKey('focus_customer')) { e.preventDefault(); e.stopPropagation(); document.getElementById('customerNameInput')?.focus(); return; }
       if (checkKey('focus_item')) { 
           e.preventDefault(); e.stopPropagation(); 
@@ -406,7 +399,6 @@ export default function App() {
   const filteredRecentBills = useMemo(() => {
     return (recentBillsList || []).filter(bill => {
       if (recentModeFilter !== "ALL" && bill.mode !== recentModeFilter) return false;
-      
       if (recentDateFilter === "THIS_MONTH") {
         const billDateObj = parseBillDate(bill.date);
         const now = new Date();
@@ -432,8 +424,6 @@ export default function App() {
       return true;
     });
   }, [recentBillsList, recentModeFilter, recentDateFilter, customStartDate, customEndDate]);
-// ----- END OF PART 1 -----
-// ----- START OF PART 2 -----
   const handleBulkDownload = async () => {
     if ((filteredRecentBills || []).length === 0) { toast.error("No bills to download!"); return; }
     if ((filteredRecentBills || []).length > 20) { if (!window.confirm(`Generate PDF with ${filteredRecentBills.length} pages? This might take a minute.`)) return; }
@@ -559,12 +549,10 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [customer.phone, customer.name, token, isPublicView, authHeaders]);
 
-  // CALCULATIONS UPDATE: Handles Applied/Saved Credits and Bonus Points
   const computed = useMemo(() => {
     const baseSilverRate = num(settings.silver_rate_per_gram);
     const baseMCPerGram = num(settings.making_charge_per_gram);
     const flatMCBelow5g = num(settings.flat_mc_below_5g);
-    
     const ptPerGram = num(settings.loyalty_points_per_gram !== undefined ? settings.loyalty_points_per_gram : 1);
     const rsPerPt = num(settings.loyalty_point_value_rs !== undefined ? settings.loyalty_point_value_rs : 1);
 
@@ -583,7 +571,6 @@ export default function App() {
 
       const totalItemCost = (weight * silverRate) + mcAmount;
       const formulaAmount = mode === "estimate" ? totalItemCost * quantity : totalItemCost;
-      
       const amount = item.amount_override !== "" ? num(item.amount_override) : formulaAmount;
       const rateForPrint = weight > 0 ? (amount / (mode === "estimate" ? quantity : 1)) / weight : 0;
       const { rupees, paise } = splitAmount(amount);
@@ -684,9 +671,7 @@ export default function App() {
   const handleGlobalBranchChange = async (nextBranchId) => { setGlobalBranchId(nextBranchId); if (!currentBillId && checkIsBlank()) { setBillBranchId(nextBranchId); await reserveNumber(mode, nextBranchId); } };
   
   const updateBranch = (index, field, value) => { const updatedBranches = [...(settings.branches || [])]; updatedBranches[index] = { ...updatedBranches[index], [field]: value }; setSettings({ ...settings, branches: updatedBranches }); };
-  
   const addBranch = () => { const newId = `B${Date.now()}`; const newBranch = { id: newId, name: `New Branch`, address: "", location_url: "", map_url: "#", invoice_upi_id: "", estimate_upi_id: "", gstin: "", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 }; setSettings({ ...settings, branches: [...(settings.branches || []), newBranch] }); };
-  
   const removeBranch = (index) => { if ((settings.branches || []).length <= 1) { toast.error("You must have at least one branch."); return; } if (!window.confirm("Remove this branch from settings?")) return; const updatedBranches = (settings.branches || []).filter((_, i) => i !== index); setSettings({ ...settings, branches: updatedBranches }); };
   const addShortcut = () => { const newSc = { id: `custom_${Date.now()}`, action: "", keys: "", isSystem: false }; setSettings(prev => ({ ...prev, shortcuts: [...(prev.shortcuts || defaultSettings.shortcuts), newSc] })); };
   const updateShortcut = (index, field, value) => { const list = [...(settings.shortcuts || defaultSettings.shortcuts)]; list[index] = { ...list[index], [field]: value }; setSettings(prev => ({ ...prev, shortcuts: list })); };
@@ -713,7 +698,6 @@ export default function App() {
         balance_method: balanceMethod, balance_split_cash: num(balanceSplitCash), is_balance_paid: isBalancePaid,
         discount: num(discount), exchange: num(exchange), round_off: manualRoundOff === "" ? null : num(manualRoundOff), notes,
         
-        // PAYLOAD EXTENDED TO SEND ALL CREDIT AND BONUS DATA TO BACKEND
         redeemed_points: num(redeemedPoints),
         earned_points: computed.earnedPoints,
         applied_credit: computed.appliedCredit,
@@ -742,7 +726,6 @@ export default function App() {
   const publicComputed = useMemo(() => {
     if (!publicBill || !publicSettings) return { items: [], taxable: 0, cgst: 0, sgst: 0, igst: 0, mdr: 0, roundOff: 0, grandTotal: 0, discount: 0, exchange: 0 };
     const baseSilverRate = num(publicSettings.silver_rate_per_gram); const baseMCPerGram = num(publicSettings.making_charge_per_gram); const flatMCBelow5g = num(publicSettings.flat_mc_below_5g);
-    
     const ptPerGram = num(publicSettings.loyalty_points_per_gram !== undefined ? publicSettings.loyalty_points_per_gram : 1);
     const rsPerPt = num(publicSettings.loyalty_point_value_rs !== undefined ? publicSettings.loyalty_point_value_rs : 1);
 
@@ -899,10 +882,10 @@ export default function App() {
                 <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(publicComputed.discount)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(publicComputed.exchange)}</strong></div></>
               )}
               {num(publicComputed.redeemedPoints) > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED ({publicComputed.redeemedPoints} pts)</span><strong style={{color:"#16a34a"}}>- ₹{money(publicComputed.redeemedValue)}</strong></div>}
-              {publicComputed.appliedCredit > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>STORE CREDIT APPLIED</span><strong style={{color:"#16a34a"}}>- ₹{money(publicComputed.appliedCredit)}</strong></div>}
+              {num(publicComputed.appliedCredit) > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>STORE CREDIT APPLIED</span><strong style={{color:"#16a34a"}}>- ₹{money(publicComputed.appliedCredit)}</strong></div>}
               <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(publicComputed.mdr)}</strong></div>
               <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(publicComputed.roundOff)}</strong></div>
-              {publicComputed.savedCredit > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(publicComputed.savedCredit)}</strong></div>}
+              {num(publicComputed.savedCredit) > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(publicComputed.savedCredit)}</strong></div>}
               <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(publicComputed.grandTotal)}</strong></div>
 
               {publicBill.tx_type && publicBill.tx_type !== "sale" && (
@@ -1002,6 +985,7 @@ export default function App() {
     <div className="billing-app" style={isPrinting ? { height: "auto", overflow: "visible" } : { display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", backgroundColor: "#f1f5f9" }}>
       <Toaster position="bottom-right" />
 
+      {/* INVISIBLE BULK PDF RENDERER */}
       <div style={{ position: "absolute", zIndex: -9999, opacity: 0, pointerEvents: "none", top: 0, left: 0, height: 0, overflow: "hidden" }}>
         {(filteredRecentBills || []).map(b => {
            const billBranch = (settings.branches || []).find(br => br.id === b.branch_id) || (settings.branches || [])[0] || defaultSettings.branches[0];
@@ -1621,7 +1605,6 @@ export default function App() {
                   <Input value={settings.default_hsn} onChange={(e) => setSettings({ ...settings, default_hsn: e.target.value })} />
                 </div>
 
-                {/* NEW: Loyalty Points System Settings */}
                 <div style={{ padding: "15px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px solid #bbf7d0" }}>
                   <h4 style={{ margin: "0 0 15px 0", color: "#16a34a" }}>Loyalty Points System</h4>
                   <label className="select-label">Points Earned Per 1 Gram</label>
@@ -1649,11 +1632,9 @@ export default function App() {
                       <label className="select-label">Branch Address</label>
                       <Input value={branch.address} onChange={(e) => updateBranch(index, 'address', e.target.value)} style={{ marginBottom: "10px" }} />
                       
-                      {/* UPDATE: Added specific location URL */}
                       <label className="select-label">Google Maps Location URL (For Address Click)</label>
                       <Input value={branch.location_url || ""} onChange={(e) => updateBranch(index, 'location_url', e.target.value)} style={{ marginBottom: "10px" }} />
                       
-                      {/* UPDATE: Clarified Review URL label */}
                       <label className="select-label">Google Maps Feedback/Review URL (For ⭐ Button)</label>
                       <Input value={branch.map_url} onChange={(e) => updateBranch(index, 'map_url', e.target.value)} style={{ marginBottom: "10px" }} />
                       
@@ -1724,4 +1705,3 @@ export default function App() {
     </div>
   );
 }
-// ----- END OF PART 2 -----
