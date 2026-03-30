@@ -58,9 +58,7 @@ const today = () => {
 const parseBillDate = (dStr) => {
   if (!dStr) return new Date();
   const p = dStr.split("-");
-  if (p.length === 3 && p[0].length === 2) {
-    return new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]));
-  }
+  if (p.length === 3 && p[0].length === 2) return new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]));
   return new Date(dStr);
 };
 
@@ -144,12 +142,10 @@ export default function App() {
   useEffect(() => {
       const handleResize = () => setViewportWidth(window.innerWidth);
       window.addEventListener("resize", handleResize); 
-      
       const handleBeforePrint = () => setIsPrinting(true);
       const handleAfterPrint = () => setIsPrinting(false);
       window.addEventListener("beforeprint", handleBeforePrint);
       window.addEventListener("afterprint", handleAfterPrint);
-
       return () => { 
         window.removeEventListener("resize", handleResize); 
         window.removeEventListener("beforeprint", handleBeforePrint);
@@ -158,7 +154,6 @@ export default function App() {
   }, []);
   
   const isMobileSplit = viewportWidth <= 1024;
-
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
   
@@ -187,10 +182,8 @@ export default function App() {
   const [isNumberLoading, setIsNumberLoading] = useState(false);
   const [billDate, setBillDate] = useState(today());
 
-  // ADDED STORE CREDIT & BONUS POINTS
   const [customer, setCustomer] = useState({ name: "", phone: "", address: "", email: "", points: 0, credit: 0 });
   const [bonusPoints, setBonusPoints] = useState("");
-  
   const [suggestions, setSuggestions] = useState([]);
   const [items, setItems] = useState([createItem()]);
   
@@ -252,14 +245,11 @@ export default function App() {
   const [cloudStatus, setCloudStatus] = useState({ provider: "supabase", enabled: false, mode: "loading" });
   
   const authHeaders = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
-
   const activeGlobalBranch = (settings.branches || []).find(b => b.id === globalBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
   const activeBillBranch = (settings.branches || []).find(b => b.id === billBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
 
   useEffect(() => {
-    if (settings.custom_fonts && settings.custom_fonts.length > 0) {
-      settings.custom_fonts.forEach(f => registerFont(f.name, f.dataUrl));
-    }
+    if (settings.custom_fonts && settings.custom_fonts.length > 0) { settings.custom_fonts.forEach(f => registerFont(f.name, f.dataUrl)); }
   }, [settings.custom_fonts]);
 
   const handleFontUpload = async (event) => {
@@ -309,43 +299,30 @@ export default function App() {
     const handleGlobalKeyDown = (e) => {
       const activeTag = document.activeElement?.tagName.toLowerCase();
       const isInput = activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select';
-
       if (e.key === "Enter" && isInput && activeTag !== 'textarea') {
           e.preventDefault();
           const formElements = Array.from(document.querySelectorAll('input, select, textarea, button:not(:disabled)'));
           const index = formElements.indexOf(document.activeElement);
-          if (index > -1 && index < formElements.length - 1) {
-              formElements[index + 1].focus();
-          }
+          if (index > -1 && index < formElements.length - 1) { formElements[index + 1].focus(); }
           return;
       }
-
-      if (isInput && !e.ctrlKey && !e.metaKey && !e.altKey) {
-          return; 
-      }
+      if (isInput && !e.ctrlKey && !e.metaKey && !e.altKey) return; 
 
       const scList = settings.shortcuts || defaultSettings.shortcuts;
-      
       const checkKey = (actionId) => {
           const sc = scList.find(s => s.id === actionId);
           if (!sc || !sc.keys) return false;
-          
           const parts = sc.keys.toLowerCase().split('+').map(p => p.trim());
           const needsCtrl = parts.includes('ctrl') || parts.includes('cmd');
           const needsShift = parts.includes('shift');
           const needsAlt = parts.includes('alt');
           const keyPart = parts[parts.length - 1]; 
-          
           const ctrlPressed = e.ctrlKey || e.metaKey;
           const shiftPressed = e.shiftKey;
           const altPressed = e.altKey;
-
           const keyFromKey = e.key ? e.key.toLowerCase() : "";
           const keyFromCode = e.code ? e.code.toLowerCase().replace("key", "").replace("digit", "") : "";
-
-          const keyMatches = (keyFromKey === keyPart || keyFromCode === keyPart);
-
-          return (ctrlPressed === needsCtrl) && (shiftPressed === needsShift) && (altPressed === needsAlt) && keyMatches;
+          return (ctrlPressed === needsCtrl) && (shiftPressed === needsShift) && (altPressed === needsAlt) && (keyFromKey === keyPart || keyFromCode === keyPart);
       };
 
       if (checkKey('save_bill')) { e.preventDefault(); e.stopPropagation(); saveBill(); return; }
@@ -355,21 +332,14 @@ export default function App() {
       if (checkKey('open_ledger')) { e.preventDefault(); e.stopPropagation(); setShowLedger(true); return; }
       if (checkKey('open_recent')) { e.preventDefault(); e.stopPropagation(); setShowRecentBills(true); return; }
       if (checkKey('focus_payment')) { e.preventDefault(); e.stopPropagation(); document.getElementById('paymentMethodSelect')?.focus(); return; }
-      
       if (checkKey('focus_customer')) { e.preventDefault(); e.stopPropagation(); document.getElementById('customerNameInput')?.focus(); return; }
-      if (checkKey('focus_item')) { 
-          e.preventDefault(); e.stopPropagation(); 
-          const itemInputs = document.querySelectorAll('.item-desc-input'); 
-          if(itemInputs.length > 0) itemInputs[itemInputs.length - 1].focus(); 
-          return; 
-      }
+      if (checkKey('focus_item')) { e.preventDefault(); e.stopPropagation(); const itemInputs = document.querySelectorAll('.item-desc-input'); if(itemInputs.length > 0) itemInputs[itemInputs.length - 1].focus(); return; }
       if (checkKey('focus_discount')) { e.preventDefault(); e.stopPropagation(); document.getElementById('discountInput')?.focus(); return; }
       if (checkKey('focus_redeem')) { e.preventDefault(); e.stopPropagation(); document.getElementById('redeemedPointsInput')?.focus(); return; }
       if (checkKey('focus_credit')) { e.preventDefault(); e.stopPropagation(); document.getElementById('appliedCreditInput')?.focus(); return; }
       if (checkKey('download_pdf')) { e.preventDefault(); e.stopPropagation(); downloadPdf("bill-print-root", documentNumber || mode); return; }
       if (checkKey('print_bill')) { e.preventDefault(); e.stopPropagation(); window.print(); return; }
     };
-
     window.addEventListener('keydown', handleGlobalKeyDown, true);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
   }); 
@@ -406,7 +376,6 @@ export default function App() {
   const filteredRecentBills = useMemo(() => {
     return (recentBillsList || []).filter(bill => {
       if (recentModeFilter !== "ALL" && bill.mode !== recentModeFilter) return false;
-      
       if (recentDateFilter === "THIS_MONTH") {
         const billDateObj = parseBillDate(bill.date);
         const now = new Date();
@@ -432,31 +401,25 @@ export default function App() {
       return true;
     });
   }, [recentBillsList, recentModeFilter, recentDateFilter, customStartDate, customEndDate]);
-// ----- END OF PART 1 -----
-// ----- START OF PART 2 -----
+
   const handleBulkDownload = async () => {
     if ((filteredRecentBills || []).length === 0) { toast.error("No bills to download!"); return; }
     if ((filteredRecentBills || []).length > 20) { if (!window.confirm(`Generate PDF with ${filteredRecentBills.length} pages? This might take a minute.`)) return; }
     setIsBulkDownloading(true); toast.info(`Generating PDF for ${filteredRecentBills.length} bills...`);
-    
     await new Promise(resolve => setTimeout(resolve, 800));
-
     try {
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const pageWidth = pdf.internal.pageSize.getWidth();
-
       for (let i = 0; i < filteredRecentBills.length; i++) {
         const bill = filteredRecentBills[i];
         const node = document.getElementById(`bulk-bill-${bill.document_number}`);
         if (!node) continue;
-        
         const canvas = await html2canvas(node, { 
           scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#ffffff", windowWidth: 1024,
           onclone: (clonedDoc) => {
             const clonedNode = clonedDoc.getElementById(`bulk-bill-${bill.document_number}`);
             if (clonedNode) {
-              clonedNode.style.display = "block";
-              clonedNode.style.transform = "none";
+              clonedNode.style.display = "block"; clonedNode.style.transform = "none";
               clonedNode.style.width = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.maxWidth = "800px"; 
               clonedNode.style.padding = "20px"; clonedNode.style.boxSizing = "border-box";
               const images = clonedNode.getElementsByTagName('img'); for (let img of images) img.crossOrigin = "anonymous";
@@ -510,19 +473,9 @@ export default function App() {
             return savedSys ? savedSys : sys;
         });
         mergedShortcuts = [...systemUpdated, ...customOnly];
-    } else {
-        mergedShortcuts = defaultSettings.shortcuts;
-    }
+    } else { mergedShortcuts = defaultSettings.shortcuts; }
 
-    const newSettings = { 
-      ...defaultSettings, 
-      ...dbData, 
-      logo_data_url: savedLogo || dbData.logo_data_url || "", 
-      about_qr_data_url: savedAboutQr || dbData.about_qr_data_url || STATIC_ABOUT_QR_URL, 
-      custom_fonts: dbData.custom_fonts || localFonts, 
-      shortcuts: mergedShortcuts 
-    };
-    
+    const newSettings = { ...defaultSettings, ...dbData, logo_data_url: savedLogo || dbData.logo_data_url || "", about_qr_data_url: savedAboutQr || dbData.about_qr_data_url || STATIC_ABOUT_QR_URL, custom_fonts: dbData.custom_fonts || localFonts, shortcuts: mergedShortcuts };
     setSettings(newSettings);
     if (!(newSettings.branches || []).find(b => b.id === globalBranchId)) { setGlobalBranchId((newSettings.branches || [])[0].id); setBillBranchId((newSettings.branches || [])[0].id); }
     setItems((prev) => { if (prev.length === 1 && !prev[0].description && !prev[0].weight && !prev[0].hsn) return [{ ...prev[0], hsn: newSettings.default_hsn }]; return prev; });
@@ -559,23 +512,18 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [customer.phone, customer.name, token, isPublicView, authHeaders]);
 
-  // CALCULATIONS UPDATE: Handles Applied/Saved Credits and Bonus Points
   const computed = useMemo(() => {
     const baseSilverRate = num(settings.silver_rate_per_gram);
     const baseMCPerGram = num(settings.making_charge_per_gram);
     const flatMCBelow5g = num(settings.flat_mc_below_5g);
-    
     const ptPerGram = num(settings.loyalty_points_per_gram !== undefined ? settings.loyalty_points_per_gram : 1);
     const rsPerPt = num(settings.loyalty_point_value_rs !== undefined ? settings.loyalty_point_value_rs : 1);
-
     let totalWeight = 0;
 
     const mapped = (items || []).map((item, index) => {
-      const weight = num(item.weight);
-      totalWeight += weight;
+      const weight = num(item.weight); totalWeight += weight;
       const quantity = Math.max(num(item.quantity || 1), 1);
       const silverRate = item.rate_override !== "" ? num(item.rate_override) : baseSilverRate;
-
       let mcAmount = 0;
       if (item.mc_override !== "") { mcAmount = weight * num(item.mc_override); } 
       else if (flatMCBelow5g > 0 && weight > 0 && weight < 5) { mcAmount = flatMCBelow5g; } 
@@ -583,18 +531,14 @@ export default function App() {
 
       const totalItemCost = (weight * silverRate) + mcAmount;
       const formulaAmount = mode === "estimate" ? totalItemCost * quantity : totalItemCost;
-      
       const amount = item.amount_override !== "" ? num(item.amount_override) : formulaAmount;
       const rateForPrint = weight > 0 ? (amount / (mode === "estimate" ? quantity : 1)) / weight : 0;
       const { rupees, paise } = splitAmount(amount);
       return { ...item, slNo: index + 1, rate: rateForPrint, quantity, amount, rupees, paise, weight };
     });
 
-    const subtotal = mapped.reduce((sum, row) => sum + row.amount, 0);
-    const taxable = subtotal;
-    const cgst = mode === "invoice" ? taxable * 0.015 : 0;
-    const sgst = mode === "invoice" ? taxable * 0.015 : 0; 
-    const igst = 0;
+    const subtotal = mapped.reduce((sum, row) => sum + row.amount, 0); const taxable = subtotal;
+    const cgst = mode === "invoice" ? taxable * 0.015 : 0; const sgst = mode === "invoice" ? taxable * 0.015 : 0; const igst = 0;
     const gstApplied = mode === "invoice" ? cgst + sgst + igst : 0;
     const mdr = paymentMethod === "Card" ? (taxable + gstApplied) * 0.02 : 0;
     
@@ -614,7 +558,6 @@ export default function App() {
   }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff, redeemedPoints, appliedCredit, savedCredit, bonusPoints]);
 
   const updateItem = (id, key, value) => { markDirty(); setItems((prev) => prev.map((item) => (item.id === id ? { ...item, [key]: value } : item))); };
-
   const checkIsBlank = () => { return !customer.name.trim() && !customer.phone.trim() && !customer.address.trim() && !(items || []).some(i => i.description.trim() || i.weight.trim() || i.amount_override.trim()) && (!discount || discount === "0") && (!exchange || exchange === "0") && !paymentMethod && !advanceMethod && !advanceAmount && !splitCash; };
 
   const clearBill = async (nextMode = mode, nextBranch = billBranchId) => {
@@ -636,10 +579,7 @@ export default function App() {
     setAdvanceAmount(bill.advance_amount ? String(bill.advance_amount) : ""); setAdvanceMethod(bill.advance_method || ""); setAdvanceSplitCash(bill.advance_split_cash ? String(bill.advance_split_cash) : ""); setIsAdvancePaid(bill.is_advance_paid || false);
     setBalanceMethod(bill.balance_method || ""); setBalanceSplitCash(bill.balance_split_cash ? String(bill.balance_split_cash) : ""); setIsBalancePaid(bill.is_balance_paid || false);
     setNotes(bill.notes || ""); setDiscount(bill.discount ? String(bill.discount) : (bill.totals?.discount ? String(bill.totals.discount) : "0")); setExchange(bill.exchange ? String(bill.exchange) : (bill.totals?.exchange ? String(bill.totals.exchange) : "0")); setManualRoundOff(bill.totals?.round_off !== null && bill.totals?.round_off !== undefined ? String(bill.totals.round_off) : "");
-    setRedeemedPoints(bill.redeemed_points ? String(bill.redeemed_points) : "");
-    setAppliedCredit(bill.applied_credit ? String(bill.applied_credit) : "");
-    setSavedCredit(bill.saved_credit ? String(bill.saved_credit) : "");
-    setBonusPoints(bill.bonus_points ? String(bill.bonus_points) : "");
+    setRedeemedPoints(bill.redeemed_points ? String(bill.redeemed_points) : ""); setAppliedCredit(bill.applied_credit ? String(bill.applied_credit) : ""); setSavedCredit(bill.saved_credit ? String(bill.saved_credit) : ""); setBonusPoints(bill.bonus_points ? String(bill.bonus_points) : "");
     const loadedItems = (bill.items || []).map((item) => ({ id: `${Date.now()}-${Math.random()}`, description: item.description || "", hsn: item.hsn || "", weight: item.weight ? String(item.weight) : "", quantity: item.quantity ? String(item.quantity) : "1", mc_override: item.mc_override !== null && item.mc_override !== undefined ? String(item.mc_override) : "", rate_override: item.rate_override !== null && item.rate_override !== undefined ? String(item.rate_override) : "", amount_override: item.amount_override !== null && item.amount_override !== undefined ? String(item.amount_override) : "", }));
     setItems(loadedItems.length > 0 ? loadedItems : [createItem(settings.default_hsn)]); setIsDirty(false); setShowRecentBills(false); setShowLedger(false); toast.success(`Loaded ${bill.document_number} for editing`); goToBillTop();
   };
@@ -659,20 +599,17 @@ export default function App() {
 
   const handleResetCounter = async (resetMode) => {
     if (!window.confirm(`Are you SURE you want to restart the ${resetMode.toUpperCase()} counter for ${activeGlobalBranch.name} back to 0001?`)) return;
-    try { await axios.post(`${API}/bills/reset-counter`, { mode: resetMode, branch_id: globalBranchId }, { headers: authHeaders }); toast.success(`${resetMode.toUpperCase()} counter for ${activeGlobalBranch.name} has been reset.`); if (mode === resetMode && billBranchId === globalBranchId) { await reserveNumber(mode, billBranchId); } } 
-    catch { toast.error(`Failed to reset the ${resetMode} counter.`); }
+    try { await axios.post(`${API}/bills/reset-counter`, { mode: resetMode, branch_id: globalBranchId }, { headers: authHeaders }); toast.success(`${resetMode.toUpperCase()} counter for ${activeGlobalBranch.name} has been reset.`); if (mode === resetMode && billBranchId === globalBranchId) { await reserveNumber(mode, billBranchId); } } catch { toast.error(`Failed to reset the ${resetMode} counter.`); }
   };
 
   const handleBackupBills = async () => {
-    try { toast.info("Preparing backup file..."); const res = await axios.get(`${API}/bills/export`, { headers: authHeaders }); const dataStr = JSON.stringify(res.data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `Jalaram_Bills_Backup_${today()}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link); toast.success("Backup downloaded successfully!"); } 
-    catch { toast.error("Failed to download backup."); }
+    try { toast.info("Preparing backup file..."); const res = await axios.get(`${API}/bills/export`, { headers: authHeaders }); const dataStr = JSON.stringify(res.data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `Jalaram_Bills_Backup_${today()}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link); toast.success("Backup downloaded successfully!"); } catch { toast.error("Failed to download backup."); }
   };
 
   const handleDeleteAllBills = async () => {
     if (!window.confirm("🚨 WARNING! This will permanently delete ALL bills. Have you downloaded your backup first?")) return;
     if (window.prompt("Type 'DELETE' to confirm wiping all bills:") !== "DELETE") { toast.error("Deletion cancelled."); return; }
-    try { await axios.delete(`${API}/bills/all`, { headers: authHeaders }); toast.success("All bills wiped. (Ledger balances remain intact)"); setRecentBillsList([]); const res = await axios.get(`${API}/system/storage`, { headers: authHeaders }); setStorageStats(res.data); } 
-    catch { toast.error("Failed to delete bills."); }
+    try { await axios.delete(`${API}/bills/all`, { headers: authHeaders }); toast.success("All bills wiped. (Ledger balances remain intact)"); setRecentBillsList([]); const res = await axios.get(`${API}/system/storage`, { headers: authHeaders }); setStorageStats(res.data); } catch { toast.error("Failed to delete bills."); }
   };
 
   const handleModeChange = async (nextMode) => {
@@ -682,11 +619,8 @@ export default function App() {
   };
 
   const handleGlobalBranchChange = async (nextBranchId) => { setGlobalBranchId(nextBranchId); if (!currentBillId && checkIsBlank()) { setBillBranchId(nextBranchId); await reserveNumber(mode, nextBranchId); } };
-  
   const updateBranch = (index, field, value) => { const updatedBranches = [...(settings.branches || [])]; updatedBranches[index] = { ...updatedBranches[index], [field]: value }; setSettings({ ...settings, branches: updatedBranches }); };
-  
   const addBranch = () => { const newId = `B${Date.now()}`; const newBranch = { id: newId, name: `New Branch`, address: "", location_url: "", map_url: "#", invoice_upi_id: "", estimate_upi_id: "", gstin: "", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 }; setSettings({ ...settings, branches: [...(settings.branches || []), newBranch] }); };
-  
   const removeBranch = (index) => { if ((settings.branches || []).length <= 1) { toast.error("You must have at least one branch."); return; } if (!window.confirm("Remove this branch from settings?")) return; const updatedBranches = (settings.branches || []).filter((_, i) => i !== index); setSettings({ ...settings, branches: updatedBranches }); };
   const addShortcut = () => { const newSc = { id: `custom_${Date.now()}`, action: "", keys: "", isSystem: false }; setSettings(prev => ({ ...prev, shortcuts: [...(prev.shortcuts || defaultSettings.shortcuts), newSc] })); };
   const updateShortcut = (index, field, value) => { const list = [...(settings.shortcuts || defaultSettings.shortcuts)]; list[index] = { ...list[index], [field]: value }; setSettings(prev => ({ ...prev, shortcuts: list })); };
@@ -713,12 +647,7 @@ export default function App() {
         balance_method: balanceMethod, balance_split_cash: num(balanceSplitCash), is_balance_paid: isBalancePaid,
         discount: num(discount), exchange: num(exchange), round_off: manualRoundOff === "" ? null : num(manualRoundOff), notes,
         
-        // PAYLOAD EXTENDED TO SEND ALL CREDIT AND BONUS DATA TO BACKEND
-        redeemed_points: num(redeemedPoints),
-        earned_points: computed.earnedPoints,
-        applied_credit: computed.appliedCredit,
-        saved_credit: computed.savedCredit,
-        bonus_points: computed.bonusPoints,
+        redeemed_points: num(redeemedPoints), earned_points: computed.earnedPoints, applied_credit: computed.appliedCredit, saved_credit: computed.savedCredit, bonus_points: computed.bonusPoints,
 
         items: computed.items.map((item) => ({ description: item.description, hsn: item.hsn, weight: num(item.weight), quantity: num(item.quantity), mc_override: item.mc_override === "" ? null : num(item.mc_override), rate_override: item.rate_override === "" ? null : num(item.rate_override), amount_override: item.amount_override === "" ? null : num(item.amount_override), rate: item.rate, amount: item.amount, sl_no: item.slNo })),
         totals: { grand_total: computed.grandTotal, subtotal: computed.subtotal }
@@ -738,14 +667,11 @@ export default function App() {
   const todaysTotalCash = (todayBills || []).filter(b => b.is_payment_done).reduce((sum, b) => sum + (b.payment_method === 'Cash' ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_cash) : 0), 0);
   const todaysTotalEstBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'estimate').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
   const todaysTotalInvBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'invoice').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
-
   const publicComputed = useMemo(() => {
     if (!publicBill || !publicSettings) return { items: [], taxable: 0, cgst: 0, sgst: 0, igst: 0, mdr: 0, roundOff: 0, grandTotal: 0, discount: 0, exchange: 0 };
     const baseSilverRate = num(publicSettings.silver_rate_per_gram); const baseMCPerGram = num(publicSettings.making_charge_per_gram); const flatMCBelow5g = num(publicSettings.flat_mc_below_5g);
-    
     const ptPerGram = num(publicSettings.loyalty_points_per_gram !== undefined ? publicSettings.loyalty_points_per_gram : 1);
     const rsPerPt = num(publicSettings.loyalty_point_value_rs !== undefined ? publicSettings.loyalty_point_value_rs : 1);
-
     let totalWeight = 0;
 
     const mapped = (publicBill.items || []).map((item, index) => {
@@ -756,13 +682,11 @@ export default function App() {
       if (item.mc_override !== undefined && item.mc_override !== null && item.mc_override !== "") { mcAmount = weight * num(item.mc_override); } 
       else if (flatMCBelow5g > 0 && weight > 0 && weight < 5) { mcAmount = flatMCBelow5g; } 
       else { mcAmount = weight * baseMCPerGram; }
-
       const totalItemCost = (weight * silverRate) + mcAmount;
       const formulaAmount = publicBill.mode === "estimate" ? totalItemCost * quantity : totalItemCost;
       const amount = (item.amount !== undefined && item.amount !== null && item.amount !== "") ? num(item.amount) : (item.amount_override ? num(item.amount_override) : formulaAmount);
       const { rupees, paise } = splitAmount(amount);
       const rateForPrint = weight > 0 ? (amount / (publicBill.mode === "estimate" ? quantity : 1)) / weight : 0;
-      
       return { ...item, sl_no: item.sl_no || (index + 1), rate: rateForPrint, amount, rupees, paise, weight, quantity };
     });
 
@@ -899,10 +823,10 @@ export default function App() {
                 <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(publicComputed.discount)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(publicComputed.exchange)}</strong></div></>
               )}
               {num(publicComputed.redeemedPoints) > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED ({publicComputed.redeemedPoints} pts)</span><strong style={{color:"#16a34a"}}>- ₹{money(publicComputed.redeemedValue)}</strong></div>}
-              {publicComputed.appliedCredit > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>STORE CREDIT APPLIED</span><strong style={{color:"#16a34a"}}>- ₹{money(publicComputed.appliedCredit)}</strong></div>}
+              {num(publicComputed.appliedCredit) > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>STORE CREDIT APPLIED</span><strong style={{color:"#16a34a"}}>- ₹{money(publicComputed.appliedCredit)}</strong></div>}
               <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(publicComputed.mdr)}</strong></div>
               <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(publicComputed.roundOff)}</strong></div>
-              {publicComputed.savedCredit > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(publicComputed.savedCredit)}</strong></div>}
+              {num(publicComputed.savedCredit) > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(publicComputed.savedCredit)}</strong></div>}
               <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(publicComputed.grandTotal)}</strong></div>
 
               {publicBill.tx_type && publicBill.tx_type !== "sale" && (
@@ -1621,7 +1545,6 @@ export default function App() {
                   <Input value={settings.default_hsn} onChange={(e) => setSettings({ ...settings, default_hsn: e.target.value })} />
                 </div>
 
-                {/* NEW: Loyalty Points System Settings */}
                 <div style={{ padding: "15px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px solid #bbf7d0" }}>
                   <h4 style={{ margin: "0 0 15px 0", color: "#16a34a" }}>Loyalty Points System</h4>
                   <label className="select-label">Points Earned Per 1 Gram</label>
@@ -1649,11 +1572,9 @@ export default function App() {
                       <label className="select-label">Branch Address</label>
                       <Input value={branch.address} onChange={(e) => updateBranch(index, 'address', e.target.value)} style={{ marginBottom: "10px" }} />
                       
-                      {/* UPDATE: Added specific location URL */}
                       <label className="select-label">Google Maps Location URL (For Address Click)</label>
                       <Input value={branch.location_url || ""} onChange={(e) => updateBranch(index, 'location_url', e.target.value)} style={{ marginBottom: "10px" }} />
                       
-                      {/* UPDATE: Clarified Review URL label */}
                       <label className="select-label">Google Maps Feedback/Review URL (For ⭐ Button)</label>
                       <Input value={branch.map_url} onChange={(e) => updateBranch(index, 'map_url', e.target.value)} style={{ marginBottom: "10px" }} />
                       
@@ -1724,4 +1645,4 @@ export default function App() {
     </div>
   );
 }
-// ----- END OF PART 2 -----
+ 
