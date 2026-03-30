@@ -136,6 +136,7 @@ const DesignSettingRow = ({ title, fieldPrefix, settings, setSettings }) => (
     </div>
   </div>
 );
+
 export default function App() {
   const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
   const [isPrinting, setIsPrinting] = useState(false);
@@ -186,6 +187,7 @@ export default function App() {
   const [isNumberLoading, setIsNumberLoading] = useState(false);
   const [billDate, setBillDate] = useState(today());
 
+  // ADDED STORE CREDIT & BONUS POINTS
   const [customer, setCustomer] = useState({ name: "", phone: "", address: "", email: "", points: 0, credit: 0 });
   const [bonusPoints, setBonusPoints] = useState("");
   
@@ -327,17 +329,22 @@ export default function App() {
       const checkKey = (actionId) => {
           const sc = scList.find(s => s.id === actionId);
           if (!sc || !sc.keys) return false;
+          
           const parts = sc.keys.toLowerCase().split('+').map(p => p.trim());
           const needsCtrl = parts.includes('ctrl') || parts.includes('cmd');
           const needsShift = parts.includes('shift');
           const needsAlt = parts.includes('alt');
           const keyPart = parts[parts.length - 1]; 
+          
           const ctrlPressed = e.ctrlKey || e.metaKey;
           const shiftPressed = e.shiftKey;
           const altPressed = e.altKey;
+
           const keyFromKey = e.key ? e.key.toLowerCase() : "";
           const keyFromCode = e.code ? e.code.toLowerCase().replace("key", "").replace("digit", "") : "";
+
           const keyMatches = (keyFromKey === keyPart || keyFromCode === keyPart);
+
           return (ctrlPressed === needsCtrl) && (shiftPressed === needsShift) && (altPressed === needsAlt) && keyMatches;
       };
 
@@ -348,8 +355,14 @@ export default function App() {
       if (checkKey('open_ledger')) { e.preventDefault(); e.stopPropagation(); setShowLedger(true); return; }
       if (checkKey('open_recent')) { e.preventDefault(); e.stopPropagation(); setShowRecentBills(true); return; }
       if (checkKey('focus_payment')) { e.preventDefault(); e.stopPropagation(); document.getElementById('paymentMethodSelect')?.focus(); return; }
+      
       if (checkKey('focus_customer')) { e.preventDefault(); e.stopPropagation(); document.getElementById('customerNameInput')?.focus(); return; }
-      if (checkKey('focus_item')) { e.preventDefault(); e.stopPropagation(); const itemInputs = document.querySelectorAll('.item-desc-input'); if(itemInputs.length > 0) itemInputs[itemInputs.length - 1].focus(); return; }
+      if (checkKey('focus_item')) { 
+          e.preventDefault(); e.stopPropagation(); 
+          const itemInputs = document.querySelectorAll('.item-desc-input'); 
+          if(itemInputs.length > 0) itemInputs[itemInputs.length - 1].focus(); 
+          return; 
+      }
       if (checkKey('focus_discount')) { e.preventDefault(); e.stopPropagation(); document.getElementById('discountInput')?.focus(); return; }
       if (checkKey('focus_redeem')) { e.preventDefault(); e.stopPropagation(); document.getElementById('redeemedPointsInput')?.focus(); return; }
       if (checkKey('focus_credit')) { e.preventDefault(); e.stopPropagation(); document.getElementById('appliedCreditInput')?.focus(); return; }
@@ -393,6 +406,7 @@ export default function App() {
   const filteredRecentBills = useMemo(() => {
     return (recentBillsList || []).filter(bill => {
       if (recentModeFilter !== "ALL" && bill.mode !== recentModeFilter) return false;
+      
       if (recentDateFilter === "THIS_MONTH") {
         const billDateObj = parseBillDate(bill.date);
         const now = new Date();
@@ -418,7 +432,8 @@ export default function App() {
       return true;
     });
   }, [recentBillsList, recentModeFilter, recentDateFilter, customStartDate, customEndDate]);
-
+// ----- END OF PART 1 -----
+// ----- START OF PART 2 -----
   const handleBulkDownload = async () => {
     if ((filteredRecentBills || []).length === 0) { toast.error("No bills to download!"); return; }
     if ((filteredRecentBills || []).length > 20) { if (!window.confirm(`Generate PDF with ${filteredRecentBills.length} pages? This might take a minute.`)) return; }
@@ -543,6 +558,8 @@ export default function App() {
     }, 250);
     return () => clearTimeout(timer);
   }, [customer.phone, customer.name, token, isPublicView, authHeaders]);
+
+  // CALCULATIONS UPDATE: Handles Applied/Saved Credits and Bonus Points
   const computed = useMemo(() => {
     const baseSilverRate = num(settings.silver_rate_per_gram);
     const baseMCPerGram = num(settings.making_charge_per_gram);
@@ -665,8 +682,11 @@ export default function App() {
   };
 
   const handleGlobalBranchChange = async (nextBranchId) => { setGlobalBranchId(nextBranchId); if (!currentBillId && checkIsBlank()) { setBillBranchId(nextBranchId); await reserveNumber(mode, nextBranchId); } };
+  
   const updateBranch = (index, field, value) => { const updatedBranches = [...(settings.branches || [])]; updatedBranches[index] = { ...updatedBranches[index], [field]: value }; setSettings({ ...settings, branches: updatedBranches }); };
+  
   const addBranch = () => { const newId = `B${Date.now()}`; const newBranch = { id: newId, name: `New Branch`, address: "", location_url: "", map_url: "#", invoice_upi_id: "", estimate_upi_id: "", gstin: "", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 }; setSettings({ ...settings, branches: [...(settings.branches || []), newBranch] }); };
+  
   const removeBranch = (index) => { if ((settings.branches || []).length <= 1) { toast.error("You must have at least one branch."); return; } if (!window.confirm("Remove this branch from settings?")) return; const updatedBranches = (settings.branches || []).filter((_, i) => i !== index); setSettings({ ...settings, branches: updatedBranches }); };
   const addShortcut = () => { const newSc = { id: `custom_${Date.now()}`, action: "", keys: "", isSystem: false }; setSettings(prev => ({ ...prev, shortcuts: [...(prev.shortcuts || defaultSettings.shortcuts), newSc] })); };
   const updateShortcut = (index, field, value) => { const list = [...(settings.shortcuts || defaultSettings.shortcuts)]; list[index] = { ...list[index], [field]: value }; setSettings(prev => ({ ...prev, shortcuts: list })); };
@@ -693,6 +713,7 @@ export default function App() {
         balance_method: balanceMethod, balance_split_cash: num(balanceSplitCash), is_balance_paid: isBalancePaid,
         discount: num(discount), exchange: num(exchange), round_off: manualRoundOff === "" ? null : num(manualRoundOff), notes,
         
+        // PAYLOAD EXTENDED TO SEND ALL CREDIT AND BONUS DATA TO BACKEND
         redeemed_points: num(redeemedPoints),
         earned_points: computed.earnedPoints,
         applied_credit: computed.appliedCredit,
@@ -721,6 +742,7 @@ export default function App() {
   const publicComputed = useMemo(() => {
     if (!publicBill || !publicSettings) return { items: [], taxable: 0, cgst: 0, sgst: 0, igst: 0, mdr: 0, roundOff: 0, grandTotal: 0, discount: 0, exchange: 0 };
     const baseSilverRate = num(publicSettings.silver_rate_per_gram); const baseMCPerGram = num(publicSettings.making_charge_per_gram); const flatMCBelow5g = num(publicSettings.flat_mc_below_5g);
+    
     const ptPerGram = num(publicSettings.loyalty_points_per_gram !== undefined ? publicSettings.loyalty_points_per_gram : 1);
     const rsPerPt = num(publicSettings.loyalty_point_value_rs !== undefined ? publicSettings.loyalty_point_value_rs : 1);
 
@@ -771,6 +793,707 @@ export default function App() {
       if (isAdvancePaid && !isBalancePaid && (balanceMethod === "UPI" || balanceMethod === "Split")) { const bal = Math.max(0, computed.grandTotal - num(advanceAmount)); return balanceMethod === "Split" ? Math.max(0, bal - num(balanceSplitCash)) : bal; }
       return 0;
   };
+  const upiAmountToPay = getUpiAmount(); const showDashboardUpi = upiAmountToPay > 0;
+  const upiId = mode === "invoice" ? activeBillBranch.invoice_upi_id : activeBillBranch.estimate_upi_id;
+  const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
+  const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
+
+  if (isPublicView) {
+    if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
+    if (publicBill === "NOT_FOUND" || !publicBill) return <div className="loading-screen">Bill not found or has been deleted.</div>;
+
+    const isSale = publicBill.tx_type === "sale" || !publicBill.tx_type;
+    const isPaid = isSale ? (publicBill.is_payment_done === true || publicBill.is_payment_done === 1 || String(publicBill.is_payment_done).toLowerCase() === "true") : (publicBill.is_balance_paid === true || publicBill.is_balance_paid === 1 || String(publicBill.is_balance_paid).toLowerCase() === "true");
+    const pbBranch = (publicSettings?.branches || []).find(b => b.id === publicBill.branch_id) || (publicSettings?.branches || [])[0] || defaultSettings.branches[0];
+
+    let publicUpiAmountToPay = publicComputed.grandTotal;
+    if (!isPaid) {
+      if (isSale && publicBill.payment_method === "Split") {
+         publicUpiAmountToPay = Math.max(0, publicComputed.grandTotal - num(publicBill.split_cash));
+      } else if (!isSale) {
+         if (!publicBill.is_advance_paid) {
+            publicUpiAmountToPay = publicBill.advance_method === "Split" ? Math.max(0, num(publicBill.advance_amount) - num(publicBill.advance_split_cash)) : num(publicBill.advance_amount);
+            if (publicUpiAmountToPay <= 0) publicUpiAmountToPay = num(publicBill.advance_amount) || publicComputed.grandTotal;
+         } else if (!publicBill.is_balance_paid) {
+            const bal = Math.max(0, publicComputed.grandTotal - num(publicBill.advance_amount));
+            publicUpiAmountToPay = publicBill.balance_method === "Split" ? Math.max(0, bal - num(publicBill.balance_split_cash)) : bal;
+            if (publicUpiAmountToPay <= 0) publicUpiAmountToPay = bal;
+         }
+      }
+    }
+    const publicUpiId = publicBill.mode === "invoice" ? pbBranch.invoice_upi_id : pbBranch.estimate_upi_id;
+    const publicUpiUri = `upi://pay?pa=${publicUpiId}&pn=${encodeURIComponent(publicSettings?.shop_name || "Shop")}&am=${money(publicUpiAmountToPay)}&cu=INR&tn=Bill_${publicBill.document_number}`;
+    const publicDynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(publicUpiUri)}&size=220`;
+
+    return (
+      <div className="billing-app" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px', minHeight: '100dvh', height: 'max-content', backgroundColor: '#f1f5f9', overflowX: 'hidden', paddingBottom: '40px' }}>
+        <Toaster position="bottom-right" />
+        {showFeedbackModal && (
+          <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
+            <div style={{ backgroundColor: "white", padding: "30px", borderRadius: "16px", width: "100%", maxWidth: "380px", textAlign: "center", boxShadow: "0 10px 25px rgba(0,0,0,0.2)" }}>
+              <h3 style={{ marginTop: 0, marginBottom: "8px", color: "#0f172a" }}>Leave a Review!</h3>
+              <p style={{ fontSize: "0.9rem", color: "#64748b", marginBottom: "20px" }}>Which branch did you visit today?</p>
+              {(publicSettings?.branches || []).map(b => (
+                <a key={b.id} href={b.map_url !== "#" ? b.map_url : "#"} target="_blank" rel="noopener noreferrer" style={{ display: "block", padding: "14px", backgroundColor: b.map_url !== "#" ? "#facc15" : "#e2e8f0", color: b.map_url !== "#" ? "#854d0e" : "#475569", textDecoration: "none", borderRadius: "10px", marginBottom: "12px", fontWeight: "bold", fontSize: "1.1rem" }}>⭐ {b.name}</a>
+              ))}
+              <Button variant="ghost" onClick={() => setShowFeedbackModal(false)} style={{ width: "100%", color: "#64748b", marginTop: "10px" }}>Cancel</Button>
+            </div>
+          </div>
+        )}
+        <div className="no-print" style={{ marginBottom: '20px', display: 'flex', gap: '15px' }}>
+          <Button onClick={() => downloadPdf("public-bill-root", publicBill.document_number)}>Download PDF</Button>
+          <Button variant="outline" onClick={() => window.print()}>Print Bill</Button>
+        </div>
+
+        <section id="public-bill-root" className="bill-sheet" style={{ "--print-scale-factor": 1, position: 'relative', zIndex: 1 }}>
+          {isPaid && <div className="watermark-done">FULLY PAID</div>}
+
+          <div className="bill-header">
+            <div className="logo-area">
+              {publicSettings?.logo_data_url ? <img src={publicSettings.logo_data_url} alt="Shop Logo" className="shop-logo" crossOrigin="anonymous" /> : <div className="shop-logo-fallback">JJ</div>}
+              <div style={{ width: "100%", textAlign: publicSettings?.shop_name_align || "center" }}>
+                <h2 className="sheet-shop-title" style={{ fontFamily: publicSettings?.shop_name_font || "sans-serif", color: publicSettings?.shop_name_color || "#000", fontSize: `${publicSettings?.shop_name_size}px`, margin: 0 }}>{publicSettings?.shop_name}</h2>
+              </div>
+              <div style={{ width: "100%", textAlign: publicSettings?.tagline_align || "center" }}>
+                <p className="sheet-tagline" style={{ fontFamily: publicSettings?.tagline_font || "sans-serif", color: publicSettings?.tagline_color || "#475569", fontSize: `${publicSettings?.tagline_size}px`, margin: "5px 0" }}>{publicSettings?.tagline}</p>
+              </div>
+            </div>
+
+            <div className="contact-area">
+              <div className="contact-address" style={{ fontFamily: publicSettings?.address_font || "sans-serif", display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '8px', alignItems: publicSettings?.address_align === 'left' ? 'flex-start' : publicSettings?.address_align === 'right' ? 'flex-end' : 'center', textAlign: publicSettings?.address_align || "center" }}>
+                  <a href={pbBranch.location_url && pbBranch.location_url !== "#" ? pbBranch.location_url : "#"} target="_blank" rel="noopener noreferrer" style={{ color: publicSettings?.address_color || "#475569", fontSize: `${publicSettings?.address_size || 14}px`, textDecoration: 'none' }}>{pbBranch.address}</a>
+              </div>
+              <div style={{ width: "100%", textAlign: publicSettings?.phone_align || "center", fontFamily: publicSettings?.phone_font || "sans-serif", fontSize: `${publicSettings?.phone_size || 13}px`, marginBottom: "4px" }}>
+                {(publicSettings?.phone_numbers || []).join(" | ")}
+              </div>
+              <div style={{ width: "100%", textAlign: publicSettings?.email_align || "center", fontFamily: publicSettings?.email_font || "sans-serif", fontSize: `${publicSettings?.email_size || 13}px`, marginBottom: "4px" }}>
+                <a href={`mailto:${publicSettings?.email}`} style={{ color: publicSettings?.email_color || "#475569", textDecoration: 'none' }}>{publicSettings?.email}</a>
+              </div>
+              {publicBill.mode === "invoice" && pbBranch.gstin && <p style={{ margin: "4px 0", textAlign: "center", fontWeight: "bold" }}>GSTIN: {pbBranch.gstin}</p>}
+            </div>
+          </div>
+
+          <div className="sheet-banner">{publicBill.tx_type === "booking" ? "BOOKING RECEIPT" : publicBill.tx_type === "service" ? "SERVICE ORDER" : publicBill.mode === "invoice" ? "TAX INVOICE" : "ESTIMATE"}</div>
+
+          <div className="meta-grid">
+            <p><strong>{publicBill.mode === "invoice" ? "Invoice No" : "Estimate No"}:</strong> {publicBill.document_number}</p>
+            <p><strong>Date:</strong> {publicBill.date}</p>
+          </div>
+
+          <div className="customer-box">
+            <p><strong>Name:</strong> {publicBill.customer_name || publicBill.customer?.name || "-"}</p>
+            <p><strong>Address:</strong> {publicBill.customer_address || publicBill.customer?.address || "-"}</p>
+            <p><strong>Phone:</strong> {publicBill.customer_phone || publicBill.customer?.phone || "-"}</p>
+          </div>
+
+          <BillTable mode={publicBill.mode} items={publicComputed.items} />
+
+          <div className="sheet-bottom-stack">
+            <div className="totals">
+              <div className="totals-row"><span>{publicBill.mode === "invoice" ? "Taxable Amt." : "TOTAL"}</span><strong>₹{money(publicComputed.taxable)}</strong></div>
+              {publicBill.mode === "invoice" ? (
+                <>
+                  <div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(publicComputed.cgst)}</strong></div><div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(publicComputed.sgst)}</strong></div><div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(publicComputed.igst)}</strong></div>
+                </>
+              ) : (
+                <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(publicComputed.discount)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(publicComputed.exchange)}</strong></div></>
+              )}
+              {num(publicComputed.redeemedPoints) > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED ({publicComputed.redeemedPoints} pts)</span><strong style={{color:"#16a34a"}}>- ₹{money(publicComputed.redeemedValue)}</strong></div>}
+              {publicComputed.appliedCredit > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>STORE CREDIT APPLIED</span><strong style={{color:"#16a34a"}}>- ₹{money(publicComputed.appliedCredit)}</strong></div>}
+              <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(publicComputed.mdr)}</strong></div>
+              <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(publicComputed.roundOff)}</strong></div>
+              {publicComputed.savedCredit > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(publicComputed.savedCredit)}</strong></div>}
+              <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(publicComputed.grandTotal)}</strong></div>
+
+              {publicBill.tx_type && publicBill.tx_type !== "sale" && (
+                <>
+                  <div className="totals-row" style={{ marginTop: "10px", color: "#16a34a" }}><span>ADVANCE RECEIVED</span><strong>₹{money(publicBill.advance_amount)}</strong></div>
+                  <div className="totals-row" style={{ color: "#dc2626" }}><span>BALANCE DUE</span><strong>₹{money(Math.max(0, publicComputed.grandTotal - num(publicBill.advance_amount)))}</strong></div>
+                </>
+              )}
+
+              {!isPaid && publicUpiAmountToPay > 0 && (
+                <div className="payment-qr-box no-print" data-html2canvas-ignore="true" style={{ textAlign: "center", marginTop: "20px", padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px dashed #cbd5e1" }}>
+                  <p className="scan-title" style={{ fontWeight: "bold", margin: "0 0 10px 0", color: "#0f172a", fontSize: "1.1rem" }}>Scan Here For Payment (₹{money(publicUpiAmountToPay)})</p>
+                  <img src={publicDynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" style={{ width: "200px", height: "200px", margin: "0 auto", display: "block" }} crossOrigin="anonymous" />
+                  <p className="upi-id" style={{ fontSize: "0.9rem", color: "#64748b", margin: "10px 0 0 0", fontWeight: "bold" }}>UPI: {publicUpiId}</p>
+                </div>
+              )}
+            </div>
+
+            {publicComputed.earnedPoints > 0 && (
+              <div style={{ textAlign: "center", marginTop: "15px", padding: "10px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px dashed #22c55e", color: "#166534", fontWeight: "bold", fontSize: "0.9rem" }}>
+                🎉 You earned {publicComputed.earnedPoints} Loyalty Points on this bill!
+              </div>
+            )}
+
+            <ConnectWithUs phoneLink={(publicSettings?.phone_numbers || [])[0]} />
+
+            {publicBill.mode === "invoice" ? (
+              <div className="declaration">
+                <p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p>
+                <div className="no-print" data-html2canvas-ignore="true" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                  <div onClick={() => { if(pbBranch.map_url && pbBranch.map_url !== "#") window.open(pbBranch.map_url, "_blank"); else toast.info("Feedback link not set for this branch yet!"); }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
+                </div>
+              </div>
+            ) : (
+              <div className="policies">
+                <p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul>
+                <div className="no-print" data-html2canvas-ignore="true" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                  <div onClick={() => { if(pbBranch.map_url && pbBranch.map_url !== "#") window.open(pbBranch.map_url, "_blank"); else toast.info("Feedback link not set for this branch yet!"); }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
+                </div>
+              </div>
+            )}
+          </div>
+          <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
+        </section>
+      </div>
+    );
+  }
+
+  if (checkingSession) {
+    return (
+      <div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#0f172a' }}>Loading billing dashboard...</div>
+        {isWakingUp && (
+          <div style={{ marginTop: '20px', textAlign: 'center', padding: '15px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', maxWidth: '320px' }}>
+            <p style={{ margin: '0 0 15px 0', fontSize: '0.9rem', color: '#64748b' }}>The database server is currently waking up from sleep mode. This usually takes about <strong>30 to 60 seconds</strong>.</p>
+            <Button variant="outline" onClick={() => { localStorage.clear(); window.location.reload(); }} style={{ width: '100%', borderColor: '#ef4444', color: '#ef4444' }}>Force Quit & Clear Session</Button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (!token) {
+    return (
+      <div className="login-shell">
+        <Toaster position="bottom-right" />
+        <form className="login-card" onSubmit={handleLogin}>
+          <h1 className="login-title">Jalaram Jewellers</h1>
+          <p className="login-subtitle">Enter passcode to access billing panel</p>
+          <Input type="password" value={passcode} onChange={(e) => setPasscode(e.target.value)} placeholder="Enter passcode" />
+          <Button type="submit" disabled={loggingIn}>{loggingIn ? "Checking..." : "Login"}</Button>
+        </form>
+      </div>
+    );
+  }
+
+  if (token && settingsLoaded && !isPublicView && !gatewayPassed) {
+     return (
+        <div className="login-shell" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9', height: '100vh' }}>
+           <div className="login-card" style={{ maxWidth: '400px', width: '90%', textAlign: 'center', backgroundColor: 'white', padding: '30px', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+              <Store size={48} color="#0f172a" style={{ margin: '0 auto 15px auto' }} />
+              <h2 style={{ marginBottom: '10px', color: '#0f172a' }}>Select Branch</h2>
+              <p style={{ color: '#64748b', marginBottom: '25px', fontSize: '0.9rem' }}>Which branch are you working in today?</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                 {(settings.branches || []).map(b => (
+                    <Button key={b.id} onClick={() => { setGlobalBranchId(b.id); setBillBranchId(b.id); reserveNumber(mode, b.id); setGatewayPassed(true); }} style={{ padding: '15px', height: 'auto', fontSize: '1.1rem', backgroundColor: '#f8fafc', color: '#0f172a', border: '1px solid #cbd5e1', justifyContent: 'flex-start', textAlign: 'left' }} variant="outline">
+                       📍 {b.name}
+                    </Button>
+                 ))}
+              </div>
+           </div>
+        </div>
+     );
+  }
+
+  return (
+    <div className="billing-app" style={isPrinting ? { height: "auto", overflow: "visible" } : { display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", backgroundColor: "#f1f5f9" }}>
+      <Toaster position="bottom-right" />
+
+      <div style={{ position: "absolute", zIndex: -9999, opacity: 0, pointerEvents: "none", top: 0, left: 0, height: 0, overflow: "hidden" }}>
+        {(filteredRecentBills || []).map(b => {
+           const billBranch = (settings.branches || []).find(br => br.id === b.branch_id) || (settings.branches || [])[0] || defaultSettings.branches[0];
+           const rsPerPt = num(settings.loyalty_point_value_rs !== undefined ? settings.loyalty_point_value_rs : 1);
+           
+           const printedItems = (b.items || []).map((item, index) => {
+             const rate = (item.rate !== undefined && item.rate !== null) ? num(item.rate) : (item.rate_override ? num(item.rate_override) : 0);
+             const amount = (item.amount !== undefined && item.amount !== null) ? num(item.amount) : (item.amount_override ? num(item.amount_override) : 0);
+             const { rupees, paise } = splitAmount(amount);
+             return { ...item, sl_no: item.sl_no || (index + 1), rate, amount, rupees, paise };
+           });
+
+           return (
+             <section key={b.id} id={`bulk-bill-${b.document_number}`} className="bill-sheet" style={{ width: "800px", maxWidth: "800px", margin: 0, "--print-scale-factor": 1 }}>
+                {(b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) && <div className="watermark-done">FULLY PAID</div>}
+                <div className="bill-header">
+                  <div className="logo-area">
+                    {settings.logo_data_url ? <img src={settings.logo_data_url} alt="Shop Logo" className="shop-logo" crossOrigin="anonymous" /> : <div className="shop-logo-fallback">JJ</div>}
+                    <div style={{ width: "100%", textAlign: settings.shop_name_align || "center" }}>
+                      <h2 className="sheet-shop-title" style={{ fontFamily: settings.shop_name_font || "sans-serif", color: settings.shop_name_color || "#000", fontSize: `${settings.shop_name_size}px`, margin: 0 }}>{settings.shop_name}</h2>
+                    </div>
+                    <div style={{ width: "100%", textAlign: settings.tagline_align || "center" }}>
+                      <p className="sheet-tagline" style={{ fontFamily: settings.tagline_font || "sans-serif", color: settings.tagline_color || "#475569", fontSize: `${settings.tagline_size}px`, margin: "5px 0" }}>{settings.tagline}</p>
+                    </div>
+                  </div>
+                  <div className="contact-area">
+                    <div className="contact-address" style={{ fontFamily: settings.address_font || "sans-serif", textAlign: settings.address_align || "center" }}>
+                        <span style={{ color: settings.address_color || "#475569", fontSize: `${settings.address_size || 14}px` }}>{billBranch.address}</span>
+                    </div>
+                    <div style={{ width: "100%", textAlign: settings.phone_align || "center", fontFamily: settings.phone_font || "sans-serif", fontSize: `${settings.phone_size || 13}px`, marginBottom: "4px" }}>
+                      {(settings.phone_numbers || []).join(" | ")}
+                    </div>
+                    {b.mode === "invoice" && billBranch.gstin && <p style={{ margin: "4px 0", textAlign: "center", fontWeight: "bold" }}>GSTIN: {billBranch.gstin}</p>}
+                  </div>
+                </div>
+
+                <div className="sheet-banner">{b.tx_type === "booking" ? "BOOKING RECEIPT" : b.tx_type === "service" ? "SERVICE ORDER" : b.mode === "invoice" ? "TAX INVOICE" : "ESTIMATE"}</div>
+
+                <div className="meta-grid">
+                  <p><strong>{b.mode === "invoice" ? "Invoice No" : "Estimate No"}:</strong> {b.document_number}</p>
+                  <p><strong>Date:</strong> {b.date}</p>
+                </div>
+
+                <div className="customer-box">
+                  <p><strong>Name:</strong> {b.customer_name || b.customer?.name || "-"}</p>
+                  <p><strong>Address:</strong> {b.customer_address || b.customer?.address || "-"}</p>
+                  <p><strong>Phone:</strong> {b.customer_phone || b.customer?.phone || "-"}</p>
+                </div>
+
+                <BillTable mode={b.mode} items={printedItems} />
+
+                <div className="sheet-bottom-stack">
+                  <div className="totals">
+                    <div className="totals-row"><span>{b.mode === "invoice" ? "Taxable Amt." : "TOTAL"}</span><strong>₹{money(b.totals?.taxable_amount || b.totals?.subtotal || 0)}</strong></div>
+                    {b.mode === "invoice" ? (
+                      <>
+                        <div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(b.totals?.cgst || 0)}</strong></div><div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(b.totals?.sgst || 0)}</strong></div><div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(b.totals?.igst || 0)}</strong></div>
+                      </>
+                    ) : (
+                      <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(b.totals?.discount || 0)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(b.totals?.exchange || 0)}</strong></div></>
+                    )}
+                    {num(b.redeemed_points) > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED ({b.redeemed_points} pts)</span><strong style={{color:"#16a34a"}}>- ₹{money(num(b.redeemed_points) * rsPerPt)}</strong></div>}
+                    {num(b.applied_credit) > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>STORE CREDIT APPLIED</span><strong style={{color:"#16a34a"}}>- ₹{money(b.applied_credit)}</strong></div>}
+                    <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(b.totals?.mdr || 0)}</strong></div>
+                    <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(b.totals?.round_off !== undefined ? b.totals.round_off : 0)}</strong></div>
+                    {num(b.saved_credit) > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(b.saved_credit)}</strong></div>}
+                    <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(b.totals?.grand_total || 0)}</strong></div>
+                    
+                    {b.tx_type && b.tx_type !== "sale" && (
+                      <><div className="totals-row" style={{ marginTop: "10px", color: "#16a34a" }}><span>ADVANCE RECEIVED</span><strong>₹{money(b.advance_amount)}</strong></div><div className="totals-row" style={{ color: "#dc2626" }}><span>BALANCE DUE</span><strong>₹{money(Math.max(0, num(b.totals?.grand_total || 0) - num(b.advance_amount)))}</strong></div></>
+                    )}
+                  </div>
+                  {b.earned_points > 0 && (
+                    <div style={{ textAlign: "center", marginTop: "15px", padding: "10px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px dashed #22c55e", color: "#166534", fontWeight: "bold", fontSize: "0.9rem" }}>
+                      🎉 You earned {b.earned_points} Loyalty Points on this bill!
+                    </div>
+                  )}
+                </div>
+                <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
+             </section>
+           );
+        })}
+      </div>
+
+      <header className="top-bar no-print" style={{ zIndex: 50, position: "relative", flexShrink: 0, minHeight: "65px", height: "auto", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 20px", flexWrap: "wrap", gap: "10px" }}>
+        <div className="brand-block" style={{ display: "flex", alignItems: "center", gap: "15px", flexWrap: "nowrap" }}>
+          <div><h1 className="brand-title" style={{ margin: 0, fontSize: "1.2rem", color: "white" }}>{settings.shop_name}</h1></div>
+          
+          <div style={{ paddingLeft: "15px", borderLeft: "2px solid rgba(255,255,255,0.2)" }}>
+             <select value={globalBranchId} onChange={(e) => handleGlobalBranchChange(e.target.value)} style={{ backgroundColor: "rgba(255,255,255,0.1)", color: "white", border: "1px solid rgba(255,255,255,0.3)", padding: "6px 12px", borderRadius: "6px", fontWeight: "bold", outline: "none", cursor: "pointer" }}>
+                {(settings.branches || []).map(b => <option key={b.id} value={b.id} style={{ color: "black" }}>📍 {b.name}</option>)}
+             </select>
+          </div>
+
+          <div style={{ display: "flex", gap: "6px", backgroundColor: "rgba(255,255,255,0.15)", padding: "4px", borderRadius: "8px", marginLeft: "10px" }}>
+            <Button onClick={() => handleModeChange("invoice")} style={{ backgroundColor: mode === "invoice" ? "#ffffff" : "transparent", color: mode === "invoice" ? "#000000" : "white", border: "none", padding: "4px 12px", height: "auto" }}>Tax Invoice</Button>
+            <Button onClick={() => handleModeChange("estimate")} style={{ backgroundColor: mode === "estimate" ? "#ffffff" : "transparent", color: mode === "estimate" ? "#000000" : "white", border: "none", padding: "4px 12px", height: "auto" }}>Estimate</Button>
+          </div>
+        </div>
+        
+        <div className="top-actions" style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.85rem", color: cloudStatus.enabled ? "#4ade80" : "#facc15", marginRight: "10px" }}>
+             <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: cloudStatus.enabled ? "#4ade80" : "#facc15" }} />
+             <span>{cloudStatus.enabled ? "Live" : "Offline"}</span>
+          </div>
+          <Button variant="outline" onClick={goToBillTop} style={{ color: "black", backgroundColor: "white" }}>Back</Button>
+          <Button variant="outline" onClick={handleLogout} style={{ color: "black", backgroundColor: "white" }}>Logout</Button>
+        </div>
+      </header>
+
+      <main className="main-layout" style={isPrinting ? { height: "auto", overflow: "visible", display: "block" } : { flex: 1, display: "flex", flexDirection: isMobileSplit ? "column" : "row", overflowY: isMobileSplit ? "auto" : "hidden", overflowX: "hidden", backgroundColor: "#f1f5f9", minHeight: 0, paddingBottom: isMobileSplit ? "40px" : "0" }}>
+        
+        <section style={isPrinting ? { padding: 0, margin: 0, overflow: "visible" } : { flex: isMobileSplit ? "none" : "3", overflow: isMobileSplit ? "visible" : "auto", padding: "20px", height: isMobileSplit ? "max-content" : "100%" }}>
+          <div id="bill-print-root" className="bill-sheet" style={{ "--print-scale-factor": (printScale / 100).toFixed(3), position: 'relative', zIndex: 1, margin: "0 auto" }}>
+            {(txType === "sale" ? isPaymentDone : isBalancePaid) && <div className="watermark-done">FULLY PAID</div>}
+            <div className="bill-header">
+              <div className="logo-area">
+                {settings.logo_data_url ? <img src={settings.logo_data_url} alt="Shop Logo" className="shop-logo" crossOrigin="anonymous" /> : <div className="shop-logo-fallback">JJ</div>}
+                <div style={{ width: "100%", textAlign: settings.shop_name_align || "center" }}>
+                  <h2 className="sheet-shop-title" style={{ fontFamily: settings.shop_name_font || "sans-serif", color: settings.shop_name_color || "#000", fontSize: `${settings.shop_name_size}px`, margin: 0 }}>{settings.shop_name}</h2>
+                </div>
+                <div style={{ width: "100%", textAlign: settings.tagline_align || "center" }}>
+                  <p className="sheet-tagline" style={{ fontFamily: settings.tagline_font || "sans-serif", color: settings.tagline_color || "#475569", fontSize: `${settings.tagline_size}px`, margin: "5px 0" }}>{settings.tagline}</p>
+                </div>
+              </div>
+
+              <div className="contact-area">
+                <div className="contact-address" style={{ fontFamily: settings.address_font || "sans-serif", display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '8px', alignItems: settings.address_align === 'left' ? 'flex-start' : settings.address_align === 'right' ? 'flex-end' : 'center', textAlign: settings.address_align || "center" }}>
+                    <a href={activeBillBranch.location_url && activeBillBranch.location_url !== "#" ? activeBillBranch.location_url : "#"} target="_blank" rel="noopener noreferrer" style={{ color: settings.address_color || "#475569", fontSize: `${settings.address_size || 14}px`, textDecoration: 'none' }}>{activeBillBranch.address}</a>
+                </div>
+                <div style={{ width: "100%", textAlign: settings.phone_align || "center", fontFamily: settings.phone_font || "sans-serif", fontSize: `${settings.phone_size || 13}px`, marginBottom: "4px" }}>
+                  {(settings.phone_numbers || []).join(" | ")}
+                </div>
+                <div style={{ width: "100%", textAlign: settings.email_align || "center", fontFamily: settings.email_font || "sans-serif", fontSize: `${settings.email_size || 13}px`, marginBottom: "4px" }}>
+                  <a href={`mailto:${settings.email}`} style={{ color: settings.email_color || "#475569", textDecoration: 'none' }}>{settings.email}</a>
+                </div>
+                {mode === "invoice" && activeBillBranch.gstin && <p style={{ margin: "4px 0", textAlign: "center", fontWeight: "bold" }}>GSTIN: {activeBillBranch.gstin}</p>}
+              </div>
+            </div>
+
+            <div className="sheet-banner">{txType === "booking" ? "BOOKING RECEIPT" : txType === "service" ? "SERVICE ORDER" : mode === "invoice" ? "TAX INVOICE" : "ESTIMATE"}</div>
+
+            <div className="meta-grid">
+              <p><strong>{mode === "invoice" ? "Invoice No" : "Estimate No"}:</strong> {isNumberLoading ? "Generating..." : documentNumber || "-"}</p>
+              <p><strong>Date:</strong> {billDate}</p>
+            </div>
+
+            <div className="customer-box">
+              <p><strong>Name:</strong> {customer.name || "-"}</p>
+              <p><strong>Address:</strong> {customer.address || "-"}</p>
+              <p><strong>Phone:</strong> {customer.phone || "-"}</p>
+            </div>
+
+            <BillTable mode={mode} items={computed.items} />
+
+            <div className="sheet-bottom-stack">
+              <div className="totals">
+                <div className="totals-row"><span>{mode === "invoice" ? "Taxable Amt." : "TOTAL"}</span><strong>₹{money(computed.taxable)}</strong></div>
+                {mode === "invoice" ? (
+                  <>
+                    <div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(computed.cgst)}</strong></div>
+                    <div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(computed.sgst)}</strong></div>
+                    <div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(computed.igst)}</strong></div>
+                  </>
+                ) : (
+                  <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(discount)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(exchange)}</strong></div></>
+                )}
+                {computed.redeemedPoints > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED ({computed.redeemedPoints} pts)</span><strong style={{color:"#16a34a"}}>- ₹{money(computed.redeemedValue)}</strong></div>}
+                {computed.appliedCredit > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>STORE CREDIT APPLIED</span><strong style={{color:"#16a34a"}}>- ₹{money(computed.appliedCredit)}</strong></div>}
+                <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(computed.mdr)}</strong></div>
+                <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(computed.roundOff)}</strong></div>
+                {computed.savedCredit > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(computed.savedCredit)}</strong></div>}
+                <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(computed.grandTotal)}</strong></div>
+
+                {txType !== "sale" && (
+                  <>
+                    <div className="totals-row" style={{ marginTop: "10px", color: "#16a34a" }}><span>ADVANCE RECEIVED</span><strong>₹{money(advanceAmount)}</strong></div>
+                    <div className="totals-row" style={{ color: "#dc2626" }}><span>BALANCE DUE</span><strong>₹{money(Math.max(0, computed.grandTotal - num(advanceAmount)))}</strong></div>
+                  </>
+                )}
+
+                {showDashboardUpi && (
+                  <div className="payment-qr-box no-print" data-html2canvas-ignore="true">
+                    <p className="scan-title">Scan Here For Payment (₹{money(upiAmountToPay)})</p>
+                    <img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" crossOrigin="anonymous" />
+                    <p className="upi-id">UPI: {upiId}</p>
+                  </div>
+                )}
+              </div>
+
+              {computed.earnedPoints > 0 && (
+                <div style={{ textAlign: "center", marginTop: "15px", padding: "10px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px dashed #22c55e", color: "#166534", fontWeight: "bold", fontSize: "0.9rem" }}>
+                  🎉 You earned {computed.earnedPoints} Loyalty Points on this bill!
+                </div>
+              )}
+
+              {mode === "invoice" ? (
+                <div className="declaration">
+                  <p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p>
+                  <div className="no-print" data-html2canvas-ignore="true" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                    <div onClick={() => { if(activeBillBranch.map_url && activeBillBranch.map_url !== "#") window.open(activeBillBranch.map_url, "_blank"); else toast.info("Feedback link not set for this branch yet!"); }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
+                  </div>
+                </div>
+              ) : (
+                <div className="policies">
+                  <p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul>
+                  <div className="no-print" data-html2canvas-ignore="true" style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+                    <div onClick={() => { if(activeBillBranch.map_url && activeBillBranch.map_url !== "#") window.open(activeBillBranch.map_url, "_blank"); else toast.info("Feedback link not set for this branch yet!"); }} style={{ flex: 1, padding: "12px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", fontWeight: "bold", borderRadius: "8px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", cursor: "pointer" }}>⭐ Leave Feedback</div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
+          </div>
+        </section>
+
+        <aside className="controls no-print" style={{ flex: isMobileSplit ? "none" : "2", overflowY: isMobileSplit ? "visible" : "auto", overflowX: "hidden", padding: "20px", backgroundColor: "white", borderLeft: isMobileSplit ? "none" : "1px solid #cbd5e1", borderTop: isMobileSplit ? "1px solid #cbd5e1" : "none", height: isMobileSplit ? "max-content" : "100%" }}>
+          
+          <div className="control-card">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+                <h3 style={{ margin: 0 }}>Bill Details</h3>
+                <select value={billBranchId} onChange={async (e) => { 
+                    const nextBranch = e.target.value; setBillBranchId(nextBranch); markDirty(); 
+                    if (currentBillId) { try { const res = await axios.get(`${API}/bills/next-number?mode=${mode}&branch_id=${nextBranch}`, { headers: authHeaders }); setDocumentNumber(res.data.document_number); toast.info(`Migrating to Branch: ${nextBranch}`); } catch (err) { toast.error("Failed to fetch new number for migration."); } } else { await reserveNumber(mode, nextBranch); }
+                }} style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem", outline: "none", cursor: "pointer" }}>
+                    {(settings.branches || []).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                </select>
+            </div>
+
+            <div style={{ marginBottom: "15px", paddingBottom: "15px", borderBottom: "1px dashed var(--border)" }}>
+              <label className="select-label" style={{ fontSize: "0.8rem", marginBottom: "4px", display: "block" }}>Bill Number (Editable)</label>
+              <Input value={documentNumber} onChange={(e) => { setDocumentNumber(e.target.value); markDirty(); }} placeholder="e.g. INV-0212" disabled={!!currentBillId} style={{ fontWeight: "bold", color: "var(--brand)", backgroundColor: currentBillId ? "#f1f5f9" : "white" }} />
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginBottom: "5px", color: "#16a34a", fontWeight: "bold" }}>
+               <span>{customer.name ? `Loyalty Points: ${customer.points} | Store Credit: ₹${money(customer.credit)}` : ""}</span>
+            </div>
+            <Input id="customerNameInput" value={customer.name} onChange={(e) => { setCustomer((prev) => ({ ...prev, name: e.target.value })); markDirty(); }} placeholder="Customer name" />
+            <Input value={customer.phone} onChange={(e) => { setCustomer((prev) => ({ ...prev, phone: e.target.value })); markDirty(); }} placeholder="Phone" />
+            <Input value={customer.address} onChange={(e) => { setCustomer((prev) => ({ ...prev, address: e.target.value })); markDirty(); }} placeholder="Address" />
+            <Input value={customer.email} onChange={(e) => { setCustomer((prev) => ({ ...prev, email: e.target.value })); markDirty(); }} placeholder="Email" />
+            <Input type="text" value={billDate} onChange={(e) => { setBillDate(e.target.value); markDirty(); }} placeholder="DD-MM-YYYY" />
+            <Input type="number" value={bonusPoints} onChange={(e) => { setBonusPoints(e.target.value); markDirty(); }} placeholder="🎁 Assign Bonus/Welcome Points (Optional)" style={{ marginTop: "5px", borderColor: "#22c55e", backgroundColor: "#f0fdf4" }} />
+
+            {(suggestions || []).length > 0 && (
+              <div className="suggestions">
+                {(suggestions || []).map((entry) => (
+                  <button key={entry.id} type="button" className="suggestion-item" onClick={() => { setCustomer({ name: entry.name, phone: entry.phone, address: entry.address, email: entry.email, points: entry.points || 0, credit: entry.credit || 0 }); setSuggestions([]); markDirty(); }}>
+                    {entry.name} · {entry.phone}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="control-card">
+            <h3>Item Lines</h3>
+            {(items || []).map((item) => (
+              <div key={item.id} className="item-row-editor">
+                <Input className="item-desc-input" value={item.description} onChange={(e) => updateItem(item.id, "description", e.target.value)} placeholder="Description" />
+                <Input value={item.hsn} onChange={(e) => updateItem(item.id, "hsn", e.target.value)} placeholder="HSN" />
+                <Input value={item.weight} onChange={(e) => updateItem(item.id, "weight", e.target.value)} placeholder="Weight" />
+                <Input value={item.quantity} onChange={(e) => updateItem(item.id, "quantity", e.target.value)} placeholder="Qty" />
+                <Input value={item.mc_override} onChange={(e) => updateItem(item.id, "mc_override", e.target.value)} placeholder="Custom MC ₹/g" />
+                <Input value={item.rate_override} onChange={(e) => updateItem(item.id, "rate_override", e.target.value)} placeholder="Custom Silver Rate" />
+                <Input value={item.amount_override} onChange={(e) => updateItem(item.id, "amount_override", e.target.value)} placeholder="Fixed Amount ₹" />
+                <Button type="button" variant="outline" onClick={() => { setItems((prev) => prev.filter((row) => row.id !== item.id)); markDirty(); }} disabled={(items || []).length === 1}>Remove</Button>
+              </div>
+            ))}
+            <Button type="button" onClick={() => { setItems((prev) => [...prev, createItem(settings.default_hsn)]); markDirty(); }}>Add Item</Button>
+          </div>
+
+          <div className="control-card">
+            <h3>Adjustments & Credits</h3>
+            <Input id="appliedCreditInput" type="number" value={appliedCredit} onChange={(e) => { setAppliedCredit(e.target.value); markDirty(); }} placeholder={`Use Store Credit (Max: ₹${money(customer.credit || 0)})`} />
+            <Input id="redeemedPointsInput" type="number" value={redeemedPoints} onChange={(e) => { setRedeemedPoints(e.target.value); markDirty(); }} placeholder={`Redeem Points (Max: ${customer.points || 0})`} />
+            <Input id="discountInput" value={discount} onChange={(e) => { setDiscount(e.target.value); markDirty(); }} placeholder="Discount" />
+            <Input value={exchange} onChange={(e) => { setExchange(e.target.value); markDirty(); }} placeholder="Exchange Amount" />
+            <Input value={savedCredit} onChange={(e) => { setSavedCredit(e.target.value); markDirty(); }} placeholder="Save as Store Credit (For negative totals)" />
+            <Input value={manualRoundOff} onChange={(e) => { setManualRoundOff(e.target.value); markDirty(); }} placeholder="Manual round off (optional)" />
+          </div>
+
+          <div className="control-card">
+            <h3>Payment Options</h3>
+            <label className="select-label">Transaction Type</label>
+            <div style={{ display: 'flex', gap: '5px', marginBottom: '15px' }}>
+              <Button variant={txType === "sale" ? "default" : "outline"} onClick={() => {setTxType("sale"); markDirty();}} style={{flex: 1, padding: "0 5px"}}>Sale</Button>
+              <Button variant={txType === "booking" ? "default" : "outline"} onClick={() => {setTxType("booking"); markDirty();}} style={{flex: 1, padding: "0 5px"}}>Booking</Button>
+              <Button variant={txType === "service" ? "default" : "outline"} onClick={() => {setTxType("service"); markDirty();}} style={{flex: 1, padding: "0 5px"}}>Service</Button>
+            </div>
+
+            {txType === "sale" && (
+              <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                <label className="select-label">Payment Method</label>
+                <select id="paymentMethodSelect" value={paymentMethod} onChange={(e) => { setPaymentMethod(e.target.value); markDirty(); }} className="native-select">
+                  <option value="" disabled>Select Method</option><option value="Cash">Cash</option><option value="UPI">UPI</option>
+                  {mode === "invoice" && <option value="Card">Card</option>}
+                  <option value="Split">Split (Cash + UPI)</option>
+                </select>
+                {paymentMethod === "Split" && (
+                  <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+                    <Input value={splitCash} onChange={(e) => { setSplitCash(e.target.value); markDirty(); }} placeholder="Cash Received ₹" />
+                    <Input value={`UPI: ₹${money(Math.max(0, computed.grandTotal - num(splitCash)))}`} disabled style={{ backgroundColor: "#f1f5f9" }} />
+                  </div>
+                )}
+                <div style={{ marginTop: "15px", padding: "12px", backgroundColor: isPaymentDone ? "#dcfce7" : "#fef3c7", border: `1.5px solid ${isPaymentDone ? "#22c55e" : "#f59e0b"}`, borderRadius: "8px", display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} onClick={() => { setIsPaymentDone(!isPaymentDone); markDirty(); }}>
+                  <input type="checkbox" checked={isPaymentDone} onChange={(e) => { setIsPaymentDone(e.target.checked); markDirty(); }} onClick={(e) => e.stopPropagation()} style={{ width: "20px", height: "20px", cursor: "pointer" }} />
+                  <strong style={{ color: isPaymentDone ? "#166534" : "#b45309", fontSize: "1.1rem" }}>{isPaymentDone ? "✅ PAYMENT DONE" : "⏳ PAYMENT PENDING"}</strong>
+                </div>
+              </div>
+            )}
+
+            {(txType === "booking" || txType === "service") && (
+              <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                <h4 style={{ margin: '0 0 10px 0', color: '#16a34a' }}>Advance Payment</h4>
+                <Input placeholder="Advance Received ₹" value={advanceAmount} onChange={e => {setAdvanceAmount(e.target.value); markDirty();}} style={{ marginBottom: '10px' }} />
+                <select value={advanceMethod} onChange={(e) => { setAdvanceMethod(e.target.value); markDirty(); }} className="native-select">
+                  <option value="" disabled>Select Advance Method</option><option value="Cash">Cash</option><option value="UPI">UPI</option>
+                  {mode === "invoice" && <option value="Card">Card</option>}
+                  <option value="Split">Split (Cash + UPI)</option>
+                </select>
+                {advanceMethod === "Split" && (
+                  <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+                    <Input value={advanceSplitCash} onChange={(e) => { setAdvanceSplitCash(e.target.value); markDirty(); }} placeholder="Cash Portion ₹" />
+                    <Input value={`UPI: ₹${money(Math.max(0, num(advanceAmount) - num(advanceSplitCash)))}`} disabled style={{ backgroundColor: "#f1f5f9" }} />
+                  </div>
+                )}
+                <div style={{ marginTop: "15px", padding: "10px", backgroundColor: isAdvancePaid ? "#dcfce7" : "#fef3c7", border: `1px solid ${isAdvancePaid ? "#22c55e" : "#f59e0b"}`, borderRadius: "8px", display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} onClick={() => { setIsAdvancePaid(!isAdvancePaid); markDirty(); }}>
+                  <input type="checkbox" checked={isAdvancePaid} onChange={(e) => { setIsAdvancePaid(e.target.checked); markDirty(); }} onClick={(e) => e.stopPropagation()} style={{ width: "16px", height: "16px" }} />
+                  <strong style={{ color: isAdvancePaid ? "#166534" : "#b45309" }}>{isAdvancePaid ? "✅ ADVANCE COLLECTED" : "⏳ ADVANCE PENDING"}</strong>
+                </div>
+
+                <div style={{ borderTop: '2px dashed #cbd5e1', margin: '20px 0' }}></div>
+                <h4 style={{ margin: '0 0 10px 0', color: '#dc2626', display: 'flex', justifyContent: 'space-between' }}>Balance Payment<span>Due: ₹{money(Math.max(0, computed.grandTotal - num(advanceAmount)))}</span></h4>
+                <select value={balanceMethod} onChange={(e) => { setBalanceMethod(e.target.value); markDirty(); }} className="native-select">
+                  <option value="" disabled>Select Balance Method</option><option value="Cash">Cash</option><option value="UPI">UPI</option>
+                  {mode === "invoice" && <option value="Card">Card</option>}
+                  <option value="Split">Split (Cash + UPI)</option>
+                </select>
+                {balanceMethod === "Split" && (
+                  <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+                    <Input value={balanceSplitCash} onChange={(e) => { setBalanceSplitCash(e.target.value); markDirty(); }} placeholder="Cash Portion ₹" />
+                    <Input value={`UPI: ₹${money(Math.max(0, (computed.grandTotal - num(advanceAmount)) - num(balanceSplitCash)))}`} disabled style={{ backgroundColor: "#f1f5f9" }} />
+                  </div>
+                )}
+                <div style={{ marginTop: "15px", padding: "10px", backgroundColor: isBalancePaid ? "#dcfce7" : "#fef3c7", border: `1px solid ${isBalancePaid ? "#22c55e" : "#f59e0b"}`, borderRadius: "8px", display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} onClick={() => { setIsBalancePaid(!isBalancePaid); markDirty(); }}>
+                  <input type="checkbox" checked={isBalancePaid} onChange={(e) => { setIsBalancePaid(e.target.checked); markDirty(); }} onClick={(e) => e.stopPropagation()} style={{ width: "16px", height: "16px" }} />
+                  <strong style={{ color: isBalancePaid ? "#166534" : "#b45309" }}>{isBalancePaid ? "✅ BALANCE COLLECTED" : "⏳ BALANCE PENDING"}</strong>
+                </div>
+              </div>
+            )}
+            <textarea value={notes} onChange={(e) => { setNotes(e.target.value); markDirty(); }} placeholder="Notes / Descriptions" className="notes-box" style={{ marginTop: "15px" }} />
+          </div>
+
+          <div className="control-card action-grid">
+            <Button onClick={saveBill} disabled={savingBill} style={{ backgroundColor: "#0f172a" }}>{savingBill ? "Saving..." : currentBillId ? `Update & Migrate (${editingDocNumber})` : "Save Bill"}</Button>
+            <Button onClick={() => setShowLedger(true)} style={{ backgroundColor: "#16a34a", color: "white" }}>Daily Sales & Ledger</Button>
+            <Button onClick={() => { setShowRecentBills(true); setBillSearchQuery(""); setRecentBranchFilter("ALL"); setRecentModeFilter("ALL"); setRecentDateFilter("ALL"); }} variant="outline">Recent Bills</Button>
+            <Button onClick={() => downloadPdf("bill-print-root", documentNumber || mode)}>Download PDF</Button>
+            <Button onClick={() => window.print()}>Print</Button>
+            <Button onClick={shareWhatsApp}>WhatsApp Link</Button>
+            <Button onClick={shareEmail}>Email Link</Button>
+            <Button onClick={handleNewBillClick} variant="outline">New Bill</Button>
+            <Button onClick={() => setShowSettings(true)} variant="outline">Settings</Button>
+          </div>
+
+        </aside>
+      </main>
+
+      {/* DAILY SALES & LEDGER */}
+      {showLedger && (
+        <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "650px", backgroundColor: "white", zIndex: 100, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
+          <div className="drawer-header" style={{ backgroundColor: "#f0fdf4", borderBottom: "2px solid #bbf7d0", padding: "20px", position: "sticky", top: 0, zIndex: 10 }}>
+            <h3 style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", margin: 0 }}><Banknote /> Vaults & Ledger: {activeGlobalBranch.name}</h3>
+            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowLedger(false)} style={{ marginTop: "10px" }}><ArrowLeft className="drawer-back-icon" style={{ marginRight: "5px" }} /><span>Close Menu</span></Button>
+          </div>
+
+          <div style={{ padding: "20px" }}>
+            <div style={{ marginBottom: "25px" }}>
+              <h4 style={{ margin: "0 0 15px 0", fontSize: "1.1rem", color: "#1e293b" }}>Live Vault Balances</h4>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+                <div style={{ flex: "1 1 140px", backgroundColor: "#fffbeb", border: "1px solid #fde68a", padding: "15px", borderRadius: "10px", textAlign: "center" }}>
+                  <Banknote size={24} color="#d97706" style={{ margin: "0 auto 8px auto" }} />
+                  <p style={{ margin: "0 0 5px 0", fontSize: "0.85rem", color: "#92400e", fontWeight: "bold" }}>Cash Drawer</p>
+                  {editingBalances ? (<Input type="number" value={manualCash} onChange={(e) => setManualCash(e.target.value)} style={{ textAlign: "center", marginTop: "5px" }} />) : (<h3 style={{ margin: 0, color: "#b45309", fontSize: "1.3rem" }}>₹{money(activeGlobalBranch.cash_balance)}</h3>)}
+                </div>
+                <div style={{ flex: "1 1 140px", backgroundColor: "#eff6ff", border: "1px solid #bfdbfe", padding: "15px", borderRadius: "10px", textAlign: "center" }}>
+                  <Wallet size={24} color="#2563eb" style={{ margin: "0 auto 8px auto" }} />
+                  <p style={{ margin: "0 0 5px 0", fontSize: "0.85rem", color: "#1e40af", fontWeight: "bold" }}>Estimate Bank</p>
+                  {editingBalances ? (<Input type="number" value={manualEstBank} onChange={(e) => setManualEstBank(e.target.value)} style={{ textAlign: "center", marginTop: "5px" }} />) : (<h3 style={{ margin: 0, color: "#1d4ed8", fontSize: "1.3rem" }}>₹{money(activeGlobalBranch.estimate_bank_balance)}</h3>)}
+                </div>
+                <div style={{ flex: "1 1 140px", backgroundColor: "#fef2f2", border: "1px solid #fecaca", padding: "15px", borderRadius: "10px", textAlign: "center" }}>
+                  <Building2 size={24} color="#dc2626" style={{ margin: "0 auto 8px auto" }} />
+                  <p style={{ margin: "0 0 5px 0", fontSize: "0.85rem", color: "#991b1b", fontWeight: "bold" }}>GST Bank</p>
+                  {editingBalances ? (<Input type="number" value={manualInvBank} onChange={(e) => setManualInvBank(e.target.value)} style={{ textAlign: "center", marginTop: "5px" }} />) : (<h3 style={{ margin: 0, color: "#b91c1c", fontSize: "1.3rem" }}>₹{money(activeGlobalBranch.invoice_bank_balance)}</h3>)}
+                </div>
+              </div>
+              <div style={{ textAlign: "right", marginTop: "10px" }}>
+                 {!editingBalances ? (
+                   <Button size="sm" variant="outline" onClick={() => { setManualCash(activeGlobalBranch.cash_balance || 0); setManualEstBank(activeGlobalBranch.estimate_bank_balance || 0); setManualInvBank(activeGlobalBranch.invoice_bank_balance || 0); setEditingBalances(true); }}>Manually Edit Balances</Button>
+                 ) : (
+                   <div style={{ display: "inline-flex", gap: "10px" }}><Button size="sm" variant="outline" onClick={() => setEditingBalances(false)}>Cancel</Button><Button size="sm" style={{ backgroundColor: "#16a34a" }} onClick={saveBalances}>Save Balances</Button></div>
+                 )}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: "30px", padding: "15px", backgroundColor: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "10px" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", justifyContent: "space-between", alignItems: "center" }}>
+                <h4 style={{ margin: "0" }}>Log Expenses & Vault Exchanges</h4>
+                <Button size="sm" onClick={() => setShowLogForm(!showLogForm)} style={{ backgroundColor: "#0f172a" }}><Plus size={16} style={{ marginRight: "5px" }} /> New Entry</Button>
+              </div>
+              {showLogForm && (
+                <div style={{ marginTop: "15px", paddingTop: "15px", borderTop: "1px dashed #cbd5e1" }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "10px" }}>
+                    <div style={{ flex: "1 1 150px" }}><label className="select-label">Transaction Type</label><select value={logType} onChange={(e) => setLogType(e.target.value)} className="native-select"><option value="expense">Expense (Deduct Money)</option><option value="add">Add Funds (Add Money)</option><option value="exchange">Exchange (Move Vault to Vault)</option></select></div>
+                    <div style={{ flex: "1 1 150px" }}><label className="select-label">Amount (₹)</label><Input type="number" placeholder="e.g. 500" value={logAmount} onChange={(e) => setLogAmount(e.target.value)} /></div>
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "10px" }}>
+                    <div style={{ flex: "1 1 150px" }}><label className="select-label">{logType === "add" ? "To Vault" : "From Vault"}</label><select value={logSourceVault} onChange={(e) => setLogSourceVault(e.target.value)} className="native-select"><option value="cash">Cash Drawer</option><option value="estimate_bank">Estimate Bank</option><option value="invoice_bank">GST Bank</option></select></div>
+                    {logType === "exchange" && (<div style={{ flex: "1 1 150px" }}><label className="select-label">To Vault</label><select value={logTargetVault} onChange={(e) => setLogTargetVault(e.target.value)} className="native-select"><option value="cash">Cash Drawer</option><option value="estimate_bank">Estimate Bank</option><option value="invoice_bank">GST Bank</option></select></div>)}
+                  </div>
+                  <label className="select-label">Reason / Remark</label><Input placeholder="e.g. Paid for Lunch, Transfer to Bank..." value={logReason} onChange={(e) => setLogReason(e.target.value)} style={{ marginBottom: "15px" }} />
+                  <div style={{ display: "flex", gap: "10px" }}><Button variant="outline" onClick={() => setShowLogForm(false)} style={{ flex: 1 }}>Cancel</Button><Button onClick={submitLedgerLog} disabled={submittingLog} style={{ flex: 2, backgroundColor: "#16a34a" }}>{submittingLog ? "Saving..." : "Save Transaction"}</Button></div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginBottom: "30px" }}>
+              <h4 style={{ margin: "0 0 15px 0", fontSize: "1.1rem", color: "#1e293b" }}>Today's Bill Collections ({today()})</h4>
+              {ledgerLoading ? (<p>Calculating today's sales...</p>) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px", backgroundColor: "#f8fafc", padding: "15px", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", borderBottom: "1px solid #e2e8f0", paddingBottom: "8px" }}><span style={{ color: "#475569" }}>Physical Cash Collected:</span><strong style={{ color: "#d97706" }}>+ ₹{money(todaysTotalCash)}</strong></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", borderBottom: "1px solid #e2e8f0", paddingBottom: "8px" }}><span style={{ color: "#475569" }}>Estimate Bank Collected:</span><strong style={{ color: "#2563eb" }}>+ ₹{money(todaysTotalEstBank)}</strong></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap" }}><span style={{ color: "#475569" }}>GST Bank Collected:</span><strong style={{ color: "#dc2626" }}>+ ₹{money(todaysTotalInvBank)}</strong></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", marginTop: "10px", paddingTop: "10px", borderTop: "2px solid #cbd5e1" }}><span style={{ fontWeight: "bold", fontSize: "1.1rem" }}>Total Day Sales:</span><strong style={{ fontSize: "1.1rem" }}>₹{money(todaysTotalCash + todaysTotalEstBank + todaysTotalInvBank)}</strong></div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginBottom: "30px" }}>
+              <h4 style={{ margin: "0 0 15px 0", fontSize: "1.1rem", color: "#1e293b", display: "flex", alignItems: "center", gap: "8px" }}><History size={18} /> Ledger History (Expenses & Exchanges)</h4>
+              {(ledgerLogs || []).length === 0 ? (<p style={{ color: "#666", fontStyle: "italic" }}>No manual transactions logged yet.</p>) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {(ledgerLogs || []).map(log => (
+                    <div key={log.id} style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", backgroundColor: "white" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}><strong style={{ color: "#0f172a" }}>{log.reason}</strong><span style={{ fontSize: "0.75rem", color: "#94a3b8" }}>{new Date(log.date).toLocaleDateString()}</span></div>
+                      <div style={{ fontSize: "0.85rem", display: "flex", flexDirection: "column", gap: "2px" }}>
+                        {log.cash_change !== 0 && (<span style={{ color: log.cash_change > 0 ? "#16a34a" : "#dc2626" }}>Cash: {log.cash_change > 0 ? "+" : ""}₹{money(log.cash_change)}</span>)}
+                        {log.estimate_bank_change !== 0 && (<span style={{ color: log.estimate_bank_change > 0 ? "#16a34a" : "#dc2626" }}>Est Bank: {log.estimate_bank_change > 0 ? "+" : ""}₹{money(log.estimate_bank_change)}</span>)}
+                        {log.invoice_bank_change !== 0 && (<span style={{ color: log.invoice_bank_change > 0 ? "#16a34a" : "#dc2626" }}>GST Bank: {log.invoice_bank_change > 0 ? "+" : ""}₹{money(log.invoice_bank_change)}</span>)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            <div>
+              <h4 style={{ margin: "0 0 15px 0", fontSize: "1.1rem", color: "#1e293b" }}>Today's Bills</h4>
+              {ledgerLoading ? (<p>Loading bills...</p>) : (todayBills || []).length === 0 ? (<p style={{ color: "#666" }}>No bills generated today yet.</p>) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {(todayBills || []).map(b => (
+                    <div key={b.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px", border: "1px solid #e2e8f0", borderRadius: "6px", backgroundColor: "white" }}>
+                      <div>
+                        <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "4px" }}>
+                          <strong style={{ color: b.mode === 'invoice' ? "#dc2626" : "#2563eb" }}>{b.document_number}</strong>
+                          <span style={{ fontSize: "0.75rem", padding: "2px 6px", backgroundColor: (b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "#dcfce7" : "#fee2e2", color: (b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "#166534" : "#991b1b", borderRadius: "4px" }}>
+                            {(b.tx_type === "sale" ? b.is_payment_done : b.is_balance_paid) ? "Paid" : "Pending"}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: "0.85rem", color: "#475569" }}>{b.customer_name || b.customer?.name || "Unknown"} • {b.tx_type || "Sale"}</div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <strong style={{ fontSize: "1.1rem" }}>₹{money(b.totals?.grand_total || 0)}</strong>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* RECENT BILLS */}
+      {showRecentBills && (
+        <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "550px", backgroundColor: "white", zIndex: 100, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
+          <div className="drawer-header" style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10, paddingBottom: "15px", borderBottom: "1px solid #e2e8f0" }}>
+            <h3 style={{ margin: "20px 20px 10px 20px" }}>Recent Bills & Exports</h3>
+            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowRecentBills(false)} style={{ marginLeft: "20px" }}><ArrowLeft className="drawer-back-icon" style={{ marginRight: "5px" }} /><span>Close Menu</span></Button>
+          </div>
+
           <div style={{ padding: "15px" }}>
             <div style={{ marginBottom: "20px" }}>
               <Button onClick={handleBulkDownload} disabled={isBulkDownloading || (filteredRecentBills || []).length === 0} style={{ width: "100%", backgroundColor: "#0f172a", height: "auto", padding: "10px", display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", justifyContent: "center", fontSize: "1rem", boxSizing: "border-box" }}>
@@ -1001,3 +1724,4 @@ export default function App() {
     </div>
   );
 }
+// ----- END OF PART 2 -----
