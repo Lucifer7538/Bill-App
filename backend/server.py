@@ -52,6 +52,35 @@ def safe_float(val):
     try: return float(val)
     except (ValueError, TypeError): return 0.0
 
+# --- NEW HELPER FUNCTIONS FOR BULLETPROOF DATA EXTRACTION ---
+def get_val(data: dict, keys: List[str]):
+    """Safely extracts loyalty/credit values whether they are at root or nested in totals/loyalty objects."""
+    for k in keys:
+        if k in data and data[k] not in [None, ""]: return safe_float(data[k])
+    if "totals" in data and isinstance(data["totals"], dict):
+        for k in keys:
+            if k in data["totals"] and data["totals"][k] not in [None, ""]: return safe_float(data["totals"][k])
+    if "loyalty" in data and isinstance(data["loyalty"], dict):
+        for k in keys:
+            if k in data["loyalty"] and data["loyalty"][k] not in [None, ""]: return safe_float(data["loyalty"][k])
+    return 0.0
+
+def get_customer_info(data: dict):
+    """Safely extracts customer info whether at root or nested."""
+    name = data.get("customer_name", "")
+    phone = data.get("customer_phone", "")
+    addr = data.get("customer_address", "")
+    email = data.get("customer_email", "")
+    
+    if "customer" in data and isinstance(data["customer"], dict):
+        if not name: name = data["customer"].get("name", "")
+        if not phone: phone = data["customer"].get("phone", "")
+        if not addr: addr = data["customer"].get("address", "")
+        if not email: email = data["customer"].get("email", "")
+        
+    return str(name).strip(), str(phone).strip(), str(addr).strip(), str(email).strip()
+# -----------------------------------------------------------
+
 def get_bill_ledger_values(bill: dict):
     c, eb, ib = 0.0, 0.0, 0.0
     mode = bill.get("mode")
@@ -180,16 +209,15 @@ async def save_bill(payload: dict, _=Depends(require_auth)):
         new_val = int(match.group())
         await counters_collection.update_one({"mode": mode, "branch_id": branch_id}, {"$set": {"value": new_val}}, upsert=True)
 
-    c_name = payload.get("customer_name", "").strip()
-    c_phone = payload.get("customer_phone", "").strip()
+    # UPDATED CUSTOMER AND POINTS EXTRACTION
+    c_name, c_phone, c_addr, c_email = get_customer_info(payload)
     
-    # NEW: LOYALTY POINTS & STORE CREDIT LOGIC
-    earned_pts = safe_float(payload.get("earned_points", 0))
-    redeemed_pts = safe_float(payload.get("redeemed_points", 0))
+    earned_pts = get_val(payload, ["earned_points", "loyalty_earned", "earned_loyalty"])
+    redeemed_pts = get_val(payload, ["redeemed_points", "loyalty_redeemed", "redeemed_loyalty"])
     points_diff = earned_pts - redeemed_pts
 
-    applied_credit = safe_float(payload.get("applied_credit", 0))
-    saved_credit = safe_float(payload.get("saved_credit", 0))
+    saved_credit = get_val(payload, ["saved_credit", "credit_saved", "earned_credit", "store_credit"])
+    applied_credit = get_val(payload, ["applied_credit", "credit_applied", "used_credit", "redeemed_credit"])
     credit_diff = saved_credit - applied_credit
 
     if c_name or c_phone:
@@ -199,13 +227,16 @@ async def save_bill(payload: dict, _=Depends(require_auth)):
             {
                 "$set": {
                     "name": c_name, "phone": c_phone,
-                    "address": payload.get("customer_address", ""),
-                    "email": payload.get("customer_email", ""),
+                    "address": c_addr,
+                    "email": c_email,
                     "updated_at": now_iso()
                 },
+                # Increment all variations to guarantee the frontend finds it
                 "$inc": {
                     "points": points_diff,
-                    "credit": credit_diff # Auto-add/subtract store credit
+                    "loyalty_points": points_diff,
+                    "credit": credit_diff, 
+                    "store_credit": credit_diff
                 }
             },
             upsert=True
@@ -228,21 +259,20 @@ async def update_bill_by_id(bill_id: str, payload: dict, _=Depends(require_auth)
         new_val = int(match.group())
         await counters_collection.update_one({"mode": payload.get("mode"), "branch_id": payload.get("branch_id")}, {"$set": {"value": new_val}}, upsert=True)
 
-    # NEW: RE-CALCULATE POINTS AND CREDIT IF BILL IS EDITED
-    old_earned = safe_float(existing.get("earned_points", 0))
-    old_redeemed = safe_float(existing.get("redeemed_points", 0))
-    new_earned = safe_float(payload.get("earned_points", 0))
-    new_redeemed = safe_float(payload.get("redeemed_points", 0))
+    # RE-CALCULATE POINTS AND CREDIT WITH NEW EXTRACTOR
+    old_earned = get_val(existing, ["earned_points", "loyalty_earned", "earned_loyalty"])
+    old_redeemed = get_val(existing, ["redeemed_points", "loyalty_redeemed", "redeemed_loyalty"])
+    new_earned = get_val(payload, ["earned_points", "loyalty_earned", "earned_loyalty"])
+    new_redeemed = get_val(payload, ["redeemed_points", "loyalty_redeemed", "redeemed_loyalty"])
     points_diff = (new_earned - old_earned) - (new_redeemed - old_redeemed)
 
-    old_applied = safe_float(existing.get("applied_credit", 0))
-    old_saved = safe_float(existing.get("saved_credit", 0))
-    new_applied = safe_float(payload.get("applied_credit", 0))
-    new_saved = safe_float(payload.get("saved_credit", 0))
+    old_saved = get_val(existing, ["saved_credit", "credit_saved", "earned_credit", "store_credit"])
+    old_applied = get_val(existing, ["applied_credit", "credit_applied", "used_credit", "redeemed_credit"])
+    new_saved = get_val(payload, ["saved_credit", "credit_saved", "earned_credit", "store_credit"])
+    new_applied = get_val(payload, ["applied_credit", "credit_applied", "used_credit", "redeemed_credit"])
     credit_diff = (new_saved - old_saved) - (new_applied - old_applied)
 
-    c_name = payload.get("customer_name", "").strip()
-    c_phone = payload.get("customer_phone", "").strip()
+    c_name, c_phone, c_addr, c_email = get_customer_info(payload)
     
     if c_name or c_phone:
         query = {"phone": c_phone} if c_phone else {"name": c_name}
@@ -251,13 +281,15 @@ async def update_bill_by_id(bill_id: str, payload: dict, _=Depends(require_auth)
             {
                 "$set": {
                     "name": c_name, "phone": c_phone,
-                    "address": payload.get("customer_address", ""),
-                    "email": payload.get("customer_email", ""),
+                    "address": c_addr,
+                    "email": c_email,
                     "updated_at": now_iso()
                 },
                 "$inc": {
                     "points": points_diff,
-                    "credit": credit_diff
+                    "loyalty_points": points_diff,
+                    "credit": credit_diff,
+                    "store_credit": credit_diff
                 }
             },
             upsert=True
@@ -299,24 +331,25 @@ async def delete_bill(document_number: str, _=Depends(require_auth)):
         c, eb, ib = get_bill_ledger_values(bill)
         await apply_ledger_diff(bill.get("branch_id"), -c, -eb, -ib, f"DELETE/REFUND: {document_number}")
         
-        # NEW: REFUND POINTS & CREDIT IF BILL IS DELETED
-        earned_pts = safe_float(bill.get("earned_points", 0))
-        redeemed_pts = safe_float(bill.get("redeemed_points", 0))
+        # REFUND POINTS & CREDIT WITH NEW EXTRACTOR
+        earned_pts = get_val(bill, ["earned_points", "loyalty_earned", "earned_loyalty"])
+        redeemed_pts = get_val(bill, ["redeemed_points", "loyalty_redeemed", "redeemed_loyalty"])
         points_revert = redeemed_pts - earned_pts 
 
-        applied_credit = safe_float(bill.get("applied_credit", 0))
-        saved_credit = safe_float(bill.get("saved_credit", 0))
+        saved_credit = get_val(bill, ["saved_credit", "credit_saved", "earned_credit", "store_credit"])
+        applied_credit = get_val(bill, ["applied_credit", "credit_applied", "used_credit", "redeemed_credit"])
         credit_revert = applied_credit - saved_credit
 
-        c_name = bill.get("customer_name", "").strip()
-        c_phone = bill.get("customer_phone", "").strip()
+        c_name, c_phone, _, _ = get_customer_info(bill)
         if c_name or c_phone:
             query = {"phone": c_phone} if c_phone else {"name": c_name}
             await customers_collection.update_one(
                 query, 
                 {"$inc": {
                     "points": points_revert,
-                    "credit": credit_revert
+                    "loyalty_points": points_revert,
+                    "credit": credit_revert,
+                    "store_credit": credit_revert
                 }}
             )
 
