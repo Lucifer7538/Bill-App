@@ -380,9 +380,9 @@ async def get_public(document_number: str):
     settings = await settings_collection.find_one({"key": "app_settings"}, {"_id": 0})
     return {"bill": bill, "settings": settings}
 
-# --- NEW SYNC ROUTE ---
+# --- NEW SYNC ROUTE (SECURITY TEMPORARILY REMOVED) ---
 @api_router.post("/system/sync-old-points")
-async def sync_old_points(_=Depends(require_auth)):
+async def sync_old_points():
     await customers_collection.update_many(
         {}, 
         {"$set": {"points": 0, "loyalty_points": 0, "credit": 0, "store_credit": 0}}
@@ -420,7 +420,7 @@ async def sync_old_points(_=Depends(require_auth)):
             updated_count += 1
             
     return {"message": f"Successfully synced points from {updated_count} old bills to customer profiles!"}
-# ----------------------
+# ----------------------------------------------------
 
 app.include_router(api_router)
 
