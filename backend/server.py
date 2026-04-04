@@ -52,7 +52,7 @@ def safe_float(val):
     try: return float(val)
     except (ValueError, TypeError): return 0.0
 
-# --- NEW HELPER FUNCTIONS FOR BULLETPROOF DATA EXTRACTION ---
+# --- HELPER FUNCTIONS FOR BULLETPROOF DATA EXTRACTION ---
 def get_val(data: dict, keys: List[str]):
     """Safely extracts loyalty/credit values whether they are at root or nested in totals/loyalty objects."""
     for k in keys:
@@ -209,7 +209,6 @@ async def save_bill(payload: dict, _=Depends(require_auth)):
         new_val = int(match.group())
         await counters_collection.update_one({"mode": mode, "branch_id": branch_id}, {"$set": {"value": new_val}}, upsert=True)
 
-    # UPDATED CUSTOMER AND POINTS EXTRACTION
     c_name, c_phone, c_addr, c_email = get_customer_info(payload)
     
     earned_pts = get_val(payload, ["earned_points", "loyalty_earned", "earned_loyalty"])
@@ -231,7 +230,6 @@ async def save_bill(payload: dict, _=Depends(require_auth)):
                     "email": c_email,
                     "updated_at": now_iso()
                 },
-                # Increment all variations to guarantee the frontend finds it
                 "$inc": {
                     "points": points_diff,
                     "loyalty_points": points_diff,
@@ -259,7 +257,6 @@ async def update_bill_by_id(bill_id: str, payload: dict, _=Depends(require_auth)
         new_val = int(match.group())
         await counters_collection.update_one({"mode": payload.get("mode"), "branch_id": payload.get("branch_id")}, {"$set": {"value": new_val}}, upsert=True)
 
-    # RE-CALCULATE POINTS AND CREDIT WITH NEW EXTRACTOR
     old_earned = get_val(existing, ["earned_points", "loyalty_earned", "earned_loyalty"])
     old_redeemed = get_val(existing, ["redeemed_points", "loyalty_redeemed", "redeemed_loyalty"])
     new_earned = get_val(payload, ["earned_points", "loyalty_earned", "earned_loyalty"])
@@ -331,7 +328,6 @@ async def delete_bill(document_number: str, _=Depends(require_auth)):
         c, eb, ib = get_bill_ledger_values(bill)
         await apply_ledger_diff(bill.get("branch_id"), -c, -eb, -ib, f"DELETE/REFUND: {document_number}")
         
-        # REFUND POINTS & CREDIT WITH NEW EXTRACTOR
         earned_pts = get_val(bill, ["earned_points", "loyalty_earned", "earned_loyalty"])
         redeemed_pts = get_val(bill, ["redeemed_points", "loyalty_redeemed", "redeemed_loyalty"])
         points_revert = redeemed_pts - earned_pts 
@@ -383,6 +379,48 @@ async def get_public(document_number: str):
     bill = await bills_collection.find_one({"document_number": document_number}, {"_id": 0})
     settings = await settings_collection.find_one({"key": "app_settings"}, {"_id": 0})
     return {"bill": bill, "settings": settings}
+
+# --- NEW SYNC ROUTE ---
+@api_router.post("/system/sync-old-points")
+async def sync_old_points(_=Depends(require_auth)):
+    await customers_collection.update_many(
+        {}, 
+        {"$set": {"points": 0, "loyalty_points": 0, "credit": 0, "store_credit": 0}}
+    )
+    
+    bills = await bills_collection.find({}).to_list(None)
+    updated_count = 0
+    
+    for bill in bills:
+        c_name, c_phone, _, _ = get_customer_info(bill)
+        
+        if not c_name and not c_phone: 
+            continue
+            
+        earned = get_val(bill, ["earned_points", "loyalty_earned", "earned_loyalty"])
+        redeemed = get_val(bill, ["redeemed_points", "loyalty_redeemed", "redeemed_loyalty"])
+        saved_cred = get_val(bill, ["saved_credit", "credit_saved", "earned_credit", "store_credit"])
+        applied_cred = get_val(bill, ["applied_credit", "credit_applied", "used_credit", "redeemed_credit"])
+        
+        points_to_add = earned - redeemed
+        credit_to_add = saved_cred - applied_cred
+        
+        if points_to_add != 0 or credit_to_add != 0:
+            query = {"phone": c_phone} if c_phone else {"name": c_name}
+            await customers_collection.update_one(
+                query,
+                {"$inc": {
+                    "points": points_to_add,
+                    "loyalty_points": points_to_add,
+                    "credit": credit_to_add,
+                    "store_credit": credit_to_add
+                }},
+                upsert=True
+            )
+            updated_count += 1
+            
+    return {"message": f"Successfully synced points from {updated_count} old bills to customer profiles!"}
+# ----------------------
 
 app.include_router(api_router)
 
