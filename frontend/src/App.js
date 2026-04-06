@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Wifi, Store, Upload, Download, Keyboard } from "lucide-react";
+import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Store, Upload, Download, Keyboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Toaster, toast } from "sonner";
@@ -152,6 +152,7 @@ const GLOBAL_PRINT_CSS = `
   .no-print { display: none !important; }
 }
 `;
+
 export default function App() {
   const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
   const [isPrinting, setIsPrinting] = useState(false);
@@ -437,7 +438,7 @@ export default function App() {
             if (clonedNode) {
               clonedNode.style.display = "block"; clonedNode.style.transform = "none";
               clonedNode.style.width = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.maxWidth = "800px"; 
-              clonedNode.style.height = "max-content"; // Fix for white screen
+              clonedNode.style.height = "max-content";
               clonedNode.style.padding = "20px"; clonedNode.style.boxSizing = "border-box";
               const noPrint = clonedDoc.querySelectorAll('.no-print'); noPrint.forEach(el => el.style.display = 'none');
               const printOnly = clonedDoc.querySelectorAll('.print-only'); printOnly.forEach(el => { el.style.position = 'static'; el.style.width = '100%'; el.style.height = 'auto'; el.style.opacity = '1'; el.style.visibility = 'visible'; el.style.display = 'flex'; });
@@ -699,14 +700,14 @@ export default function App() {
     } catch (error) { toast.error("Failed to download PDF."); } 
   };
   
-  const shareWhatsApp = () => { const link = `${window.location.origin}/?view=${documentNumber}`; const text = `*Hello*  ${customer.name || "Customer"},\n Thank you for visiting Jalaram Jewellers\n\n Official ${mode === "invoice" ? "Invoice" : "Estimate"} Bill\n Here Is Your Bill No. ${documentNumber}\n Amount: ₹${money(computed.grandTotal)}.\n\n Here You can view and download it securely\n Link: ${link}\n\n *Stay Connected With us*\n WhatsApp Group\n Link (https://bit.ly/Jalaram-Group-WP)\n Instagram\n Link (https://bit.ly/Jalaram-IG)\n\n*We value Your Feedback*\n Dear ${customer.name || "Customer"}, Please Give us a minute to Rate our Behaviour and Service. Give us your Valuable Feedback so we can make your experience even better:\n ${activeBillBranch.map_url}\n\n   Thank you,\n${settings.shop_name} : The Silver Specialist\n\n  `; let cleanedPhone = customer.phone.replace(/\D/g, ""); if (cleanedPhone.length === 10) cleanedPhone = `91${cleanedPhone}`; window.open(`https://wa.me/${cleanedPhone}?text=${encodeURIComponent(text)}`, "_blank"); };
+  const shareWhatsApp = () => { const link = `${window.location.origin}/?view=${documentNumber}`; const text = `*Hello* ${customer.name || "Customer"},\n Thank you for visiting Jalaram Jewellers\n\n Official ${mode === "invoice" ? "Invoice" : "Estimate"} Bill\n Here Is Your Bill No. ${documentNumber}\n Amount: ₹${money(computed.grandTotal)}.\n\n Here You can view and download it securely\n Link: ${link}\n\n *Stay Connected With us*\n WhatsApp Group\n Link (https://bit.ly/Jalaram-Group-WP)\n Instagram\n Link (https://bit.ly/Jalaram-IG)\n\n*We value Your Feedback*\n Dear ${customer.name || "Customer"}, Please Give us a minute to Rate our Behaviour and Service. Give us your Valuable Feedback so we can make your experience even better:\n ${activeBillBranch.map_url}\n\n   Thank you,\n${settings.shop_name} : The Silver Specialist\n\n  `; let cleanedPhone = customer.phone.replace(/\D/g, ""); if (cleanedPhone.length === 10) cleanedPhone = `91${cleanedPhone}`; window.open(`https://wa.me/${cleanedPhone}?text=${encodeURIComponent(text)}`, "_blank"); };
   const shareEmail = () => { const link = `${window.location.origin}/?view=${documentNumber}`; const subject = `${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber}`; const body = `Dear ${customer.name || "Customer"},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`; window.location.href = `mailto:${customer.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; };
   const goToBillTop = () => { document.getElementById("bill-print-root")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
 
   const todaysTotalCash = (todayBills || []).filter(b => b.is_payment_done).reduce((sum, b) => sum + (b.payment_method === 'Cash' ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_cash) : 0), 0);
   const todaysTotalEstBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'estimate').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
   const todaysTotalInvBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'invoice').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
- // --- START OF PART 4 ---
+
   const publicComputed = useMemo(() => {
     if (!publicBill || !publicSettings) return { items: [], taxable: 0, cgst: 0, sgst: 0, igst: 0, mdr: 0, roundOff: 0, grandTotal: 0, discount: 0, exchange: 0 };
     const baseSilverRate = num(publicSettings.silver_rate_per_gram); const baseMCPerGram = num(publicSettings.making_charge_per_gram); const flatMCBelow5g = num(publicSettings.flat_mc_below_5g);
@@ -755,9 +756,25 @@ export default function App() {
   }, [publicBill, publicSettings]);
 
   const getUpiAmount = () => {
-      if (txType === "sale") return paymentMethod === "Split" ? Math.max(0, computed.grandTotal - num(splitCash)) : computed.grandTotal;
-      if (!isAdvancePaid && (advanceMethod === "UPI" || advanceMethod === "Split")) return advanceMethod === "Split" ? Math.max(0, num(advanceAmount) - num(advanceSplitCash)) : num(advanceAmount);
-      if (isAdvancePaid && !isBalancePaid && (balanceMethod === "UPI" || balanceMethod === "Split")) { const bal = Math.max(0, computed.grandTotal - num(advanceAmount)); return balanceMethod === "Split" ? Math.max(0, bal - num(balanceSplitCash)) : bal; }
+      if (txType === "sale") {
+          if (isPaymentDone) return 0;
+          if (paymentMethod === "UPI") return computed.grandTotal;
+          if (paymentMethod === "Split") return Math.max(0, computed.grandTotal - num(splitCash));
+          return 0;
+      }
+      if (txType === "booking" || txType === "service") {
+          if (!isAdvancePaid) {
+              if (advanceMethod === "UPI") return num(advanceAmount);
+              if (advanceMethod === "Split") return Math.max(0, num(advanceAmount) - num(advanceSplitCash));
+              return 0;
+          }
+          if (!isBalancePaid) {
+              const bal = Math.max(0, computed.grandTotal - num(advanceAmount));
+              if (balanceMethod === "UPI") return bal;
+              if (balanceMethod === "Split") return Math.max(0, bal - num(balanceSplitCash));
+              return 0;
+          }
+      }
       return 0;
   };
   const upiAmountToPay = getUpiAmount(); const showDashboardUpi = upiAmountToPay > 0;
@@ -773,18 +790,19 @@ export default function App() {
     const isPaid = isSale ? (publicBill.is_payment_done === true || publicBill.is_payment_done === 1 || String(publicBill.is_payment_done).toLowerCase() === "true") : (publicBill.is_balance_paid === true || publicBill.is_balance_paid === 1 || String(publicBill.is_balance_paid).toLowerCase() === "true");
     const pbBranch = (publicSettings?.branches || []).find(b => b.id === publicBill.branch_id) || (publicSettings?.branches || [])[0] || defaultSettings.branches[0];
 
-    let publicUpiAmountToPay = publicComputed.grandTotal;
+    let publicUpiAmountToPay = 0;
     if (!isPaid) {
-      if (isSale && publicBill.payment_method === "Split") {
-         publicUpiAmountToPay = Math.max(0, publicComputed.grandTotal - num(publicBill.split_cash));
-      } else if (!isSale) {
+      if (isSale) {
+         if (publicBill.payment_method === "UPI") publicUpiAmountToPay = publicComputed.grandTotal;
+         else if (publicBill.payment_method === "Split") publicUpiAmountToPay = Math.max(0, publicComputed.grandTotal - num(publicBill.split_cash));
+      } else {
          if (!publicBill.is_advance_paid) {
-            publicUpiAmountToPay = publicBill.advance_method === "Split" ? Math.max(0, num(publicBill.advance_amount) - num(publicBill.advance_split_cash)) : num(publicBill.advance_amount);
-            if (publicUpiAmountToPay <= 0) publicUpiAmountToPay = num(publicBill.advance_amount) || publicComputed.grandTotal;
+            if (publicBill.advance_method === "UPI") publicUpiAmountToPay = num(publicBill.advance_amount) || publicComputed.grandTotal;
+            else if (publicBill.advance_method === "Split") publicUpiAmountToPay = Math.max(0, num(publicBill.advance_amount) - num(publicBill.advance_split_cash));
          } else if (!publicBill.is_balance_paid) {
             const bal = Math.max(0, publicComputed.grandTotal - num(publicBill.advance_amount));
-            publicUpiAmountToPay = publicBill.balance_method === "Split" ? Math.max(0, bal - num(publicBill.balance_split_cash)) : bal;
-            if (publicUpiAmountToPay <= 0) publicUpiAmountToPay = bal;
+            if (publicBill.balance_method === "UPI") publicUpiAmountToPay = bal;
+            else if (publicBill.balance_method === "Split") publicUpiAmountToPay = Math.max(0, bal - num(publicBill.balance_split_cash));
          }
       }
     }
@@ -873,10 +891,21 @@ export default function App() {
               {num(publicComputed.savedCredit) > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(publicComputed.savedCredit)}</strong></div>}
               <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(publicComputed.grandTotal)}</strong></div>
 
-              {publicBill.tx_type && publicBill.tx_type !== "sale" && (
+              {isSale ? (
+                <div className="totals-row" style={{ color: isPaid ? "#16a34a" : "#b45309", marginTop: "10px" }}>
+                  <span>{isPaid ? "PAID VIA" : "PAYMENT STATUS"}</span>
+                  <strong>{isPaid ? (publicBill.payment_method === "Split" ? `SPLIT (C:₹${money(publicBill.split_cash)}, U:₹${money(Math.max(0, publicComputed.grandTotal - num(publicBill.split_cash)))})` : (publicBill.payment_method || "CASH").toUpperCase()) : "PENDING"}</strong>
+                </div>
+              ) : (
                 <>
-                  <div className="totals-row" style={{ marginTop: "10px", color: "#16a34a" }}><span>ADVANCE RECEIVED</span><strong>₹{money(publicBill.advance_amount)}</strong></div>
-                  <div className="totals-row" style={{ color: "#dc2626" }}><span>BALANCE DUE</span><strong>₹{money(Math.max(0, publicComputed.grandTotal - num(publicBill.advance_amount)))}</strong></div>
+                  <div className="totals-row" style={{ marginTop: "10px", color: publicBill.is_advance_paid ? "#16a34a" : "#b45309" }}>
+                    <span>ADVANCE {publicBill.is_advance_paid ? "RECEIVED" : "PENDING"} {publicBill.advance_method ? `(${publicBill.advance_method === 'Split' ? `C:₹${money(publicBill.advance_split_cash)}, U:₹${money(Math.max(0, num(publicBill.advance_amount) - num(publicBill.advance_split_cash)))}` : publicBill.advance_method})` : ""}</span>
+                    <strong>₹{money(publicBill.advance_amount)}</strong>
+                  </div>
+                  <div className="totals-row" style={{ color: publicBill.is_balance_paid ? "#16a34a" : "#dc2626" }}>
+                    <span>BALANCE {publicBill.is_balance_paid ? "RECEIVED" : "DUE"} {publicBill.balance_method ? `(${publicBill.balance_method === 'Split' ? `C:₹${money(publicBill.balance_split_cash)}, U:₹${money(Math.max(0, (publicComputed.grandTotal - num(publicBill.advance_amount)) - num(publicBill.balance_split_cash)))}` : publicBill.balance_method})` : ""}</span>
+                    <strong>₹{money(Math.max(0, publicComputed.grandTotal - num(publicBill.advance_amount)))}</strong>
+                  </div>
                 </>
               )}
 
@@ -1031,8 +1060,22 @@ export default function App() {
                     {num(b.saved_credit) > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(b.saved_credit)}</strong></div>}
                     <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(b.totals?.grand_total || 0)}</strong></div>
                     
-                    {b.tx_type && b.tx_type !== "sale" && (
-                      <><div className="totals-row" style={{ marginTop: "10px", color: "#16a34a" }}><span>ADVANCE RECEIVED</span><strong>₹{money(b.advance_amount)}</strong></div><div className="totals-row" style={{ color: "#dc2626" }}><span>BALANCE DUE</span><strong>₹{money(Math.max(0, num(b.totals?.grand_total || 0) - num(b.advance_amount)))}</strong></div></>
+                    {b.tx_type === "sale" || !b.tx_type ? (
+                      <div className="totals-row" style={{ color: b.is_payment_done ? "#16a34a" : "#b45309", marginTop: "10px" }}>
+                        <span>{b.is_payment_done ? "PAID VIA" : "PAYMENT STATUS"}</span>
+                        <strong>{b.is_payment_done ? (b.payment_method === "Split" ? `SPLIT (C:₹${money(b.split_cash)}, U:₹${money(Math.max(0, (b.totals?.grand_total || 0) - num(b.split_cash)))})` : (b.payment_method || "CASH").toUpperCase()) : "PENDING"}</strong>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="totals-row" style={{ marginTop: "10px", color: b.is_advance_paid ? "#16a34a" : "#b45309" }}>
+                          <span>ADVANCE {b.is_advance_paid ? "RECEIVED" : "PENDING"} {b.advance_method ? `(${b.advance_method === 'Split' ? `C:₹${money(b.advance_split_cash)}, U:₹${money(Math.max(0, num(b.advance_amount) - num(b.advance_split_cash)))}` : b.advance_method})` : ""}</span>
+                          <strong>₹{money(b.advance_amount)}</strong>
+                        </div>
+                        <div className="totals-row" style={{ color: b.is_balance_paid ? "#16a34a" : "#dc2626" }}>
+                          <span>BALANCE {b.is_balance_paid ? "RECEIVED" : "DUE"} {b.balance_method ? `(${b.balance_method === 'Split' ? `C:₹${money(b.balance_split_cash)}, U:₹${money(Math.max(0, ((b.totals?.grand_total || 0) - num(b.advance_amount)) - num(b.balance_split_cash)))}` : b.balance_method})` : ""}</span>
+                          <strong>₹{money(Math.max(0, num(b.totals?.grand_total || 0) - num(b.advance_amount)))}</strong>
+                        </div>
+                      </>
                     )}
                   </div>
                   {b.earned_points > 0 && (
@@ -1146,10 +1189,21 @@ export default function App() {
                 {computed.savedCredit > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(computed.savedCredit)}</strong></div>}
                 <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(computed.grandTotal)}</strong></div>
 
-                {txType !== "sale" && (
+                {txType === "sale" ? (
+                  <div className="totals-row" style={{ color: isPaymentDone ? "#16a34a" : "#b45309", marginTop: "10px" }}>
+                    <span>{isPaymentDone ? "PAID VIA" : "PAYMENT STATUS"}</span>
+                    <strong>{isPaymentDone ? (paymentMethod === "Split" ? `SPLIT (Cash: ₹${money(splitCash)}, UPI: ₹${money(Math.max(0, computed.grandTotal - num(splitCash)))})` : (paymentMethod || "CASH").toUpperCase()) : "PENDING"}</strong>
+                  </div>
+                ) : (
                   <>
-                    <div className="totals-row" style={{ marginTop: "10px", color: "#16a34a" }}><span>ADVANCE RECEIVED</span><strong>₹{money(advanceAmount)}</strong></div>
-                    <div className="totals-row" style={{ color: "#dc2626" }}><span>BALANCE DUE</span><strong>₹{money(Math.max(0, computed.grandTotal - num(advanceAmount)))}</strong></div>
+                    <div className="totals-row" style={{ marginTop: "10px", color: isAdvancePaid ? "#16a34a" : "#b45309" }}>
+                      <span>ADVANCE {isAdvancePaid ? "RECEIVED" : "PENDING"} {advanceMethod ? `(${advanceMethod === 'Split' ? `Cash: ₹${money(advanceSplitCash)}, UPI: ₹${money(Math.max(0, num(advanceAmount) - num(advanceSplitCash)))}` : advanceMethod})` : ""}</span>
+                      <strong>₹{money(advanceAmount)}</strong>
+                    </div>
+                    <div className="totals-row" style={{ color: isBalancePaid ? "#16a34a" : "#dc2626" }}>
+                      <span>BALANCE {isBalancePaid ? "RECEIVED" : "DUE"} {balanceMethod ? `(${balanceMethod === 'Split' ? `Cash: ₹${money(balanceSplitCash)}, UPI: ₹${money(Math.max(0, (computed.grandTotal - num(advanceAmount)) - num(balanceSplitCash)))}` : balanceMethod})` : ""}</span>
+                      <strong>₹{money(Math.max(0, computed.grandTotal - num(advanceAmount)))}</strong>
+                    </div>
                   </>
                 )}
 
