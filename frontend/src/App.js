@@ -176,6 +176,7 @@ export default function App() {
   const markDirty = () => setIsDirty(true);
   
   const [isPublicView, setIsPublicView] = useState(false);
+  const [isAdminView, setIsAdminView] = useState(false);
   const [publicBill, setPublicBill] = useState(null);
   const [publicSettings, setPublicSettings] = useState(null);
   const [publicLoading, setPublicLoading] = useState(false);
@@ -289,6 +290,12 @@ export default function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const viewDoc = params.get("view");
+    const adminParam = params.get("admin");
+    
+    if (adminParam === "true") {
+      setIsAdminView(true);
+    }
+
     if (viewDoc) {
       setIsPublicView(true); setPublicLoading(true);
       const fetchPublicBill = async () => {
@@ -954,12 +961,27 @@ export default function App() {
     );
   }
 
+  // ---- NEW SECURITY LOGIC HERE ----
   if (!token) {
+    // If there is NO token, NO public bill view, and NO secret admin parameter, show the dead end!
+    if (!isAdminView && !isPublicView) {
+      return (
+        <div className="login-shell" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9', height: '100dvh', padding: '20px', textAlign: 'center' }}>
+          <Store size={64} color="#0f172a" style={{ marginBottom: '20px' }} />
+          <h1 style={{ color: '#0f172a', marginBottom: '10px' }}>Welcome to {settings?.shop_name || "Jalaram Jewellers"}</h1>
+          <p style={{ color: '#475569', fontSize: '1.1rem', maxWidth: '400px', lineHeight: '1.6' }}>
+            Please use the secure link provided in your WhatsApp or Email message to securely view your official bill.
+          </p>
+        </div>
+      );
+    }
+
+    // If they USED the secret parameter (/?admin=true), show the actual login form
     return (
       <div className="login-shell">
         <Toaster position="bottom-right" />
         <form className="login-card" onSubmit={handleLogin}>
-          <h1 className="login-title">Jalaram Jewellers</h1>
+          <h1 className="login-title">{settings?.shop_name || "Jalaram Jewellers"}</h1>
           <p className="login-subtitle">Enter passcode to access billing panel</p>
           <Input type="password" value={passcode} onChange={(e) => setPasscode(e.target.value)} placeholder="Enter passcode" />
           <Button type="submit" disabled={loggingIn}>{loggingIn ? "Checking..." : "Login"}</Button>
@@ -967,6 +989,7 @@ export default function App() {
       </div>
     );
   }
+  // --------------------------------
 
   if (token && settingsLoaded && !isPublicView && !gatewayPassed) {
      return (
