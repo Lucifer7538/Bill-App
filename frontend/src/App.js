@@ -917,7 +917,7 @@ export default function App() {
               )}
 
               {!isPaid && publicUpiAmountToPay > 0 && (
-                <div className="payment-qr-box no-print" data-html2canvas-ignore="true" style={{ textAlign: "center", marginTop: "20px", padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px dashed #cbd5e1" }}>
+                <div className="payment-qr-box" data-html2canvas-ignore="true" style={{ textAlign: "center", marginTop: "20px", padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px dashed #cbd5e1" }}>
                   <p className="scan-title" style={{ fontWeight: "bold", margin: "0 0 10px 0", color: "#0f172a", fontSize: "1.1rem" }}>Scan Here For Payment (₹{money(publicUpiAmountToPay)})</p>
                   <img src={publicDynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" style={{ width: "200px", height: "200px", margin: "0 auto", display: "block" }} crossOrigin="anonymous" />
                   <p className="upi-id" style={{ fontSize: "0.9rem", color: "#64748b", margin: "10px 0 0 0", fontWeight: "bold" }}>UPI: {publicUpiId}</p>
@@ -1233,7 +1233,7 @@ export default function App() {
                 )}
 
                 {showDashboardUpi && (
-                  <div className="payment-qr-box no-print" data-html2canvas-ignore="true">
+                  <div className="payment-qr-box" data-html2canvas-ignore="true">
                     <p className="scan-title">Scan Here For Payment (₹{money(upiAmountToPay)})</p>
                     <img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" crossOrigin="anonymous" />
                     <p className="upi-id">UPI: {upiId}</p>
