@@ -449,7 +449,6 @@ export default function App() {
               clonedNode.style.padding = "20px"; clonedNode.style.boxSizing = "border-box";
               const noPrint = clonedDoc.querySelectorAll('.no-print'); noPrint.forEach(el => el.style.display = 'none');
               const printOnly = clonedDoc.querySelectorAll('.print-only'); printOnly.forEach(el => { el.style.position = 'static'; el.style.width = '100%'; el.style.height = 'auto'; el.style.opacity = '1'; el.style.visibility = 'visible'; el.style.display = 'flex'; });
-              const images = clonedNode.getElementsByTagName('img'); for (let img of images) img.crossOrigin = "anonymous";
             }
           }
         });
@@ -699,7 +698,6 @@ export default function App() {
             clonedNode.style.margin = "0"; clonedNode.style.padding = "20px"; clonedNode.style.height = "max-content"; clonedNode.style.boxSizing = "border-box"; 
             const noPrint = clonedNode.querySelectorAll('.no-print'); noPrint.forEach(el => el.style.display = 'none');
             const printOnly = clonedNode.querySelectorAll('.print-only'); printOnly.forEach(el => { el.style.position = 'static'; el.style.width = '100%'; el.style.height = 'auto'; el.style.opacity = '1'; el.style.visibility = 'visible'; el.style.display = 'flex'; });
-            const images = clonedNode.getElementsByTagName('img'); for (let img of images) img.crossOrigin = "anonymous"; 
           } 
         } 
       }); 
