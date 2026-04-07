@@ -348,21 +348,20 @@ async def delete_bill(document_number: str, _=Depends(require_auth)):
                     "store_credit": credit_revert
                 }}
             )
-            @api_router.delete("/bills/all")
+    await bills_collection.delete_one({"document_number": document_number})
+    return {"message": "Deleted"}
+
+
+@api_router.delete("/bills/all")
 async def delete_all_bills(_=Depends(require_auth)):
     try:
-        # 1. Delete all actual bill receipts (the items, the amounts, the data)
+        # 1. Delete all actual bill receipts
         await bills_collection.delete_many({})
         
-        # 🚨 Notice: We are completely ignoring counters_collection! 
-        # Your invoice and estimate numbers will continue from exactly where they left off.
-        
-        # 🚨 Notice: We are completely ignoring customers_collection!
-        # All names, phone numbers, loyalty points, and store credits will remain 100% safe.
-        
-        return {"message": "All bill data wiped successfully. Counters and Customer details are safe!"}
+        return {"message": "All bill data wiped successfully."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 
     await bills_collection.delete_one({"document_number": document_number})
