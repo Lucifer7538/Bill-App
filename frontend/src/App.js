@@ -933,8 +933,8 @@ export default function App() {
 
             <div className="declaration">
               {publicBill.mode === "invoice" ? (
-                <><p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p></>
-              <><p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></>
+                <><p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p>
+              <p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></>
               ) : (
                 <><p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></>
               )}
