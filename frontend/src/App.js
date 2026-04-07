@@ -430,8 +430,7 @@ export default function App() {
     if ((filteredRecentBills || []).length === 0) { toast.error("No bills to download!"); return; }
     if ((filteredRecentBills || []).length > 20) { if (!window.confirm(`Generate PDF with ${filteredRecentBills.length} pages? This might take a minute.`)) return; }
     setIsBulkDownloading(true); toast.info(`Generating PDF for ${filteredRecentBills.length} bills...`);
-    // Wait for dynamic QRs to fetch properly
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise(resolve => setTimeout(resolve, 800));
     try {
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const pageWidth = pdf.internal.pageSize.getWidth();
@@ -450,7 +449,6 @@ export default function App() {
               clonedNode.style.padding = "20px"; clonedNode.style.boxSizing = "border-box";
               const noPrint = clonedDoc.querySelectorAll('.no-print'); noPrint.forEach(el => el.style.display = 'none');
               const printOnly = clonedDoc.querySelectorAll('.print-only'); printOnly.forEach(el => { el.style.position = 'static'; el.style.width = '100%'; el.style.height = 'auto'; el.style.opacity = '1'; el.style.visibility = 'visible'; el.style.display = 'flex'; });
-              const images = clonedNode.getElementsByTagName('img'); for (let img of images) img.crossOrigin = "anonymous";
             }
           }
         });
@@ -462,6 +460,7 @@ export default function App() {
       pdf.save(`Jalaram_Bills_Export_${today()}.pdf`); toast.success("Bulk PDF Downloaded!");
     } catch (error) { toast.error("Error generating bulk PDF."); } finally { setIsBulkDownloading(false); }
   };
+
   const fetchLedgerHistory = async () => {
     try { const res = await axios.get(`${API}/settings/ledger/logs?branch_id=${globalBranchId}`, { headers: authHeaders }); setLedgerLogs(res.data); } catch { toast.error("Failed to load ledger history."); }
   };
@@ -686,14 +685,8 @@ export default function App() {
     } catch (error) { toast.error("Failed to save bill."); } finally { setSavingBill(false); }
   };
 
-    const downloadPdf = async (elementId, filename) => { 
-    toast.info("Preparing PDF... Please wait a second."); 
-    const node = document.getElementById(elementId); 
-    if (!node) return; 
-    
-    // Force the PDF generator to wait 1.5 seconds so the QR code can finish loading from the internet!
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
+  const downloadPdf = async (elementId, filename) => { 
+    toast.info("Preparing PDF..."); const node = document.getElementById(elementId); if (!node) return; 
     try { 
       const canvas = await html2canvas(node, { 
         scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#ffffff", windowWidth: 1024, 
@@ -708,10 +701,6 @@ export default function App() {
           } 
         } 
       }); 
-      const imageData = canvas.toDataURL("image/png", 1.0); const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" }); const pageWidth = pdf.internal.pageSize.getWidth(); const pageHeight = (canvas.height * pageWidth) / canvas.width; pdf.addImage(imageData, "PNG", 0, 0, pageWidth, pageHeight); pdf.save(`${filename}.pdf`); toast.success("PDF Downloaded Successfully"); 
-    } catch (error) { toast.error("Failed to download PDF."); } 
-  };
-
       const imageData = canvas.toDataURL("image/png", 1.0); const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" }); const pageWidth = pdf.internal.pageSize.getWidth(); const pageHeight = (canvas.height * pageWidth) / canvas.width; pdf.addImage(imageData, "PNG", 0, 0, pageWidth, pageHeight); pdf.save(`${filename}.pdf`); toast.success("PDF Downloaded Successfully"); 
     } catch (error) { toast.error("Failed to download PDF."); } 
   };
@@ -926,7 +915,7 @@ export default function App() {
               )}
 
               {!isPaid && publicUpiAmountToPay > 0 && (
-                <div className="payment-qr-box" style={{ textAlign: "center", marginTop: "20px", padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px dashed #cbd5e1" }}>
+                <div className="payment-qr-box" data-html2canvas-ignore="true" style={{ textAlign: "center", marginTop: "20px", padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px dashed #cbd5e1" }}>
                   <p className="scan-title" style={{ fontWeight: "bold", margin: "0 0 10px 0", color: "#0f172a", fontSize: "1.1rem" }}>Scan Here For Payment (₹{money(publicUpiAmountToPay)})</p>
                   <img src={publicDynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" style={{ width: "200px", height: "200px", margin: "0 auto", display: "block" }} crossOrigin="anonymous" />
                   <p className="upi-id" style={{ fontSize: "0.9rem", color: "#64748b", margin: "10px 0 0 0", fontWeight: "bold" }}>UPI: {publicUpiId}</p>
@@ -942,7 +931,8 @@ export default function App() {
 
             <div className="declaration">
               {publicBill.mode === "invoice" ? (
-                <><p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p><p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></>
+                <><p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p>
+              <p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></>
               ) : (
                 <><p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></>
               )}
@@ -1118,7 +1108,8 @@ export default function App() {
                   
                   <div className="declaration">
                     {b.mode === "invoice" ? (
-                      <><p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p><p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></>
+                       <><p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p>
+              <p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></>
                     ) : (
                       <><p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></>
                     )}
@@ -1240,10 +1231,10 @@ export default function App() {
                 )}
 
                 {showDashboardUpi && (
-                  <div className="payment-qr-box" style={{ textAlign: "center", marginTop: "20px", padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px dashed #cbd5e1" }}>
-                    <p className="scan-title" style={{ fontWeight: "bold", margin: "0 0 10px 0", color: "#0f172a", fontSize: "1.1rem" }}>Scan Here For Payment (₹{money(upiAmountToPay)})</p>
-                    <img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" style={{ width: "200px", height: "200px", margin: "0 auto", display: "block" }} crossOrigin="anonymous" />
-                    <p className="upi-id" style={{ fontSize: "0.9rem", color: "#64748b", margin: "10px 0 0 0", fontWeight: "bold" }}>UPI: {upiId}</p>
+                  <div className="payment-qr-box" data-html2canvas-ignore="true">
+                    <p className="scan-title">Scan Here For Payment (₹{money(upiAmountToPay)})</p>
+                    <img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" crossOrigin="anonymous" />
+                    <p className="upi-id">UPI: {upiId}</p>
                   </div>
                 )}
               </div>
@@ -1256,7 +1247,8 @@ export default function App() {
 
               <div className="declaration">
                 {mode === "invoice" ? (
-                  <><p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p><p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></>
+                   <><p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p>
+              <p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></>
                 ) : (
                   <><p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></>
                 )}
