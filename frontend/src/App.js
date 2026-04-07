@@ -686,8 +686,14 @@ export default function App() {
     } catch (error) { toast.error("Failed to save bill."); } finally { setSavingBill(false); }
   };
 
-  const downloadPdf = async (elementId, filename) => { 
-    toast.info("Preparing PDF..."); const node = document.getElementById(elementId); if (!node) return; 
+    const downloadPdf = async (elementId, filename) => { 
+    toast.info("Preparing PDF... Please wait a second."); 
+    const node = document.getElementById(elementId); 
+    if (!node) return; 
+    
+    // Force the PDF generator to wait 1.5 seconds so the QR code can finish loading from the internet!
+    await new Promise(resolve => setTimeout(resolve, 1500));
+
     try { 
       const canvas = await html2canvas(node, { 
         scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#ffffff", windowWidth: 1024, 
@@ -702,6 +708,10 @@ export default function App() {
           } 
         } 
       }); 
+      const imageData = canvas.toDataURL("image/png", 1.0); const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" }); const pageWidth = pdf.internal.pageSize.getWidth(); const pageHeight = (canvas.height * pageWidth) / canvas.width; pdf.addImage(imageData, "PNG", 0, 0, pageWidth, pageHeight); pdf.save(`${filename}.pdf`); toast.success("PDF Downloaded Successfully"); 
+    } catch (error) { toast.error("Failed to download PDF."); } 
+  };
+
       const imageData = canvas.toDataURL("image/png", 1.0); const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" }); const pageWidth = pdf.internal.pageSize.getWidth(); const pageHeight = (canvas.height * pageWidth) / canvas.width; pdf.addImage(imageData, "PNG", 0, 0, pageWidth, pageHeight); pdf.save(`${filename}.pdf`); toast.success("PDF Downloaded Successfully"); 
     } catch (error) { toast.error("Failed to download PDF."); } 
   };
