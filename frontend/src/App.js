@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Store, Upload, Download, Keyboard } from "lucide-react";
+import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Store, Upload, Download, Keyboard, Cpu, Wifi, CheckCircle2 } from "lucide-react"; // Added IoT Icons
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Toaster, toast } from "sonner";
@@ -40,7 +40,8 @@ const defaultSettings = {
     { id: "open_ledger", action: "Open Ledger/Vaults", keys: "alt + l", isSystem: true },
     { id: "open_recent", action: "Open Recent Bills", keys: "alt + r", isSystem: true },
     { id: "download_pdf", action: "Download PDF", keys: "alt + f", isSystem: true },
-    { id: "print_bill", action: "Print Bill", keys: "alt + b", isSystem: true }
+    { id: "print_bill", action: "Print Bill", keys: "alt + b", isSystem: true },
+    { id: "iot_qr", action: "Send QR to ESP32", keys: "alt + q", isSystem: true } // Added Shortcut
   ],
   branches: [
     { id: "B1", name: "Branch 1 (Old Town)", address: "Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2", location_url: "", map_url: "", whatsapp_url: "", instagram_url: "", about_url: "", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", gstin: "21AAUFJ1925F1ZH", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 },
@@ -262,10 +263,51 @@ export default function App() {
   const [logoUploadName, setLogoUploadName] = useState("");
   const [aboutUploadName, setAboutUploadName] = useState("");
   const [cloudStatus, setCloudStatus] = useState({ provider: "supabase", enabled: false, mode: "loading" });
+
+  // --- NEW IOT & MQTT STATE ---
+  const [iotOnline, setIotOnline] = useState(false);
+  const [isMqttSending, setIsMqttSending] = useState(false);
   
   const authHeaders = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
   const activeGlobalBranch = (settings.branches || []).find(b => b.id === globalBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
   const activeBillBranch = (settings.branches || []).find(b => b.id === billBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
+
+  // --- NEW IOT HEARTBEAT MONITOR ---
+  useEffect(() => {
+    if (!token || isPublicView) return;
+    const checkIot = async () => {
+      try {
+        const res = await axios.get(`${API}/cloud/mqtt/status`, { headers: authHeaders });
+        setIotOnline(res.data.online);
+      } catch (e) { setIotOnline(false); }
+    };
+    checkIot();
+    const interval = setInterval(checkIot, 10000); // Check every 10 seconds
+    return () => clearInterval(interval);
+  }, [token, isPublicView, authHeaders]);
+
+  // --- NEW IOT COMMUNICATION FUNCTIONS ---
+  const sendQrToDisplay = async (amount, upiId) => {
+    if (!iotOnline) { toast.error("IoT Device is offline!"); return; }
+    setIsMqttSending(true);
+    try {
+      await axios.post(`${API}/cloud/mqtt/publish`, {
+        topic: "Jalaram/QR",
+        message: JSON.stringify({ amount: String(Math.round(amount)), upi_id: upiId })
+      }, { headers: authHeaders });
+      toast.success("QR Code sent to shop display!");
+    } catch (e) { toast.error("Failed to send QR to display."); }
+    finally { setIsMqttSending(false); }
+  };
+
+  const sendSuccessToDisplay = async () => {
+    try {
+      await axios.post(`${API}/cloud/mqtt/publish`, {
+        topic: "Jalaram/QR",
+        message: "SUCCESS"
+      }, { headers: authHeaders });
+    } catch (e) { console.error("MQTT Success trigger failed"); }
+  };
 
   useEffect(() => {
     if (settings.custom_fonts && settings.custom_fonts.length > 0) { settings.custom_fonts.forEach(f => registerFont(f.name, f.dataUrl)); }
@@ -364,6 +406,7 @@ export default function App() {
       if (checkKey('focus_credit')) { e.preventDefault(); e.stopPropagation(); document.getElementById('appliedCreditInput')?.focus(); return; }
       if (checkKey('download_pdf')) { e.preventDefault(); e.stopPropagation(); downloadPdf("bill-print-root", documentNumber || mode); return; }
       if (checkKey('print_bill')) { e.preventDefault(); e.stopPropagation(); window.print(); return; }
+      if (checkKey('iot_qr')) { e.preventDefault(); e.stopPropagation(); sendQrToDisplay(computed.grandTotal, mode === 'invoice' ? activeBillBranch.invoice_upi_id : activeBillBranch.estimate_upi_id); return; }
     };
     window.addEventListener('keydown', handleGlobalKeyDown, true);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
@@ -586,7 +629,6 @@ export default function App() {
 
   const updateItem = (id, key, value) => { markDirty(); setItems((prev) => prev.map((item) => (item.id === id ? { ...item, [key]: value } : item))); };
   const checkIsBlank = () => { return !customer.name.trim() && !customer.phone.trim() && !customer.address.trim() && !(items || []).some(i => i.description.trim() || i.weight.trim() || i.amount_override.trim()) && (!discount || discount === "0") && (!exchange || exchange === "0") && !paymentMethod && !advanceMethod && !advanceAmount && !splitCash; };
-
   const clearBill = async (nextMode = mode, nextBranch = billBranchId) => {
     setCurrentBillId(null); setEditingDocNumber(null); setItems([createItem(settings.default_hsn)]); setCustomer({ name: "", phone: "", address: "", email: "", points: 0, credit: 0 });
     setSuggestions([]); setDiscount("0"); setExchange("0"); setRedeemedPoints(""); setAppliedCredit(""); setSavedCredit(""); setBonusPoints(""); setManualRoundOff("");
@@ -620,7 +662,20 @@ export default function App() {
   const handleQuickPaymentToggle = async (bill) => {
     if (bill.tx_type === "booking" || bill.tx_type === "service") { toast.info("Please open the bill and click Edit to manage Booking/Service balances."); return; }
     const newStatus = !bill.is_payment_done;
-    try { await axios.put(`${API}/bills/${bill.document_number}/toggle-payment`, { is_payment_done: newStatus }, { headers: authHeaders }); toast.success(`Payment marked as ${newStatus ? 'DONE ✅' : 'PENDING ⏳'}`); if (currentBillId === bill.id) { setIsPaymentDone(newStatus); } setRecentBillsList(prev => prev.map(b => b.document_number === bill.document_number ? { ...b, is_payment_done: newStatus } : b)); await loadSettings(); } 
+    try { 
+      await axios.put(`${API}/bills/${bill.document_number}/toggle-payment`, { is_payment_done: newStatus }, { headers: authHeaders }); 
+      toast.success(`Payment marked as ${newStatus ? 'DONE ✅' : 'PENDING ⏳'}`); 
+      
+      // --- NEW IOT TRIGGER ---
+      if (newStatus && iotOnline) {
+        sendSuccessToDisplay();
+      }
+      // -----------------------
+
+      if (currentBillId === bill.id) { setIsPaymentDone(newStatus); } 
+      setRecentBillsList(prev => prev.map(b => b.document_number === bill.document_number ? { ...b, is_payment_done: newStatus } : b)); 
+      await loadSettings(); 
+    } 
     catch { toast.error("Failed to update payment status."); }
   };
 
@@ -662,7 +717,7 @@ export default function App() {
 
   const saveBill = async () => {
     if (txType === "sale" && !paymentMethod) { toast.error("Please select a payment method."); return; }
-    if ((txType === "booking" || txType === "service")) { if (isAdvancePaid && !advanceMethod) { toast.error("Please select a method for the Advance payment."); return; } if (isBalancePaid && !balanceMethod) { toast.error("Please select a method for the Balance payment."); return; } }
+    if ((txType === "booking" || tx_type === "service")) { if (isAdvancePaid && !advanceMethod) { toast.error("Please select a method for the Advance payment."); return; } if (isBalancePaid && !balanceMethod) { toast.error("Please select a method for the Balance payment."); return; } }
 
     setSavingBill(true);
     try {
@@ -681,6 +736,14 @@ export default function App() {
 
       if (currentBillId) { await axios.put(`${API}/bills/update-by-id/${currentBillId}`, payload, { headers: authHeaders }); toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} updated & migrated successfully.`); setIsDirty(false); setEditingDocNumber(documentNumber); } 
       else { const res = await axios.post(`${API}/bills/save`, payload, { headers: authHeaders }); toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} saved successfully.`); setIsDirty(false); setCurrentBillId(res.data.id); setEditingDocNumber(res.data.document_number); setDocumentNumber(res.data.document_number); }
+      
+      // --- NEW IOT TRIGGER ---
+      // If the bill was saved as "Paid", trigger the animation on the display
+      if (isPaymentDone && iotOnline) {
+        sendSuccessToDisplay();
+      }
+      // -----------------------
+
       await loadSettings(); await fetchLedgerHistory();
     } catch (error) { toast.error("Failed to save bill."); } finally { setSavingBill(false); }
   };
@@ -705,7 +768,12 @@ export default function App() {
     } catch (error) { toast.error("Failed to download PDF."); } 
   };
   
-  const shareWhatsApp = () => { const link = `${window.location.origin}/?view=${documentNumber}`; const text = `*Hello* ${customer.name || "Customer"},\n Thank you for visiting Jalaram Jewellers\n\n Official ${mode === "invoice" ? "Invoice" : "Estimate"} Bill\n Here Is Your Bill No. ${documentNumber}\n Amount: ₹${money(computed.grandTotal)}.\n\n Here You can view and download it securely\n Link: ${link}\n\n *Stay Connected With us*\n WhatsApp Group\n Link (https://bit.ly/Jalaram-Group-WP)\n Instagram\n Link (https://bit.ly/Jalaram-IG)\n\n*We value Your Feedback*\n Dear ${customer.name || "Customer"}, Please Give us a minute to Rate our Behaviour and Service. Give us your Valuable Feedback so we can make your experience even better:\n ${activeBillBranch.map_url}\n\n   Thank you,\n${settings.shop_name} : The Silver Specialist\n\n  `; let cleanedPhone = customer.phone.replace(/\D/g, ""); if (cleanedPhone.length === 10) cleanedPhone = `91${cleanedPhone}`; window.open(`https://wa.me/${cleanedPhone}?text=${encodeURIComponent(text)}`, "_blank"); };
+  const shareWhatsApp = () => { 
+    const link = `${window.location.origin}/?view=${documentNumber}`; 
+    const text = `*Hello* ${customer.name || "Customer"},\n Thank you for visiting Jalaram Jewellers\n\n Official ${mode === "invoice" ? "Invoice" : "Estimate"} Bill\n Here Is Your Bill No. ${documentNumber}\n Amount: ₹${money(computed.grandTotal)}.\n\n Here You can view and download it securely\n Link: ${link}\n\n *Stay Connected With us*\n WhatsApp Group\n Link (https://bit.ly/Jalaram-Group-WP)\n Instagram\n Link (https://bit.ly/Jalaram-IG)\n\n*We value Your Feedback*\n Dear ${customer.name || "Customer"}, Please Give us a minute to Rate our Behaviour and Service. Give us your Valuable Feedback so we can make your experience even better:\n ${activeBillBranch.map_url}\n\n   Thank you,\n${settings.shop_name} : The Silver Specialist\n\n  `; 
+    let cleanedPhone = customer.phone.replace(/\D/g, ""); if (cleanedPhone.length === 10) cleanedPhone = `91${cleanedPhone}`; window.open(`https://wa.me/${cleanedPhone}?text=${encodeURIComponent(text)}`, "_blank"); 
+  };
+  
   const shareEmail = () => { const link = `${window.location.origin}/?view=${documentNumber}`; const subject = `${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber}`; const body = `Dear ${customer.name || "Customer"},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`; window.location.href = `mailto:${customer.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; };
   const goToBillTop = () => { document.getElementById("bill-print-root")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
 
@@ -960,9 +1028,7 @@ export default function App() {
     );
   }
 
-  // ---- NEW SECURITY LOGIC HERE ----
   if (!token) {
-    // If there is NO token, NO public bill view, and NO secret admin parameter, show the dead end!
     if (!isAdminView && !isPublicView) {
       return (
         <div className="login-shell" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9', height: '100dvh', padding: '20px', textAlign: 'center' }}>
@@ -974,8 +1040,7 @@ export default function App() {
         </div>
       );
     }
-
-    // If they USED the secret parameter (/?admin=true), show the actual login form
+// If they USED the secret parameter (/?admin=true), show the actual login form
     return (
       <div className="login-shell">
         <Toaster position="bottom-right" />
@@ -1139,9 +1204,16 @@ export default function App() {
         </div>
         
         <div className="top-actions" style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+          {/* --- NEW IOT STATUS INDICATOR --- */}
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.85rem", color: iotOnline ? "#4ade80" : "#ef4444", marginRight: "10px", padding: "4px 10px", borderRadius: "20px", border: `1px solid ${iotOnline ? "#4ade80" : "#ef4444"}` }}>
+             <Cpu size={14} />
+             <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: iotOnline ? "#4ade80" : "#ef4444", boxShadow: iotOnline ? "0 0 8px #4ade80" : "none" }} />
+             <span>Display: {iotOnline ? "Live" : "Off"}</span>
+          </div>
+
           <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.85rem", color: cloudStatus.enabled ? "#4ade80" : "#facc15", marginRight: "10px" }}>
              <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: cloudStatus.enabled ? "#4ade80" : "#facc15" }} />
-             <span>{cloudStatus.enabled ? "Live" : "Offline"}</span>
+             <span>Cloud: {cloudStatus.enabled ? "Online" : "Connecting"}</span>
           </div>
           <Button variant="outline" onClick={goToBillTop} style={{ color: "black", backgroundColor: "white" }}>Back</Button>
           <Button variant="outline" onClick={handleLogout} style={{ color: "black", backgroundColor: "white" }}>Logout</Button>
@@ -1329,6 +1401,13 @@ export default function App() {
 
           <div className="control-card">
             <h3>Payment Options</h3>
+            {/* --- NEW IOT TRIGGER BUTTON --- */}
+            {upiAmountToPay > 0 && (
+              <Button onClick={() => sendQrToDisplay(upiAmountToPay, upiId)} disabled={isMqttSending} style={{ width: "100%", marginBottom: "15px", backgroundColor: "#0f172a", color: "white", height: "50px", fontSize: "1rem", border: "2px solid #cbd5e1" }}>
+                {isMqttSending ? "Processing..." : "🖥️ Show QR on Shop Display"}
+              </Button>
+            )}
+
             <label className="select-label">Transaction Type</label>
             <div style={{ display: 'flex', gap: '5px', marginBottom: '15px' }}>
               <Button variant={txType === "sale" ? "default" : "outline"} onClick={() => {setTxType("sale"); markDirty();}} style={{flex: 1, padding: "0 5px"}}>Sale</Button>
@@ -1350,8 +1429,14 @@ export default function App() {
                     <Input value={`UPI: ₹${money(Math.max(0, computed.grandTotal - num(splitCash)))}`} disabled style={{ backgroundColor: "#f1f5f9" }} />
                   </div>
                 )}
-                <div style={{ marginTop: "15px", padding: "12px", backgroundColor: isPaymentDone ? "#dcfce7" : "#fef3c7", border: `1.5px solid ${isPaymentDone ? "#22c55e" : "#f59e0b"}`, borderRadius: "8px", display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} onClick={() => { setIsPaymentDone(!isPaymentDone); markDirty(); }}>
-                  <input type="checkbox" checked={isPaymentDone} onChange={(e) => { setIsPaymentDone(e.target.checked); markDirty(); }} onClick={(e) => e.stopPropagation()} style={{ width: "20px", height: "20px", cursor: "pointer" }} />
+                <div style={{ marginTop: "15px", padding: "12px", backgroundColor: isPaymentDone ? "#dcfce7" : "#fef3c7", border: `1.5px solid ${isPaymentDone ? "#22c55e" : "#f59e0b"}`, borderRadius: "8px", display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} onClick={() => { 
+                   const next = !isPaymentDone; setIsPaymentDone(next); markDirty(); 
+                   if (next && iotOnline) sendSuccessToDisplay();
+                }}>
+                  <input type="checkbox" checked={isPaymentDone} onChange={(e) => { 
+                    const next = e.target.checked; setIsPaymentDone(next); markDirty(); 
+                    if (next && iotOnline) sendSuccessToDisplay();
+                  }} onClick={(e) => e.stopPropagation()} style={{ width: "20px", height: "20px", cursor: "pointer" }} />
                   <strong style={{ color: isPaymentDone ? "#166534" : "#b45309", fontSize: "1.1rem" }}>{isPaymentDone ? "✅ PAYMENT DONE" : "⏳ PAYMENT PENDING"}</strong>
                 </div>
               </div>
@@ -1372,8 +1457,14 @@ export default function App() {
                     <Input value={`UPI: ₹${money(Math.max(0, num(advanceAmount) - num(advanceSplitCash)))}`} disabled style={{ backgroundColor: "#f1f5f9" }} />
                   </div>
                 )}
-                <div style={{ marginTop: "15px", padding: "10px", backgroundColor: isAdvancePaid ? "#dcfce7" : "#fef3c7", border: `1px solid ${isAdvancePaid ? "#22c55e" : "#f59e0b"}`, borderRadius: "8px", display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} onClick={() => { setIsAdvancePaid(!isAdvancePaid); markDirty(); }}>
-                  <input type="checkbox" checked={isAdvancePaid} onChange={(e) => { setIsAdvancePaid(e.target.checked); markDirty(); }} onClick={(e) => e.stopPropagation()} style={{ width: "16px", height: "16px" }} />
+                <div style={{ marginTop: "15px", padding: "10px", backgroundColor: isAdvancePaid ? "#dcfce7" : "#fef3c7", border: `1px solid ${isAdvancePaid ? "#22c55e" : "#f59e0b"}`, borderRadius: "8px", display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} onClick={() => { 
+                   const next = !isAdvancePaid; setIsAdvancePaid(next); markDirty(); 
+                   if (next && iotOnline) sendSuccessToDisplay();
+                }}>
+                  <input type="checkbox" checked={isAdvancePaid} onChange={(e) => { 
+                    const next = e.target.checked; setIsAdvancePaid(next); markDirty(); 
+                    if (next && iotOnline) sendSuccessToDisplay();
+                  }} onClick={(e) => e.stopPropagation()} style={{ width: "16px", height: "16px" }} />
                   <strong style={{ color: isAdvancePaid ? "#166534" : "#b45309" }}>{isAdvancePaid ? "✅ ADVANCE COLLECTED" : "⏳ ADVANCE PENDING"}</strong>
                 </div>
 
@@ -1390,8 +1481,14 @@ export default function App() {
                     <Input value={`UPI: ₹${money(Math.max(0, (computed.grandTotal - num(advanceAmount)) - num(balanceSplitCash)))}`} disabled style={{ backgroundColor: "#f1f5f9" }} />
                   </div>
                 )}
-                <div style={{ marginTop: "15px", padding: "10px", backgroundColor: isBalancePaid ? "#dcfce7" : "#fef3c7", border: `1px solid ${isBalancePaid ? "#22c55e" : "#f59e0b"}`, borderRadius: "8px", display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} onClick={() => { setIsBalancePaid(!isBalancePaid); markDirty(); }}>
-                  <input type="checkbox" checked={isBalancePaid} onChange={(e) => { setIsBalancePaid(e.target.checked); markDirty(); }} onClick={(e) => e.stopPropagation()} style={{ width: "16px", height: "16px" }} />
+                <div style={{ marginTop: "15px", padding: "10px", backgroundColor: isBalancePaid ? "#dcfce7" : "#fef3c7", border: `1px solid ${isBalancePaid ? "#22c55e" : "#f59e0b"}`, borderRadius: "8px", display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} onClick={() => { 
+                   const next = !isBalancePaid; setIsBalancePaid(next); markDirty(); 
+                   if (next && iotOnline) sendSuccessToDisplay();
+                }}>
+                  <input type="checkbox" checked={isBalancePaid} onChange={(e) => { 
+                    const next = e.target.checked; setIsBalancePaid(next); markDirty(); 
+                    if (next && iotOnline) sendSuccessToDisplay();
+                  }} onClick={(e) => e.stopPropagation()} style={{ width: "16px", height: "16px" }} />
                   <strong style={{ color: isBalancePaid ? "#166534" : "#b45309" }}>{isBalancePaid ? "✅ BALANCE COLLECTED" : "⏳ BALANCE PENDING"}</strong>
                 </div>
               </div>
@@ -1528,8 +1625,7 @@ export default function App() {
           </div>
         </section>
       )}
-
-      {/* RECENT BILLS */}
+{/* RECENT BILLS */}
       {showRecentBills && (
         <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "550px", backgroundColor: "white", zIndex: 100, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
           <div className="drawer-header" style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10, paddingBottom: "15px", borderBottom: "1px solid #e2e8f0" }}>
@@ -1723,6 +1819,29 @@ export default function App() {
 
             {settingsTab === "advanced" && (
               <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+                {/* --- NEW IOT DISPLAY SETTINGS --- */}
+                <div style={{ padding: "15px", backgroundColor: "#f0f9ff", borderRadius: "8px", border: "1px solid #bae6fd" }}>
+                  <h4 style={{ color: "#0369a1", margin: "0 0 10px 0", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <Cpu size={18} /> Counter Display Terminal
+                  </h4>
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px", padding: "10px", backgroundColor: "white", borderRadius: "6px", border: "1px solid #e0f2fe" }}>
+                    <div style={{ position: "relative" }}>
+                      <span style={{ display: "block", width: "12px", height: "12px", borderRadius: "50%", backgroundColor: iotOnline ? "#22c55e" : "#ef4444" }} />
+                      {iotOnline && <span style={{ position: "absolute", top: 0, left: 0, width: "12px", height: "12px", borderRadius: "50%", backgroundColor: "#22c55e", animation: "ping 2s cubic-bezier(0, 0, 0.2, 1) infinite" }} />}
+                    </div>
+                    <div>
+                      <p style={{ margin: 0, fontWeight: "bold", color: "#0c4a6e" }}>{iotOnline ? "DISPLAY ONLINE" : "DISPLAY OFFLINE"}</p>
+                      <p style={{ margin: 0, fontSize: "0.75rem", color: "#64748b" }}>
+                        {iotOnline ? "Ready to show QR codes and payment animations." : "Check if the shop ESP32 device is powered on."}
+                      </p>
+                    </div>
+                  </div>
+                  <p style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "10px" }}>
+                    This device is synchronized with your cloud billing app to automate customer payments.
+                  </p>
+                </div>
+                {/* --------------------------------- */}
+
                 <div style={{ padding: "15px", backgroundColor: "#fef2f2", borderRadius: "8px", border: "1px solid #fecaca" }}>
                   <h4 style={{ color: "#991b1b", margin: "0 0 10px 0" }}>Danger Zone</h4>
                   <Button onClick={() => handleResetCounter("estimate")} style={{ width: "100%", marginBottom: "10px", backgroundColor: "#b91c1c", color: "white" }}>Reset Estimate Counter</Button>
