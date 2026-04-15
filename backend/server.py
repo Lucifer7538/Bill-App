@@ -1,4 +1,5 @@
 import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Dict, List, Literal, Optional
@@ -12,6 +13,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import ReturnDocument
 import requests
 from fastapi.middleware.cors import CORSMiddleware
+import paho.mqtt.client as mqtt # --- NEW: MQTT LIBRARY ---
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -26,6 +28,17 @@ customers_collection = db.customers
 bills_collection = db.bills
 counters_collection = db.number_counters
 ledger_logs_collection = db.ledger_logs 
+
+# --- NEW: HIVEMQ CLOUD CONFIGURATION ---
+MQTT_BROKER = "c625cc8e0231406e84c51c94ba9a220d.s1.eu.hivemq.cloud"
+MQTT_PORT = 8883
+MQTT_USER = "QR-Display"
+MQTT_PASS = "Khushal@7538"
+MQTT_TOPIC = "Jalaram/QR"
+STATUS_TOPIC = "Jalaram/status"
+
+# In-memory store for IoT status
+IOT_HEARTBEAT = {"last_seen": None}
 
 app = FastAPI()
 
@@ -45,6 +58,26 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip()
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
 SUPABASE_ENABLED = bool(SUPABASE_URL and SUPABASE_KEY and "YOUR_" not in SUPABASE_URL)
 
+# --- NEW: MQTT CLIENT INITIALIZATION ---
+mqtt_client = mqtt.Client(callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
+
+def on_connect(client, userdata, flags, rc, properties):
+    if rc == 0:
+        print("✅ Backend connected to HiveMQ Cloud")
+        client.subscribe(STATUS_TOPIC)
+    else:
+        print(f"❌ MQTT Connection failed with code {rc}")
+
+def on_message(client, userdata, msg):
+    """Listens for heartbeat pulses from the ESP32"""
+    if msg.topic == STATUS_TOPIC:
+        IOT_HEARTBEAT["last_seen"] = datetime.now(timezone.utc)
+
+mqtt_client.on_connect = on_connect
+mqtt_client.on_message = on_message
+mqtt_client.username_pw_set(MQTT_USER, MQTT_PASS)
+mqtt_client.tls_set() # Required for HiveMQ Cloud TLS
+
 def now_iso(): return datetime.now(timezone.utc).isoformat()
 
 def safe_float(val):
@@ -54,7 +87,6 @@ def safe_float(val):
 
 # --- HELPER FUNCTIONS FOR BULLETPROOF DATA EXTRACTION ---
 def get_val(data: dict, keys: List[str]):
-    """Safely extracts loyalty/credit values whether they are at root or nested in totals/loyalty objects."""
     for k in keys:
         if k in data and data[k] not in [None, ""]: return safe_float(data[k])
     if "totals" in data and isinstance(data["totals"], dict):
@@ -66,7 +98,6 @@ def get_val(data: dict, keys: List[str]):
     return 0.0
 
 def get_customer_info(data: dict):
-    """Safely extracts customer info whether at root or nested."""
     name = data.get("customer_name", "")
     phone = data.get("customer_phone", "")
     addr = data.get("customer_address", "")
@@ -79,7 +110,6 @@ def get_customer_info(data: dict):
         if not email: email = data["customer"].get("email", "")
         
     return str(name).strip(), str(phone).strip(), str(addr).strip(), str(email).strip()
-# -----------------------------------------------------------
 
 def get_bill_ledger_values(bill: dict):
     c, eb, ib = 0.0, 0.0, 0.0
@@ -140,6 +170,30 @@ async def login(payload: dict):
 
 @api_router.get("/auth/verify")
 async def verify(_=Depends(require_auth)): return {"valid": True}
+
+# --- NEW: IOT CONTROL ENDPOINTS ---
+
+@api_router.get("/cloud/mqtt/status")
+async def get_mqtt_status(_=Depends(require_auth)):
+    """Checks if the ESP32 has pulsed in the last 30 seconds"""
+    last = IOT_HEARTBEAT["last_seen"]
+    if not last: return {"online": False}
+    
+    is_live = (datetime.now(timezone.utc) - last) < timedelta(seconds=30)
+    return {"online": is_live, "last_seen": last.isoformat()}
+
+@api_router.post("/cloud/mqtt/publish")
+async def publish_mqtt(payload: dict, _=Depends(require_auth)):
+    """Publishes a message (QR JSON or SUCCESS) to the HiveMQ topic"""
+    try:
+        topic = payload.get("topic", MQTT_TOPIC)
+        msg = payload.get("message", "")
+        mqtt_client.publish(topic, msg, qos=1)
+        return {"status": "published"}
+    except Exception as e:
+        raise HTTPException(500, detail=str(e))
+
+# ----------------------------------
 
 @api_router.get("/cloud/status")
 async def cloud_status(_=Depends(require_auth)):
@@ -355,17 +409,10 @@ async def delete_bill(document_number: str, _=Depends(require_auth)):
 @api_router.delete("/bills/all")
 async def delete_all_bills(_=Depends(require_auth)):
     try:
-        # 1. Delete all actual bill receipts
         await bills_collection.delete_many({})
-        
         return {"message": "All bill data wiped successfully."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
-
-    await bills_collection.delete_one({"document_number": document_number})
-    return {"message": "Deleted"}
 
 @api_router.get("/bills/recent")
 async def recent(limit: int = 20, branch_filter: str = "ALL", _=Depends(require_auth)):
@@ -395,49 +442,43 @@ async def get_public(document_number: str):
     settings = await settings_collection.find_one({"key": "app_settings"}, {"_id": 0})
     return {"bill": bill, "settings": settings}
 
-# --- NEW SYNC ROUTE (SECURITY TEMPORARILY REMOVED) ---
 @api_router.post("/system/sync-old-points")
 async def sync_old_points():
     await customers_collection.update_many(
         {}, 
         {"$set": {"points": 0, "loyalty_points": 0, "credit": 0, "store_credit": 0}}
     )
-    
     bills = await bills_collection.find({}).to_list(None)
     updated_count = 0
-    
     for bill in bills:
         c_name, c_phone, _, _ = get_customer_info(bill)
-        
-        if not c_name and not c_phone: 
-            continue
-            
+        if not c_name and not c_phone: continue
         earned = get_val(bill, ["earned_points", "loyalty_earned", "earned_loyalty"])
         redeemed = get_val(bill, ["redeemed_points", "loyalty_redeemed", "redeemed_loyalty"])
         saved_cred = get_val(bill, ["saved_credit", "credit_saved", "earned_credit", "store_credit"])
         applied_cred = get_val(bill, ["applied_credit", "credit_applied", "used_credit", "redeemed_credit"])
-        
         points_to_add = earned - redeemed
         credit_to_add = saved_cred - applied_cred
-        
         if points_to_add != 0 or credit_to_add != 0:
             query = {"phone": c_phone} if c_phone else {"name": c_name}
-            await customers_collection.update_one(
-                query,
-                {"$inc": {
-                    "points": points_to_add,
-                    "loyalty_points": points_to_add,
-                    "credit": credit_to_add,
-                    "store_credit": credit_to_add
-                }},
-                upsert=True
-            )
+            await customers_collection.update_one(query, {"$inc": {"points": points_to_add, "loyalty_points": points_to_add, "credit": credit_to_add, "store_credit": credit_to_add}}, upsert=True)
             updated_count += 1
-            
-    return {"message": f"Successfully synced points from {updated_count} old bills to customer profiles!"}
-# ----------------------------------------------------
+    return {"message": f"Successfully synced points from {updated_count} old bills!"}
 
 app.include_router(api_router)
 
+# --- NEW: SYSTEM LIFECYCLE EVENTS ---
+
+@app.on_event("startup")
+async def startup_event():
+    """Connect to HiveMQ Cloud on server start"""
+    try:
+        mqtt_client.connect(MQTT_BROKER, MQTT_PORT)
+        mqtt_client.loop_start()
+    except Exception as e:
+        print(f"⚠️ MQTT Startup Error: {e}")
+
 @app.on_event("shutdown")
-async def shutdown_db_client(): client.close()
+async def shutdown_event():
+    mqtt_client.loop_stop()
+    client.close()
