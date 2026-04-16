@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Store, Upload, Download, Keyboard, Cpu, Wifi, CheckCircle2 } from "lucide-react"; // Added IoT Icons
+import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Store, Upload, Download, Keyboard, Cpu, Wifi, CheckCircle2 } from "lucide-react"; 
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Toaster, toast } from "sonner";
@@ -41,7 +42,7 @@ const defaultSettings = {
     { id: "open_recent", action: "Open Recent Bills", keys: "alt + r", isSystem: true },
     { id: "download_pdf", action: "Download PDF", keys: "alt + f", isSystem: true },
     { id: "print_bill", action: "Print Bill", keys: "alt + b", isSystem: true },
-    { id: "iot_qr", action: "Send QR to ESP32", keys: "alt + q", isSystem: true } // Added Shortcut
+    { id: "iot_qr", action: "Send QR to ESP32", keys: "alt + q", isSystem: true } 
   ],
   branches: [
     { id: "B1", name: "Branch 1 (Old Town)", address: "Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2", location_url: "", map_url: "", whatsapp_url: "", instagram_url: "", about_url: "", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", gstin: "21AAUFJ1925F1ZH", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 },
@@ -82,7 +83,7 @@ const FooterLinksAndQRs = ({ branch, allBranches }) => {
         <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Connect & Review:</p>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '15px' }}>
           {branch.whatsapp_url && (<a href={branch.whatsapp_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#25D366", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>💬 WhatsApp</a>)}
-          {branch.instagram_url && (<a href={branch.instagram_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", background: "linear-gradient(45deg, #f09433 0%, #dc2743 50%, #bc1888 100%)", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>📸 Instagram</a>)}
+          {branch.instagram_url && (<a href={branch.instagram_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", background: "linear-gradient(45deg, #f09433 0%, #bc1888 100%)", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>📸 Instagram</a>)}
           {branch.map_url && (<a href={branch.map_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>⭐ Feedback</a>)}
           {branch.about_url && (<a href={branch.about_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#3b82f6", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>ℹ️ About Us</a>)}
         </div>
@@ -205,6 +206,16 @@ export default function App() {
   const [customer, setCustomer] = useState({ name: "", phone: "", address: "", email: "", points: 0, credit: 0 });
   const [bonusPoints, setBonusPoints] = useState("");
   const [suggestions, setSuggestions] = useState([]);
+
+  // --- SMART DICTIONARY STATES ---
+  const defaultItemDictionary = ["CB Payal", "CB Chain", "Silver Ring", "T. Ring", "92.5 Tops", "Silver Coin", "Silver Biscuit", "Leg Chain", "Bichhiya"];
+  const [savedDescriptions, setSavedDescriptions] = useState(() => {
+    const local = localStorage.getItem("jj_item_dictionary");
+    return local ? JSON.parse(local) : defaultItemDictionary;
+  });
+  const [focusedDescId, setFocusedDescId] = useState(null);
+  // -------------------------------
+
   const [items, setItems] = useState([createItem()]);
   
   const [discount, setDiscount] = useState("0");
@@ -264,7 +275,6 @@ export default function App() {
   const [aboutUploadName, setAboutUploadName] = useState("");
   const [cloudStatus, setCloudStatus] = useState({ provider: "supabase", enabled: false, mode: "loading" });
 
-  // --- NEW IOT & MQTT STATE ---
   const [iotOnline, setIotOnline] = useState(false);
   const [isMqttSending, setIsMqttSending] = useState(false);
   
@@ -272,7 +282,6 @@ export default function App() {
   const activeGlobalBranch = (settings.branches || []).find(b => b.id === globalBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
   const activeBillBranch = (settings.branches || []).find(b => b.id === billBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
 
-  // --- NEW IOT HEARTBEAT MONITOR ---
   useEffect(() => {
     if (!token || isPublicView) return;
     const checkIot = async () => {
@@ -282,11 +291,10 @@ export default function App() {
       } catch (e) { setIotOnline(false); }
     };
     checkIot();
-    const interval = setInterval(checkIot, 10000); // Check every 10 seconds
+    const interval = setInterval(checkIot, 10000); 
     return () => clearInterval(interval);
   }, [token, isPublicView, authHeaders]);
 
-  // --- NEW IOT COMMUNICATION FUNCTIONS ---
   const sendQrToDisplay = async (amount, upiId) => {
     if (!iotOnline) { toast.error("IoT Device is offline!"); return; }
     setIsMqttSending(true);
@@ -715,7 +723,7 @@ export default function App() {
   const submitLedgerLog = async () => { if (!logAmount || isNaN(logAmount) || num(logAmount) <= 0) { toast.error("Please enter a valid amount."); return; } if (!logReason.trim()) { toast.error("Please enter a reason/remark."); return; } setSubmittingLog(true); try { const payload = { branch_id: globalBranchId, reason: logReason, cash_change: 0, estimate_bank_change: 0, invoice_bank_change: 0 }; const amt = num(logAmount); const keyMap = { "cash": "cash_change", "estimate_bank": "estimate_bank_change", "invoice_bank": "invoice_bank_change" }; if (logType === "expense") payload[keyMap[logSourceVault]] = -amt; else if (logType === "add") payload[keyMap[logSourceVault]] = amt; else if (logType === "exchange") { if (logSourceVault === logTargetVault) { toast.error("Cannot exchange into the same vault."); setSubmittingLog(false); return; } payload[keyMap[logSourceVault]] = -amt; payload[keyMap[logTargetVault]] = amt; } await axios.post(`${API}/settings/ledger/adjust`, payload, { headers: authHeaders }); toast.success("Transaction logged successfully!"); setShowLogForm(false); setLogAmount(""); setLogReason(""); await loadSettings(); await fetchLedgerHistory(); } catch (error) { toast.error("Ledger update failed."); } finally { setSubmittingLog(false); } };
   const saveBalances = async () => { try { const payload = { branch_id: globalBranchId, cash_balance: num(manualCash), estimate_bank_balance: num(manualEstBank), invoice_bank_balance: num(manualInvBank) }; await axios.put(`${API}/settings/balances`, payload, { headers: authHeaders }); setSettings(prev => { const updatedBranches = (prev.branches || []).map(b => b.id === globalBranchId ? { ...b, ...payload } : b); return { ...prev, branches: updatedBranches }; }); setEditingBalances(false); toast.success(`Ledger balances for ${activeGlobalBranch.name} manually updated!`); } catch { toast.error("Failed to update balances."); } };
 
- const saveBill = async () => {
+  const saveBill = async () => {
     if (txType === "sale" && !paymentMethod) { toast.error("Please select a payment method."); return; }
     
     // 🐛 FIXED TYPO HERE: Changed tx_type back to txType
@@ -723,6 +731,15 @@ export default function App() {
       if (isAdvancePaid && !advanceMethod) { toast.error("Please select a method for the Advance payment."); return; } 
       if (isBalancePaid && !balanceMethod) { toast.error("Please select a method for the Balance payment."); return; } 
     }
+
+    // --- NEW: LEARN ITEM DESCRIPTIONS ---
+    const newItems = computed.items.map(i => i.description.trim()).filter(Boolean);
+    setSavedDescriptions(prev => {
+      const updated = Array.from(new Set([...prev, ...newItems]));
+      localStorage.setItem("jj_item_dictionary", JSON.stringify(updated));
+      return updated;
+    });
+    // ------------------------------------
 
     setSavingBill(true);
     try {
@@ -1060,7 +1077,6 @@ export default function App() {
         </div>
       );
     }
-// If they USED the secret parameter (/?admin=true), show the actual login form
     return (
       <div className="login-shell">
         <Toaster position="bottom-right" />
@@ -1073,8 +1089,7 @@ export default function App() {
       </div>
     );
   }
-  // --------------------------------
-
+  
   if (token && settingsLoaded && !isPublicView && !gatewayPassed) {
      return (
         <div className="login-shell" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9', height: '100vh' }}>
@@ -1092,7 +1107,38 @@ export default function App() {
            </div>
         </div>
      );
-  }
+    const ledgerChartData = useMemo(() => {
+    // 1. Prepare Hourly Data for the graph
+    const hourlyMap = {};
+    for (let i = 9; i <= 21; i++) { hourlyMap[`${i}:00`] = 0; } // Shop hours 9 AM to 9 PM
+
+    (todayBills || []).forEach(bill => {
+      const hour = new Date(bill.created_at || new Date()).getHours();
+      const label = `${hour}:00`;
+      if (hourlyMap[label] !== undefined) {
+        hourlyMap[label] += num(bill.totals?.grand_total);
+      }
+    });
+
+    const barData = Object.keys(hourlyMap).map(key => ({ hour: key, amount: hourlyMap[key] }));
+
+    // 2. Prepare Payment Distribution Data
+    const payMap = { Cash: 0, UPI: 0, Card: 0 };
+    (todayBills || []).forEach(bill => {
+      if (bill.payment_method === 'Split') {
+        payMap.Cash += num(bill.split_cash);
+        payMap.UPI += num(bill.split_upi);
+      } else if (payMap[bill.payment_method] !== undefined) {
+        payMap[bill.payment_method] += num(bill.totals?.grand_total);
+      }
+    });
+
+    const pieData = Object.keys(payMap).map(key => ({ name: key, value: payMap[key] })).filter(d => d.value > 0);
+
+    return { barData, pieData };
+  }, [todayBills]);
+
+  const COLORS = ['#d97706', '#2563eb', '#dc2626']; // Amber, Blue, Red
 
   return (
     <div className="billing-app" style={isPrinting ? { height: "auto", overflow: "visible" } : { display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", backgroundColor: "#f1f5f9" }}>
@@ -1395,8 +1441,45 @@ export default function App() {
           <div className="control-card">
             <h3>Item Lines</h3>
             {(items || []).map((item) => (
-              <div key={item.id} className="item-row-editor">
-                <Input className="item-desc-input" value={item.description} onChange={(e) => updateItem(item.id, "description", e.target.value)} placeholder="Description" />
+              <div key={item.id} className="item-row-editor" style={{ overflow: "visible" }}>
+                
+                {/* --- SMART DESCRIPTION INPUT --- */}
+                <div style={{ position: "relative" }}>
+                  <Input 
+                    className="item-desc-input" 
+                    value={item.description} 
+                    onChange={(e) => updateItem(item.id, "description", e.target.value)} 
+                    onFocus={() => setFocusedDescId(item.id)}
+                    onBlur={() => setTimeout(() => setFocusedDescId(null), 200)}
+                    placeholder="Description" 
+                    style={{ width: "100%" }}
+                  />
+                  {focusedDescId === item.id && item.description.length >= 1 && (
+                    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50, marginTop: "4px", maxHeight: "180px", overflowY: "auto", backgroundColor: "white", border: "1px solid #cbd5e1", borderRadius: "6px", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)" }}>
+                      {savedDescriptions
+                        .filter(d => d.toLowerCase().includes(item.description.toLowerCase()) && d.toLowerCase() !== item.description.toLowerCase())
+                        .slice(0, 8)
+                        .map((desc, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onMouseDown={(e) => {
+                               e.preventDefault(); 
+                               updateItem(item.id, "description", desc);
+                               setFocusedDescId(null);
+                            }}
+                            style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", border: "none", borderBottom: "1px solid #f1f5f9", backgroundColor: "transparent", cursor: "pointer", fontSize: "0.9rem", color: "#0f172a" }}
+                            onMouseOver={(e) => e.target.style.backgroundColor = "#f8fafc"}
+                            onMouseOut={(e) => e.target.style.backgroundColor = "transparent"}
+                          >
+                            {desc}
+                          </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {/* --------------------------------- */}
+
                 <Input value={item.hsn} onChange={(e) => updateItem(item.id, "hsn", e.target.value)} placeholder="HSN" />
                 <Input value={item.weight} onChange={(e) => updateItem(item.id, "weight", e.target.value)} placeholder="Weight" />
                 <Input value={item.quantity} onChange={(e) => updateItem(item.id, "quantity", e.target.value)} placeholder="Qty" />
@@ -1540,6 +1623,52 @@ export default function App() {
           </div>
 
           <div style={{ padding: "20px" }}>
+            
+            {/* --- NEW SALES ANALYTICS SECTION --- */}
+            <div style={{ marginBottom: "30px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+                <h4 style={{ margin: "0", fontSize: "1.1rem", color: "#1e293b" }}>Today's Sales Performance</h4>
+                <div style={{ backgroundColor: "#0f172a", color: "white", padding: "4px 10px", borderRadius: "12px", fontSize: "0.85rem", fontWeight: "bold" }}>
+                  Total Weight Sold: {todayBills?.reduce((total, bill) => total + (bill.items?.reduce((sum, item) => sum + num(item.weight), 0) || 0), 0).toFixed(3)} g
+                </div>
+              </div>
+              
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "15px" }}>
+                <div style={{ flex: "2 1 300px", backgroundColor: "white", border: "1px solid #e2e8f0", padding: "15px", borderRadius: "12px", height: "250px" }}>
+                  <p style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "10px", fontWeight: "bold" }}>HOURLY REVENUE TREND</p>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={ledgerChartData.barData}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="hour" fontSize={10} />
+                      <YAxis hide />
+                      <RechartsTooltip formatter={(value) => `₹${money(value)}`} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                      <Bar dataKey="amount" fill="#16a34a" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div style={{ flex: "1 1 200px", backgroundColor: "white", border: "1px solid #e2e8f0", padding: "15px", borderRadius: "12px", height: "250px", textAlign: "center" }}>
+                  <p style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "10px", fontWeight: "bold" }}>PAYMENT MODES</p>
+                  <ResponsiveContainer width="100%" height="80%">
+                    <PieChart>
+                      <Pie data={ledgerChartData.pieData} innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
+                        {ledgerChartData.pieData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <RechartsTooltip formatter={(value) => `₹${money(value)}`} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '5px' }}>
+                     {ledgerChartData.pieData.map((entry, i) => (
+                       <span key={i} style={{ fontSize: '0.65rem', fontWeight: 'bold', color: COLORS[i] }}>● {entry.name}</span>
+                     ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+            {/* ------------------------------------ */}
+
             <div style={{ marginBottom: "25px" }}>
               <h4 style={{ margin: "0 0 15px 0", fontSize: "1.1rem", color: "#1e293b" }}>Live Vault Balances</h4>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
@@ -1645,7 +1774,8 @@ export default function App() {
           </div>
         </section>
       )}
-{/* RECENT BILLS */}
+
+      {/* RECENT BILLS */}
       {showRecentBills && (
         <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "550px", backgroundColor: "white", zIndex: 100, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
           <div className="drawer-header" style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10, paddingBottom: "15px", borderBottom: "1px solid #e2e8f0" }}>
