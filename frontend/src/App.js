@@ -1156,31 +1156,6 @@ export default function App() {
         </div>
      );
   }
-  // --- AUTO-CORRECT ENGINE ---
-  const TYPO_MAP = {
-    "breclate": "Bracelet",
-    "braclet": "Bracelet",
-    "neckles": "Necklace",
-    "neclace": "Necklace",
-    "pyal": "Payal",
-    "bichiya": "Bichhiya",
-    "bichia": "Bichhiya",
-    "silvr": "Silver",
-    "chian": "Chain",
-    "pendent": "Pendant",
-    "panden": "Pendant",
-    "ringg": "Ring"
-  };
-
-  const autoCorrectText = (text) => {
-    if (!text) return text;
-    return text.split(' ').map(word => {
-      const lowerWord = word.toLowerCase();
-      return TYPO_MAP[lowerWord] ? TYPO_MAP[lowerWord] : word;
-    }).join(' ');
-  };
-  // ---------------------------
-
   const ledgerChartData = useMemo(() => {
     const hourlyMap = {};
     for (let i = 9; i <= 21; i++) { hourlyMap[`${i}:00`] = 0; } 
