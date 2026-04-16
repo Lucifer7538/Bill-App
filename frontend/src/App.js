@@ -1107,7 +1107,9 @@ export default function App() {
            </div>
         </div>
      );
-    const ledgerChartData = useMemo(() => {
+  }
+
+  const ledgerChartData = useMemo(() => {
     // 1. Prepare Hourly Data for the graph
     const hourlyMap = {};
     for (let i = 9; i <= 21; i++) { hourlyMap[`${i}:00`] = 0; } // Shop hours 9 AM to 9 PM
@@ -2038,3 +2040,4 @@ export default function App() {
     </div>
   );
 }
+
