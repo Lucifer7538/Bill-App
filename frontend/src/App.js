@@ -214,7 +214,6 @@ export default function App() {
     return local ? JSON.parse(local) : defaultItemDictionary;
   });
   const [focusedDescId, setFocusedDescId] = useState(null);
-  // -------------------------------
 
   const [items, setItems] = useState([createItem()]);
   
@@ -885,6 +884,62 @@ export default function App() {
   const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
   const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
 
+  // --- AUTO-CORRECT ENGINE ---
+  const TYPO_MAP = {
+    "breclate": "Bracelet",
+    "braclet": "Bracelet",
+    "neckles": "Necklace",
+    "neclace": "Necklace",
+    "pyal": "Payal",
+    "bichiya": "Bichhiya",
+    "bichia": "Bichhiya",
+    "silvr": "Silver",
+    "chian": "Chain",
+    "pendent": "Pendant",
+    "panden": "Pendant",
+    "ringg": "Ring"
+  };
+
+  const autoCorrectText = (text) => {
+    if (!text) return text;
+    return text.split(' ').map(word => {
+      const lowerWord = word.toLowerCase();
+      return TYPO_MAP[lowerWord] ? TYPO_MAP[lowerWord] : word;
+    }).join(' ');
+  };
+  // ---------------------------
+
+  // --- LEDGER CHART DATA (MUST BE ABOVE EARLY RETURNS!) ---
+  const ledgerChartData = useMemo(() => {
+    const hourlyMap = {};
+    for (let i = 9; i <= 21; i++) { hourlyMap[`${i}:00`] = 0; } 
+
+    (todayBills || []).forEach(bill => {
+      const hour = new Date(bill.created_at || new Date()).getHours();
+      const label = `${hour}:00`;
+      if (hourlyMap[label] !== undefined) {
+        hourlyMap[label] += num(bill.totals?.grand_total);
+      }
+    });
+
+    const barData = Object.keys(hourlyMap).map(key => ({ hour: key, amount: hourlyMap[key] }));
+
+    const payMap = { Cash: 0, UPI: 0, Card: 0 };
+    (todayBills || []).forEach(bill => {
+      if (bill.payment_method === 'Split') {
+        payMap.Cash += num(bill.split_cash);
+        payMap.UPI += num(bill.split_upi);
+      } else if (payMap[bill.payment_method] !== undefined) {
+        payMap[bill.payment_method] += num(bill.totals?.grand_total);
+      }
+    });
+
+    const pieData = Object.keys(payMap).map(key => ({ name: key, value: payMap[key] })).filter(d => d.value > 0);
+
+    return { barData, pieData };
+  }, [todayBills]);
+
+  const COLORS = ['#d97706', '#2563eb', '#dc2626']; 
   if (isPublicView) {
     if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
     if (publicBill === "NOT_FOUND" || !publicBill) return <div className="loading-screen">Bill not found or has been deleted.</div>;
@@ -1101,68 +1156,12 @@ export default function App() {
         </div>
      );
   }
-  // --- AUTO-CORRECT ENGINE ---
-  const TYPO_MAP = {
-    "breclate": "Bracelet",
-    "braclet": "Bracelet",
-    "neckles": "Necklace",
-    "neclace": "Necklace",
-    "pyal": "Payal",
-    "bichiya": "Bichhiya",
-    "bichia": "Bichhiya",
-    "silvr": "Silver",
-    "chian": "Chain",
-    "pendent": "Pendant",
-    "panden": "Pendant",
-    "ringg": "Ring"
-  };
-
-  const autoCorrectText = (text) => {
-    if (!text) return text;
-    return text.split(' ').map(word => {
-      const lowerWord = word.toLowerCase();
-      return TYPO_MAP[lowerWord] ? TYPO_MAP[lowerWord] : word;
-    }).join(' ');
-  };
-  // ---------------------------
-
-  const ledgerChartData = useMemo(() => {
-    const hourlyMap = {};
-    for (let i = 9; i <= 21; i++) { hourlyMap[`${i}:00`] = 0; } 
-
-    (todayBills || []).forEach(bill => {
-      const hour = new Date(bill.created_at || new Date()).getHours();
-      const label = `${hour}:00`;
-      if (hourlyMap[label] !== undefined) {
-        hourlyMap[label] += num(bill.totals?.grand_total);
-      }
-    });
-
-    const barData = Object.keys(hourlyMap).map(key => ({ hour: key, amount: hourlyMap[key] }));
-
-    const payMap = { Cash: 0, UPI: 0, Card: 0 };
-    (todayBills || []).forEach(bill => {
-      if (bill.payment_method === 'Split') {
-        payMap.Cash += num(bill.split_cash);
-        payMap.UPI += num(bill.split_upi);
-      } else if (payMap[bill.payment_method] !== undefined) {
-        payMap[bill.payment_method] += num(bill.totals?.grand_total);
-      }
-    });
-
-    const pieData = Object.keys(payMap).map(key => ({ name: key, value: payMap[key] })).filter(d => d.value > 0);
-
-    return { barData, pieData };
-  }, [todayBills]);
-
-  const COLORS = ['#d97706', '#2563eb', '#dc2626']; 
 
   return (
     <div className="billing-app" style={isPrinting ? { height: "auto", overflow: "visible" } : { display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", backgroundColor: "#f1f5f9" }}>
       <Toaster position="bottom-right" />
       <style>{GLOBAL_PRINT_CSS}</style>
 
-      {/* HIDDEN BULK PRINT SECTION */}
       <div style={{ position: "absolute", zIndex: -9999, opacity: 0, pointerEvents: "none", top: 0, left: 0, height: 0, overflow: "hidden" }}>
         {(filteredRecentBills || []).map(b => {
            const billBranch = (settings.branches || []).find(br => br.id === b.branch_id) || (settings.branches || [])[0] || defaultSettings.branches[0];
