@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Store, Upload, Download, Keyboard, Cpu, Wifi, CheckCircle2 } from "lucide-react"; 
+import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Store, Download, Keyboard, Cpu } from "lucide-react"; 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -674,11 +674,9 @@ export default function App() {
       await axios.put(`${API}/bills/${bill.document_number}/toggle-payment`, { is_payment_done: newStatus }, { headers: authHeaders }); 
       toast.success(`Payment marked as ${newStatus ? 'DONE ✅' : 'PENDING ⏳'}`); 
       
-      // --- NEW IOT TRIGGER ---
       if (newStatus && iotOnline) {
         sendSuccessToDisplay();
       }
-      // -----------------------
 
       if (currentBillId === bill.id) { setIsPaymentDone(newStatus); } 
       setRecentBillsList(prev => prev.map(b => b.document_number === bill.document_number ? { ...b, is_payment_done: newStatus } : b)); 
@@ -726,20 +724,17 @@ export default function App() {
   const saveBill = async () => {
     if (txType === "sale" && !paymentMethod) { toast.error("Please select a payment method."); return; }
     
-    // 🐛 FIXED TYPO HERE: Changed tx_type back to txType
     if ((txType === "booking" || txType === "service")) { 
       if (isAdvancePaid && !advanceMethod) { toast.error("Please select a method for the Advance payment."); return; } 
       if (isBalancePaid && !balanceMethod) { toast.error("Please select a method for the Balance payment."); return; } 
     }
 
-    // --- NEW: LEARN ITEM DESCRIPTIONS ---
     const newItems = computed.items.map(i => i.description.trim()).filter(Boolean);
     setSavedDescriptions(prev => {
       const updated = Array.from(new Set([...prev, ...newItems]));
       localStorage.setItem("jj_item_dictionary", JSON.stringify(updated));
       return updated;
     });
-    // ------------------------------------
 
     setSavingBill(true);
     try {
@@ -770,11 +765,9 @@ export default function App() {
         setDocumentNumber(res.data.document_number); 
       }
       
-      // --- IOT TRIGGER ---
       if (isPaymentDone && iotOnline) {
         sendSuccessToDisplay();
       }
-      // -----------------------
 
       await loadSettings(); 
       await fetchLedgerHistory();
@@ -891,6 +884,39 @@ export default function App() {
   const upiId = mode === "invoice" ? activeBillBranch.invoice_upi_id : activeBillBranch.estimate_upi_id;
   const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
   const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
+
+  // 👇 MOVED LEDGER GRAPH DATA HERE TO FIX VERCEL HOOK ERROR 👇
+  const ledgerChartData = useMemo(() => {
+    const hourlyMap = {};
+    for (let i = 9; i <= 21; i++) { hourlyMap[`${i}:00`] = 0; } 
+
+    (todayBills || []).forEach(bill => {
+      const hour = new Date(bill.created_at || new Date()).getHours();
+      const label = `${hour}:00`;
+      if (hourlyMap[label] !== undefined) {
+        hourlyMap[label] += num(bill.totals?.grand_total);
+      }
+    });
+
+    const barData = Object.keys(hourlyMap).map(key => ({ hour: key, amount: hourlyMap[key] }));
+
+    const payMap = { Cash: 0, UPI: 0, Card: 0 };
+    (todayBills || []).forEach(bill => {
+      if (bill.payment_method === 'Split') {
+        payMap.Cash += num(bill.split_cash);
+        payMap.UPI += num(bill.split_upi);
+      } else if (payMap[bill.payment_method] !== undefined) {
+        payMap[bill.payment_method] += num(bill.totals?.grand_total);
+      }
+    });
+
+    const pieData = Object.keys(payMap).map(key => ({ name: key, value: payMap[key] })).filter(d => d.value > 0);
+
+    return { barData, pieData };
+  }, [todayBills]);
+
+  const COLORS = ['#d97706', '#2563eb', '#dc2626']; 
+  // -------------------------------------------------------------
 
   if (isPublicView) {
     if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
@@ -1108,40 +1134,6 @@ export default function App() {
         </div>
      );
   }
-
-  const ledgerChartData = useMemo(() => {
-    // 1. Prepare Hourly Data for the graph
-    const hourlyMap = {};
-    for (let i = 9; i <= 21; i++) { hourlyMap[`${i}:00`] = 0; } // Shop hours 9 AM to 9 PM
-
-    (todayBills || []).forEach(bill => {
-      const hour = new Date(bill.created_at || new Date()).getHours();
-      const label = `${hour}:00`;
-      if (hourlyMap[label] !== undefined) {
-        hourlyMap[label] += num(bill.totals?.grand_total);
-      }
-    });
-
-    const barData = Object.keys(hourlyMap).map(key => ({ hour: key, amount: hourlyMap[key] }));
-
-    // 2. Prepare Payment Distribution Data
-    const payMap = { Cash: 0, UPI: 0, Card: 0 };
-    (todayBills || []).forEach(bill => {
-      if (bill.payment_method === 'Split') {
-        payMap.Cash += num(bill.split_cash);
-        payMap.UPI += num(bill.split_upi);
-      } else if (payMap[bill.payment_method] !== undefined) {
-        payMap[bill.payment_method] += num(bill.totals?.grand_total);
-      }
-    });
-
-    const pieData = Object.keys(payMap).map(key => ({ name: key, value: payMap[key] })).filter(d => d.value > 0);
-
-    return { barData, pieData };
-  }, [todayBills]);
-
-  const COLORS = ['#d97706', '#2563eb', '#dc2626']; // Amber, Blue, Red
-
   return (
     <div className="billing-app" style={isPrinting ? { height: "auto", overflow: "visible" } : { display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", backgroundColor: "#f1f5f9" }}>
       <Toaster position="bottom-right" />
@@ -1272,7 +1264,6 @@ export default function App() {
         </div>
         
         <div className="top-actions" style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-          {/* --- NEW IOT STATUS INDICATOR --- */}
           <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.85rem", color: iotOnline ? "#4ade80" : "#ef4444", marginRight: "10px", padding: "4px 10px", borderRadius: "20px", border: `1px solid ${iotOnline ? "#4ade80" : "#ef4444"}` }}>
              <Cpu size={14} />
              <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: iotOnline ? "#4ade80" : "#ef4444", boxShadow: iotOnline ? "0 0 8px #4ade80" : "none" }} />
@@ -1445,7 +1436,6 @@ export default function App() {
             {(items || []).map((item) => (
               <div key={item.id} className="item-row-editor" style={{ overflow: "visible" }}>
                 
-                {/* --- SMART DESCRIPTION INPUT --- */}
                 <div style={{ position: "relative" }}>
                   <Input 
                     className="item-desc-input" 
@@ -1480,7 +1470,6 @@ export default function App() {
                     </div>
                   )}
                 </div>
-                {/* --------------------------------- */}
 
                 <Input value={item.hsn} onChange={(e) => updateItem(item.id, "hsn", e.target.value)} placeholder="HSN" />
                 <Input value={item.weight} onChange={(e) => updateItem(item.id, "weight", e.target.value)} placeholder="Weight" />
@@ -1506,7 +1495,6 @@ export default function App() {
 
           <div className="control-card">
             <h3>Payment Options</h3>
-            {/* --- NEW IOT TRIGGER BUTTON --- */}
             {upiAmountToPay > 0 && (
               <Button onClick={() => sendQrToDisplay(upiAmountToPay, upiId)} disabled={isMqttSending} style={{ width: "100%", marginBottom: "15px", backgroundColor: "#0f172a", color: "white", height: "50px", fontSize: "1rem", border: "2px solid #cbd5e1" }}>
                 {isMqttSending ? "Processing..." : "🖥️ Show QR on Shop Display"}
@@ -1626,7 +1614,6 @@ export default function App() {
 
           <div style={{ padding: "20px" }}>
             
-            {/* --- NEW SALES ANALYTICS SECTION --- */}
             <div style={{ marginBottom: "30px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
                 <h4 style={{ margin: "0", fontSize: "1.1rem", color: "#1e293b" }}>Today's Sales Performance</h4>
@@ -1669,7 +1656,6 @@ export default function App() {
                 </div>
               </div>
             </div>
-            {/* ------------------------------------ */}
 
             <div style={{ marginBottom: "25px" }}>
               <h4 style={{ margin: "0 0 15px 0", fontSize: "1.1rem", color: "#1e293b" }}>Live Vault Balances</h4>
@@ -2040,4 +2026,3 @@ export default function App() {
     </div>
   );
 }
-
