@@ -715,9 +715,14 @@ export default function App() {
   const submitLedgerLog = async () => { if (!logAmount || isNaN(logAmount) || num(logAmount) <= 0) { toast.error("Please enter a valid amount."); return; } if (!logReason.trim()) { toast.error("Please enter a reason/remark."); return; } setSubmittingLog(true); try { const payload = { branch_id: globalBranchId, reason: logReason, cash_change: 0, estimate_bank_change: 0, invoice_bank_change: 0 }; const amt = num(logAmount); const keyMap = { "cash": "cash_change", "estimate_bank": "estimate_bank_change", "invoice_bank": "invoice_bank_change" }; if (logType === "expense") payload[keyMap[logSourceVault]] = -amt; else if (logType === "add") payload[keyMap[logSourceVault]] = amt; else if (logType === "exchange") { if (logSourceVault === logTargetVault) { toast.error("Cannot exchange into the same vault."); setSubmittingLog(false); return; } payload[keyMap[logSourceVault]] = -amt; payload[keyMap[logTargetVault]] = amt; } await axios.post(`${API}/settings/ledger/adjust`, payload, { headers: authHeaders }); toast.success("Transaction logged successfully!"); setShowLogForm(false); setLogAmount(""); setLogReason(""); await loadSettings(); await fetchLedgerHistory(); } catch (error) { toast.error("Ledger update failed."); } finally { setSubmittingLog(false); } };
   const saveBalances = async () => { try { const payload = { branch_id: globalBranchId, cash_balance: num(manualCash), estimate_bank_balance: num(manualEstBank), invoice_bank_balance: num(manualInvBank) }; await axios.put(`${API}/settings/balances`, payload, { headers: authHeaders }); setSettings(prev => { const updatedBranches = (prev.branches || []).map(b => b.id === globalBranchId ? { ...b, ...payload } : b); return { ...prev, branches: updatedBranches }; }); setEditingBalances(false); toast.success(`Ledger balances for ${activeGlobalBranch.name} manually updated!`); } catch { toast.error("Failed to update balances."); } };
 
-  const saveBill = async () => {
+ const saveBill = async () => {
     if (txType === "sale" && !paymentMethod) { toast.error("Please select a payment method."); return; }
-    if ((txType === "booking" || tx_type === "service")) { if (isAdvancePaid && !advanceMethod) { toast.error("Please select a method for the Advance payment."); return; } if (isBalancePaid && !balanceMethod) { toast.error("Please select a method for the Balance payment."); return; } }
+    
+    // 🐛 FIXED TYPO HERE: Changed tx_type back to txType
+    if ((txType === "booking" || txType === "service")) { 
+      if (isAdvancePaid && !advanceMethod) { toast.error("Please select a method for the Advance payment."); return; } 
+      if (isBalancePaid && !balanceMethod) { toast.error("Please select a method for the Balance payment."); return; } 
+    }
 
     setSavingBill(true);
     try {
@@ -734,18 +739,33 @@ export default function App() {
         totals: { grand_total: computed.grandTotal, subtotal: computed.subtotal }
       };
 
-      if (currentBillId) { await axios.put(`${API}/bills/update-by-id/${currentBillId}`, payload, { headers: authHeaders }); toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} updated & migrated successfully.`); setIsDirty(false); setEditingDocNumber(documentNumber); } 
-      else { const res = await axios.post(`${API}/bills/save`, payload, { headers: authHeaders }); toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} saved successfully.`); setIsDirty(false); setCurrentBillId(res.data.id); setEditingDocNumber(res.data.document_number); setDocumentNumber(res.data.document_number); }
+      if (currentBillId) { 
+        await axios.put(`${API}/bills/update-by-id/${currentBillId}`, payload, { headers: authHeaders }); 
+        toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} updated & migrated successfully.`); 
+        setIsDirty(false); 
+        setEditingDocNumber(documentNumber); 
+      } else { 
+        const res = await axios.post(`${API}/bills/save`, payload, { headers: authHeaders }); 
+        toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} saved successfully.`); 
+        setIsDirty(false); 
+        setCurrentBillId(res.data.id); 
+        setEditingDocNumber(res.data.document_number); 
+        setDocumentNumber(res.data.document_number); 
+      }
       
-      // --- NEW IOT TRIGGER ---
-      // If the bill was saved as "Paid", trigger the animation on the display
+      // --- IOT TRIGGER ---
       if (isPaymentDone && iotOnline) {
         sendSuccessToDisplay();
       }
       // -----------------------
 
-      await loadSettings(); await fetchLedgerHistory();
-    } catch (error) { toast.error("Failed to save bill."); } finally { setSavingBill(false); }
+      await loadSettings(); 
+      await fetchLedgerHistory();
+    } catch (error) { 
+      toast.error("Failed to save bill."); 
+    } finally { 
+      setSavingBill(false); 
+    }
   };
 
   const downloadPdf = async (elementId, filename) => { 
