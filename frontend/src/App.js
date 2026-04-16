@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Store, Download, Keyboard, Cpu } from "lucide-react"; 
+import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Store, Upload, Download, Keyboard, Cpu, Wifi, CheckCircle2 } from "lucide-react"; 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -214,30 +214,6 @@ export default function App() {
     return local ? JSON.parse(local) : defaultItemDictionary;
   });
   const [focusedDescId, setFocusedDescId] = useState(null);
-
-  // --- AUTO-CORRECT ENGINE ---
-  const TYPO_MAP = {
-    "breclate": "Bracelet",
-    "braclet": "Bracelet",
-    "neckles": "Necklace",
-    "neclace": "Necklace",
-    "pyal": "Payal",
-    "bichiya": "Bichhiya",
-    "bichia": "Bichhiya",
-    "silvr": "Silver",
-    "chian": "Chain",
-    "pendent": "Pendant",
-    "panden": "Pendant",
-    "ringg": "Ring"
-  };
-
-  const autoCorrectText = (text) => {
-    if (!text) return text;
-    return text.split(' ').map(word => {
-      const lowerWord = word.toLowerCase();
-      return TYPO_MAP[lowerWord] ? TYPO_MAP[lowerWord] : word;
-    }).join(' ');
-  };
   // -------------------------------
 
   const [items, setItems] = useState([createItem()]);
@@ -909,37 +885,6 @@ export default function App() {
   const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
   const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
 
-  const ledgerChartData = useMemo(() => {
-    const hourlyMap = {};
-    for (let i = 9; i <= 21; i++) { hourlyMap[`${i}:00`] = 0; } 
-
-    (todayBills || []).forEach(bill => {
-      const hour = new Date(bill.created_at || new Date()).getHours();
-      const label = `${hour}:00`;
-      if (hourlyMap[label] !== undefined) {
-        hourlyMap[label] += num(bill.totals?.grand_total);
-      }
-    });
-
-    const barData = Object.keys(hourlyMap).map(key => ({ hour: key, amount: hourlyMap[key] }));
-
-    const payMap = { Cash: 0, UPI: 0, Card: 0 };
-    (todayBills || []).forEach(bill => {
-      if (bill.payment_method === 'Split') {
-        payMap.Cash += num(bill.split_cash);
-        payMap.UPI += num(bill.split_upi);
-      } else if (payMap[bill.payment_method] !== undefined) {
-        payMap[bill.payment_method] += num(bill.totals?.grand_total);
-      }
-    });
-
-    const pieData = Object.keys(payMap).map(key => ({ name: key, value: payMap[key] })).filter(d => d.value > 0);
-
-    return { barData, pieData };
-  }, [todayBills]);
-
-  const COLORS = ['#d97706', '#2563eb', '#dc2626']; 
-
   if (isPublicView) {
     if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
     if (publicBill === "NOT_FOUND" || !publicBill) return <div className="loading-screen">Bill not found or has been deleted.</div>;
@@ -1156,6 +1101,31 @@ export default function App() {
         </div>
      );
   }
+  // --- AUTO-CORRECT ENGINE ---
+  const TYPO_MAP = {
+    "breclate": "Bracelet",
+    "braclet": "Bracelet",
+    "neckles": "Necklace",
+    "neclace": "Necklace",
+    "pyal": "Payal",
+    "bichiya": "Bichhiya",
+    "bichia": "Bichhiya",
+    "silvr": "Silver",
+    "chian": "Chain",
+    "pendent": "Pendant",
+    "panden": "Pendant",
+    "ringg": "Ring"
+  };
+
+  const autoCorrectText = (text) => {
+    if (!text) return text;
+    return text.split(' ').map(word => {
+      const lowerWord = word.toLowerCase();
+      return TYPO_MAP[lowerWord] ? TYPO_MAP[lowerWord] : word;
+    }).join(' ');
+  };
+  // ---------------------------
+
   const ledgerChartData = useMemo(() => {
     const hourlyMap = {};
     for (let i = 9; i <= 21; i++) { hourlyMap[`${i}:00`] = 0; } 
@@ -1186,229 +1156,13 @@ export default function App() {
   }, [todayBills]);
 
   const COLORS = ['#d97706', '#2563eb', '#dc2626']; 
-
-  if (isPublicView) {
-    if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
-    if (publicBill === "NOT_FOUND" || !publicBill) return <div className="loading-screen">Bill not found or has been deleted.</div>;
-
-    const isSale = publicBill.tx_type === "sale" || !publicBill.tx_type;
-    const isPaid = isSale ? (publicBill.is_payment_done === true || publicBill.is_payment_done === 1 || String(publicBill.is_payment_done).toLowerCase() === "true") : (publicBill.is_balance_paid === true || publicBill.is_balance_paid === 1 || String(publicBill.is_balance_paid).toLowerCase() === "true");
-    const pbBranch = (publicSettings?.branches || []).find(b => b.id === publicBill.branch_id) || (publicSettings?.branches || [])[0] || defaultSettings.branches[0];
-
-    let publicUpiAmountToPay = 0;
-    if (!isPaid) {
-      if (isSale) {
-         if (publicBill.payment_method === "UPI") publicUpiAmountToPay = publicComputed.grandTotal;
-         else if (publicBill.payment_method === "Split") publicUpiAmountToPay = Math.max(0, publicComputed.grandTotal - num(publicBill.split_cash));
-      } else {
-         if (!publicBill.is_advance_paid) {
-            if (publicBill.advance_method === "UPI") publicUpiAmountToPay = num(publicBill.advance_amount) || publicComputed.grandTotal;
-            else if (publicBill.advance_method === "Split") publicUpiAmountToPay = Math.max(0, num(publicBill.advance_amount) - num(publicBill.advance_split_cash));
-         } else if (!publicBill.is_balance_paid) {
-            const bal = Math.max(0, publicComputed.grandTotal - num(publicBill.advance_amount));
-            if (publicBill.balance_method === "UPI") publicUpiAmountToPay = bal;
-            else if (publicBill.balance_method === "Split") publicUpiAmountToPay = Math.max(0, bal - num(publicBill.balance_split_cash));
-         }
-      }
-    }
-    const publicUpiId = publicBill.mode === "invoice" ? pbBranch.invoice_upi_id : pbBranch.estimate_upi_id;
-    const publicUpiUri = `upi://pay?pa=${publicUpiId}&pn=${encodeURIComponent(publicSettings?.shop_name || "Shop")}&am=${money(publicUpiAmountToPay)}&cu=INR&tn=Bill_${publicBill.document_number}`;
-    const publicDynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(publicUpiUri)}&size=220`;
-
-    return (
-      <div className="billing-app" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px', minHeight: '100dvh', height: 'max-content', backgroundColor: '#f1f5f9', overflowX: 'hidden', paddingBottom: '40px' }}>
-        <Toaster position="bottom-right" />
-        <style>{GLOBAL_PRINT_CSS}</style>
-        {showFeedbackModal && (
-          <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
-            <div style={{ backgroundColor: "white", padding: "30px", borderRadius: "16px", width: "100%", maxWidth: "380px", textAlign: "center", boxShadow: "0 10px 25px rgba(0,0,0,0.2)" }}>
-              <h3 style={{ marginTop: 0, marginBottom: "8px", color: "#0f172a" }}>Leave a Review!</h3>
-              <p style={{ fontSize: "0.9rem", color: "#64748b", marginBottom: "20px" }}>Which branch did you visit today?</p>
-              {(publicSettings?.branches || []).map(b => (
-                <a key={b.id} href={b.map_url && b.map_url !== "#" ? b.map_url : "#"} target="_blank" rel="noopener noreferrer" style={{ display: "block", padding: "14px", backgroundColor: b.map_url && b.map_url !== "#" ? "#facc15" : "#e2e8f0", color: b.map_url && b.map_url !== "#" ? "#854d0e" : "#475569", textDecoration: "none", borderRadius: "10px", marginBottom: "12px", fontWeight: "bold", fontSize: "1.1rem" }}>⭐ {b.name}</a>
-              ))}
-              <Button variant="ghost" onClick={() => setShowFeedbackModal(false)} style={{ width: "100%", color: "#64748b", marginTop: "10px" }}>Cancel</Button>
-            </div>
-          </div>
-        )}
-        <div className="no-print" style={{ marginBottom: '20px', display: 'flex', gap: '15px' }}>
-          <Button onClick={() => downloadPdf("public-bill-root", publicBill.document_number)}>Download PDF</Button>
-          <Button variant="outline" onClick={() => window.print()}>Print Bill</Button>
-        </div>
-
-        <section id="public-bill-root" className="bill-sheet" style={{ "--print-scale-factor": 1, position: 'relative', zIndex: 1 }}>
-          {isPaid && <div className="watermark-done">FULLY PAID</div>}
-
-          <div className="bill-header">
-            <div className="logo-area">
-              {publicSettings?.logo_data_url ? <img src={publicSettings.logo_data_url} alt="Shop Logo" className="shop-logo" crossOrigin="anonymous" /> : <div className="shop-logo-fallback">JJ</div>}
-              <div style={{ width: "100%", textAlign: publicSettings?.shop_name_align || "center" }}>
-                <h2 className="sheet-shop-title" style={{ fontFamily: publicSettings?.shop_name_font || "sans-serif", color: publicSettings?.shop_name_color || "#000", fontSize: `${publicSettings?.shop_name_size}px`, margin: 0 }}>{publicSettings?.shop_name}</h2>
-              </div>
-              <div style={{ width: "100%", textAlign: publicSettings?.tagline_align || "center" }}>
-                <p className="sheet-tagline" style={{ fontFamily: publicSettings?.tagline_font || "sans-serif", color: publicSettings?.tagline_color || "#475569", fontSize: `${publicSettings?.tagline_size}px`, margin: "5px 0" }}>{publicSettings?.tagline}</p>
-              </div>
-            </div>
-
-            <div className="contact-area">
-              <div className="contact-address" style={{ fontFamily: publicSettings?.address_font || "sans-serif", display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '8px', alignItems: publicSettings?.address_align === 'left' ? 'flex-start' : publicSettings?.address_align === 'right' ? 'flex-end' : 'center', textAlign: publicSettings?.address_align || "center" }}>
-                  <a href={pbBranch.location_url && pbBranch.location_url !== "#" ? pbBranch.location_url : "#"} target="_blank" rel="noopener noreferrer" style={{ color: publicSettings?.address_color || "#475569", fontSize: `${publicSettings?.address_size || 14}px`, textDecoration: 'none' }}>{pbBranch.address}</a>
-              </div>
-              <div style={{ width: "100%", textAlign: publicSettings?.phone_align || "center", fontFamily: publicSettings?.phone_font || "sans-serif", fontSize: `${publicSettings?.phone_size || 13}px`, marginBottom: "4px" }}>
-                {(publicSettings?.phone_numbers || []).join(" | ")}
-              </div>
-              <div style={{ width: "100%", textAlign: publicSettings?.email_align || "center", fontFamily: publicSettings?.email_font || "sans-serif", fontSize: `${publicSettings?.email_size || 13}px`, marginBottom: "4px" }}>
-                <a href={`mailto:${publicSettings?.email}`} style={{ color: publicSettings?.email_color || "#475569", textDecoration: 'none' }}>{publicSettings?.email}</a>
-              </div>
-              {publicBill.mode === "invoice" && pbBranch.gstin && <p style={{ margin: "4px 0", textAlign: "center", fontWeight: "bold" }}>GSTIN: {pbBranch.gstin}</p>}
-            </div>
-          </div>
-
-          <div className="sheet-banner">{publicBill.tx_type === "booking" ? "BOOKING RECEIPT" : publicBill.tx_type === "service" ? "SERVICE ORDER" : publicBill.mode === "invoice" ? "TAX INVOICE" : "ESTIMATE"}</div>
-
-          <div className="meta-grid">
-            <p><strong>{publicBill.mode === "invoice" ? "Invoice No" : "Estimate No"}:</strong> {publicBill.document_number}</p>
-            <p><strong>Date:</strong> {publicBill.date}</p>
-          </div>
-
-          <div className="customer-box">
-            <p><strong>Name:</strong> {publicBill.customer_name || publicBill.customer?.name || "-"}</p>
-            <p><strong>Address:</strong> {publicBill.customer_address || publicBill.customer?.address || "-"}</p>
-            <p><strong>Phone:</strong> {publicBill.customer_phone || publicBill.customer?.phone || "-"}</p>
-          </div>
-
-          <BillTable mode={publicBill.mode} items={publicComputed.items} />
-
-          <div className="sheet-bottom-stack">
-            <div className="totals">
-              <div className="totals-row"><span>{publicBill.mode === "invoice" ? "Taxable Amt." : "TOTAL"}</span><strong>₹{money(publicComputed.taxable)}</strong></div>
-              {publicBill.mode === "invoice" ? (
-                <>
-                  <div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(publicComputed.cgst)}</strong></div><div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(publicComputed.sgst)}</strong></div><div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(publicComputed.igst)}</strong></div>
-                </>
-              ) : (
-                <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(publicComputed.discount)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(publicComputed.exchange)}</strong></div></>
-              )}
-              {num(publicComputed.redeemedPoints) > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED ({publicComputed.redeemedPoints} pts)</span><strong style={{color:"#16a34a"}}>- ₹{money(publicComputed.redeemedValue)}</strong></div>}
-              {num(publicComputed.appliedCredit) > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>STORE CREDIT APPLIED</span><strong style={{color:"#16a34a"}}>- ₹{money(publicComputed.appliedCredit)}</strong></div>}
-              <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(publicComputed.mdr)}</strong></div>
-              <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(publicComputed.roundOff)}</strong></div>
-              {num(publicComputed.savedCredit) > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(publicComputed.savedCredit)}</strong></div>}
-              <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(publicComputed.grandTotal)}</strong></div>
-
-              {isSale ? (
-                <div className="totals-row" style={{ color: isPaid ? "#16a34a" : "#b45309", marginTop: "10px" }}>
-                  <span>{isPaid ? "PAID VIA" : "PAYMENT STATUS"}</span>
-                  <strong>{isPaid ? (publicBill.payment_method === "Split" ? `SPLIT (C:₹${money(publicBill.split_cash)}, U:₹${money(Math.max(0, publicComputed.grandTotal - num(publicBill.split_cash)))})` : (publicBill.payment_method || "CASH").toUpperCase()) : "PENDING"}</strong>
-                </div>
-              ) : (
-                <>
-                  <div className="totals-row" style={{ marginTop: "10px", color: publicBill.is_advance_paid ? "#16a34a" : "#b45309" }}>
-                    <span>ADVANCE {publicBill.is_advance_paid ? "RECEIVED" : "PENDING"} {publicBill.advance_method ? `(${publicBill.advance_method === 'Split' ? `C:₹${money(publicBill.advance_split_cash)}, U:₹${money(Math.max(0, num(publicBill.advance_amount) - num(publicBill.advance_split_cash)))}` : publicBill.advance_method})` : ""}</span>
-                    <strong>₹{money(publicBill.advance_amount)}</strong>
-                  </div>
-                  <div className="totals-row" style={{ color: publicBill.is_balance_paid ? "#16a34a" : "#dc2626" }}>
-                    <span>BALANCE {publicBill.is_balance_paid ? "RECEIVED" : "DUE"} {publicBill.balance_method ? `(${publicBill.balance_method === 'Split' ? `C:₹${money(publicBill.balance_split_cash)}, U:₹${money(Math.max(0, (publicComputed.grandTotal - num(publicBill.advance_amount)) - num(publicBill.balance_split_cash)))}` : publicBill.balance_method})` : ""}</span>
-                    <strong>₹{money(Math.max(0, publicComputed.grandTotal - num(publicBill.advance_amount)))}</strong>
-                  </div>
-                </>
-              )}
-
-              {!isPaid && publicUpiAmountToPay > 0 && (
-                <div className="payment-qr-box" data-html2canvas-ignore="true" style={{ textAlign: "center", marginTop: "20px", padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px dashed #cbd5e1" }}>
-                  <p className="scan-title" style={{ fontWeight: "bold", margin: "0 0 10px 0", color: "#0f172a", fontSize: "1.1rem" }}>Scan Here For Payment (₹{money(publicUpiAmountToPay)})</p>
-                  <img src={publicDynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" style={{ width: "200px", height: "200px", margin: "0 auto", display: "block" }} crossOrigin="anonymous" />
-                  <p className="upi-id" style={{ fontSize: "0.9rem", color: "#64748b", margin: "10px 0 0 0", fontWeight: "bold" }}>UPI: {publicUpiId}</p>
-                </div>
-              )}
-            </div>
-
-            {publicComputed.earnedPoints > 0 && (
-              <div style={{ textAlign: "center", marginTop: "15px", padding: "10px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px dashed #22c55e", color: "#166534", fontWeight: "bold", fontSize: "0.9rem" }}>
-                🎉 You earned {publicComputed.earnedPoints} Loyalty Points on this bill!
-              </div>
-            )}
-
-            <div className="declaration">
-              {publicBill.mode === "invoice" ? (
-                <><p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p>
-              <p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></>
-              ) : (
-                <><p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></>
-              )}
-            </div>
-            
-            <FooterLinksAndQRs branch={pbBranch} allBranches={publicSettings?.branches} />
-          </div>
-          <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
-        </section>
-      </div>
-    );
-  }
-
-  if (checkingSession) {
-    return (
-      <div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#0f172a' }}>Loading billing dashboard...</div>
-        {isWakingUp && (
-          <div style={{ marginTop: '20px', textAlign: 'center', padding: '15px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', maxWidth: '320px' }}>
-            <p style={{ margin: '0 0 15px 0', fontSize: '0.9rem', color: '#64748b' }}>The database server is currently waking up from sleep mode. This usually takes about <strong>30 to 60 seconds</strong>.</p>
-            <Button variant="outline" onClick={() => { localStorage.clear(); window.location.reload(); }} style={{ width: '100%', borderColor: '#ef4444', color: '#ef4444' }}>Force Quit & Clear Session</Button>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  if (!token) {
-    if (!isAdminView && !isPublicView) {
-      return (
-        <div className="login-shell" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9', height: '100dvh', padding: '20px', textAlign: 'center' }}>
-          <Store size={64} color="#0f172a" style={{ marginBottom: '20px' }} />
-          <h1 style={{ color: '#0f172a', marginBottom: '10px' }}>Welcome to {settings?.shop_name || "Jalaram Jewellers"}</h1>
-          <p style={{ color: '#475569', fontSize: '1.1rem', maxWidth: '400px', lineHeight: '1.6' }}>
-            Please use the secure link provided in your WhatsApp or Email message to securely view your official bill.
-          </p>
-        </div>
-      );
-    }
-    return (
-      <div className="login-shell">
-        <Toaster position="bottom-right" />
-        <form className="login-card" onSubmit={handleLogin}>
-          <h1 className="login-title">{settings?.shop_name || "Jalaram Jewellers"}</h1>
-          <p className="login-subtitle">Enter passcode to access billing panel</p>
-          <Input type="password" value={passcode} onChange={(e) => setPasscode(e.target.value)} placeholder="Enter passcode" />
-          <Button type="submit" disabled={loggingIn}>{loggingIn ? "Checking..." : "Login"}</Button>
-        </form>
-      </div>
-    );
-  }
-  
-  if (token && settingsLoaded && !isPublicView && !gatewayPassed) {
-     return (
-        <div className="login-shell" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9', height: '100vh' }}>
-           <div className="login-card" style={{ maxWidth: '400px', width: '90%', textAlign: 'center', backgroundColor: 'white', padding: '30px', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-              <Store size={48} color="#0f172a" style={{ margin: '0 auto 15px auto' }} />
-              <h2 style={{ marginBottom: '10px', color: '#0f172a' }}>Select Branch</h2>
-              <p style={{ color: '#64748b', marginBottom: '25px', fontSize: '0.9rem' }}>Which branch are you working in today?</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                 {(settings.branches || []).map(b => (
-                    <Button key={b.id} onClick={() => { setGlobalBranchId(b.id); setBillBranchId(b.id); reserveNumber(mode, b.id); setGatewayPassed(true); }} style={{ padding: '15px', height: 'auto', fontSize: '1.1rem', backgroundColor: '#f8fafc', color: '#0f172a', border: '1px solid #cbd5e1', justifyContent: 'flex-start', textAlign: 'left' }} variant="outline">
-                       📍 {b.name}
-                    </Button>
-                 ))}
-              </div>
-           </div>
-        </div>
-     );
-  }
 
   return (
     <div className="billing-app" style={isPrinting ? { height: "auto", overflow: "visible" } : { display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", backgroundColor: "#f1f5f9" }}>
       <Toaster position="bottom-right" />
       <style>{GLOBAL_PRINT_CSS}</style>
 
+      {/* HIDDEN BULK PRINT SECTION */}
       <div style={{ position: "absolute", zIndex: -9999, opacity: 0, pointerEvents: "none", top: 0, left: 0, height: 0, overflow: "hidden" }}>
         {(filteredRecentBills || []).map(b => {
            const billBranch = (settings.branches || []).find(br => br.id === b.branch_id) || (settings.branches || [])[0] || defaultSettings.branches[0];
