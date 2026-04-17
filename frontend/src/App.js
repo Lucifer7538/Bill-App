@@ -1,27 +1,27 @@
 // === PART 1 START ===
-// IMPORTING LIBRARIES AND ICONS
+// // IMPORTING REQUIRED LIBRARIES & ENGINES
 import { useEffect, useMemo, useState } from "react";
-import axios from "axios"; // For making API calls to your backend/Supabase
-import html2canvas from "html2canvas"; // For taking screenshots of the bill for PDFs
-import { jsPDF } from "jspdf"; // For converting the screenshot into a downloadable PDF
+import axios from "axios"; // Handles Cloud Database requests
+import html2canvas from "html2canvas"; // Handles PDF screenshot generation
+import { jsPDF } from "jspdf"; // Handles PDF rendering
 import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Store, Upload, Download, Keyboard, Cpu, Wifi, CheckCircle2 } from "lucide-react"; 
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts'; // Chart engines for the Ledger
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, PieChart, Pie } from 'recharts'; // Handles Analytics Graphs
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Toaster, toast } from "sonner"; // For popup notifications (success/error)
+import { Toaster, toast } from "sonner"; // Handles Green/Red popup notifications
 import "@/App.css";
 
-// SYSTEM CONSTANTS
+// // SYSTEM CONSTANTS & API ROUTES
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL ? BACKEND_URL.replace(/\/$/, '') : ""}/api`;
 const STATIC_ABOUT_QR_URL = process.env.REACT_APP_ABOUT_QR_URL;
 
-// HELPER: Creates a blank new item row for the bill
+// // HELPER: Creates a blank new item row for the bill
 const createItem = (defaultHsn = "") => ({
   id: `${Date.now()}-${Math.random()}`, description: "", hsn: defaultHsn, weight: "", quantity: "1", rate_override: "", amount_override: "", mc_override: ""
 });
 
-// DEFAULT SETTINGS: Fallback data if the cloud database takes too long to load
+// // DEFAULT SETTINGS (Fallback if cloud fails to load)
 const defaultSettings = {
   shop_name: "Jalaram Jewellers", tagline: "The Silver Specialist", phone_numbers: ["+91 9583221115", "+91 9776177296", "+91 7538977527"], email: "jalaramjewellers26@gmail.com",
   shop_name_color: "#000000", shop_name_size: 26, shop_name_font: "sans-serif", shop_name_align: "center",
@@ -55,8 +55,7 @@ const defaultSettings = {
   ]
 };
 
-// MATH & FORMATTING ENGINES
-// Formats today's date safely
+// // FORMATTING ENGINES (Dates & Money)
 const today = () => {
   const d = new Date();
   const day = String(d.getDate()).padStart(2, "0");
@@ -64,7 +63,6 @@ const today = () => {
   return `${day}-${month}-${d.getFullYear()}`;
 };
 
-// Parses strings into real Date objects for sorting/filtering
 const parseBillDate = (dStr) => {
   if (!dStr) return new Date();
   const p = dStr.split("-");
@@ -72,39 +70,32 @@ const parseBillDate = (dStr) => {
   return new Date(dStr);
 };
 
-// Converts any blank/null string into a valid number 0 to prevent NaN math crashes
 const num = (val) => { if (val === null || val === undefined || val === "") return 0; const parsed = Number.parseFloat(val); return Number.isFinite(parsed) ? parsed : 0; };
-// Formats numbers into currency strings (e.g. 10.00)
 const money = (val) => num(val).toFixed(2);
 const clampPrintScale = (value) => Math.min(102, Math.max(98, value));
 const getInitialPrintScale = () => { const saved = Number(localStorage.getItem("jj_print_scale") || "100"); return Number.isFinite(saved) ? clampPrintScale(saved) : 100; };
-// Splits a decimal into Rupees and Paise for the bill table
 const splitAmount = (amt) => { const validAmt = Number.isFinite(amt) ? amt : 0; const rupees = Math.floor(validAmt); const paise = Math.round((validAmt - rupees) * 100).toString().padStart(2, "0"); return { rupees, paise }; };
-// injects custom fonts into the document head
 const registerFont = (name, dataUrl) => { const styleId = `custom-font-${name.replace(/\s+/g, '-').toLowerCase()}`; if (document.getElementById(styleId)) return; const style = document.createElement('style'); style.id = styleId; style.innerHTML = `@font-face { font-family: '${name}'; src: url('${dataUrl}'); }`; document.head.appendChild(style); };
 
-// --- AUTO-CORRECT ENGINE (Global Typo Map) ---
-// This dictionary holds all common spelling mistakes made at the counter.
-// When the user leaves an input box, it automatically corrects these words.
-export const TYPO_MAP = {
+// // GRAMMARLY & AUTO-CORRECT ENGINE
+const TYPO_MAP = {
   "breclate": "Bracelet", "braclet": "Bracelet", "neckles": "Necklace", "neclace": "Necklace",
   "pyal": "Payal", "bichiya": "Bichhiya", "bichia": "Bichhiya", "silvr": "Silver",
   "chian": "Chain", "pendent": "Pendant", "panden": "Pendant", "ringg": "Ring"
 };
 
-// Function that parses a string, finds bad words, and replaces them using TYPO_MAP
-export const autoCorrectText = (text) => {
+const autoCorrectText = (text) => {
   if (!text) return text;
   let newText = text;
-  Object.keys(TYPO_MAP).forEach(typo => {
-    const regex = new RegExp(`\\b${typo}\\b`, 'gi');
-    newText = newText.replace(regex, TYPO_MAP[typo]);
-  });
+  // This engine safely replaces bad spellings without crashing React
+  for (const [badSpell, goodSpell] of Object.entries(TYPO_MAP)) {
+    const regex = new RegExp(`\\b${badSpell}\\b`, 'gi');
+    newText = newText.replace(regex, goodSpell);
+  }
   return newText;
 };
-// ---------------------------------------------
 
-// SUB-COMPONENTS (Small UI blocks used inside the main App)
+// // SUB-COMPONENTS (Small repeating UI blocks)
 const FontSelectOptions = ({ customFonts }) => (
   <><option value="sans-serif">Sans-serif</option><option value="Arial, Helvetica, sans-serif">Arial</option><option value="'Times New Roman', Times, serif">Times New Roman</option><option value="'Courier New', Courier, monospace">Courier New</option><option value="Georgia, serif">Georgia</option><option value="'Trebuchet MS', sans-serif">Trebuchet MS</option><option value="'Brush Script MT', cursive">Brush Script MT (Cursive)</option>{customFonts?.map(f => (<option key={f.name} value={`'${f.name}'`}>{f.name} (Custom)</option>))}</>
 );
@@ -121,23 +112,17 @@ const FooterLinksAndQRs = ({ branch, allBranches }) => {
           {branch.map_url && (<a href={branch.map_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>⭐ Feedback</a>)}
           {branch.about_url && (<a href={branch.about_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#3b82f6", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>ℹ️ About Us</a>)}
         </div>
-        
         <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Visit Our Branches:</p>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
-          {(allBranches || []).map(b => b.location_url && (
-            <a key={b.id} href={b.location_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#0f172a", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>📍 {b.name}</a>
-          ))}
+          {(allBranches || []).map(b => b.location_url && (<a key={b.id} href={b.location_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#0f172a", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>📍 {b.name}</a>))}
         </div>
       </div>
-      
       <div className="print-only" style={{ display: 'flex', justifyContent: 'center', gap: '15px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
         {branch.whatsapp_url && (<div style={{ textAlign: 'center' }}><img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.whatsapp_url)}&size=100`} alt="WA QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} /><p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>WhatsApp</p></div>)}
         {branch.instagram_url && (<div style={{ textAlign: 'center' }}><img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.instagram_url)}&size=100`} alt="Insta QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} /><p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>Instagram</p></div>)}
         {branch.map_url && (<div style={{ textAlign: 'center' }}><img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.map_url)}&size=100`} alt="Feedback QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} /><p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>Feedback</p></div>)}
         {branch.about_url && (<div style={{ textAlign: 'center' }}><img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.about_url)}&size=100`} alt="About QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} /><p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>About Us</p></div>)}
-        {(allBranches || []).map(b => b.location_url && (
-            <div key={`qr-${b.id}`} style={{ textAlign: 'center' }}><img src={`https://quickchart.io/qr?text=${encodeURIComponent(b.location_url)}&size=100`} alt={`${b.name} QR`} crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} /><p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>{b.name}</p></div>
-        ))}
+        {(allBranches || []).map(b => b.location_url && (<div key={`qr-${b.id}`} style={{ textAlign: 'center' }}><img src={`https://quickchart.io/qr?text=${encodeURIComponent(b.location_url)}&size=100`} alt={`${b.name} QR`} crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} /><p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>{b.name}</p></div>))}
       </div>
     </div>
   );
@@ -169,9 +154,7 @@ const BillTable = ({ mode, items }) => (
 const DesignSettingRow = ({ title, fieldPrefix, settings, setSettings }) => (
   <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
     <h4 style={{ margin: "0 0 10px 0" }}>{title}</h4>
-    {fieldPrefix !== "address" && (
-      <Input value={Array.isArray(settings[fieldPrefix]) ? settings[fieldPrefix].join(", ") : settings[fieldPrefix] || ""} onChange={(e) => setSettings((prev) => ({ ...prev, [fieldPrefix]: fieldPrefix === 'phone_numbers' ? e.target.value.split(",").map(i=>i.trim()).filter(Boolean) : e.target.value }))} placeholder={title} style={{ marginBottom: "10px", width: "100%", boxSizing: "border-box" }} />
-    )}
+    {fieldPrefix !== "address" && (<Input value={Array.isArray(settings[fieldPrefix]) ? settings[fieldPrefix].join(", ") : settings[fieldPrefix] || ""} onChange={(e) => setSettings((prev) => ({ ...prev, [fieldPrefix]: fieldPrefix === 'phone_numbers' ? e.target.value.split(",").map(i=>i.trim()).filter(Boolean) : e.target.value }))} placeholder={title} style={{ marginBottom: "10px", width: "100%", boxSizing: "border-box" }} />)}
     <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", width: "100%" }}>
       <input type="color" value={settings[`${fieldPrefix}_color`] || "#000000"} onChange={(e) => setSettings((prev) => ({ ...prev, [`${fieldPrefix}_color`]: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px", flexShrink: 0 }} title="Color" />
       <Input type="number" min="8" max="60" value={settings[`${fieldPrefix}_size`] || 14} onChange={(e) => setSettings((prev) => ({ ...prev, [`${fieldPrefix}_size`]: Number(e.target.value) }))} style={{ width: "70px", padding: "0 5px", textAlign: "center", flexShrink: 0 }} title="Font Size (px)" />
@@ -181,7 +164,7 @@ const DesignSettingRow = ({ title, fieldPrefix, settings, setSettings }) => (
   </div>
 );
 
-// Fixes CSS bugs when printing
+// GLOBAL CSS FOR PRINTING
 const GLOBAL_PRINT_CSS = `
 .print-only { position: absolute !important; width: 1px !important; height: 1px !important; opacity: 0.01 !important; overflow: hidden !important; pointer-events: none !important; }
 @media print {
@@ -189,54 +172,48 @@ const GLOBAL_PRINT_CSS = `
   .no-print { display: none !important; }
 }
 `;
-// === PART 1 END ===
+// === PART 1 IS FINISH RIGHT HERE. PASTE PART 2 BELOW THIS LINE ===
 // === PART 2 START ===
 export default function App() {
-  // --- UI STATES ---
+  // // UI & CORE STATES
   const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
   const [isPrinting, setIsPrinting] = useState(false);
   const isMobileSplit = viewportWidth <= 1024;
+  const [isDirty, setIsDirty] = useState(false);
+  const markDirty = () => setIsDirty(true);
   
-  // --- SESSION & VIEW STATES ---
+  // // AUTHENTICATION & LOGIN STATES
   const [isPublicView, setIsPublicView] = useState(false);
   const [isAdminView, setIsAdminView] = useState(false);
   const [publicBill, setPublicBill] = useState(null);
   const [publicSettings, setPublicSettings] = useState(null);
   const [publicLoading, setPublicLoading] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
-
   const [passcode, setPasscode] = useState("");
   const [token, setToken] = useState(localStorage.getItem("jj_auth_token") || "");
   const [checkingSession, setCheckingSession] = useState(Boolean(localStorage.getItem("jj_auth_token")));
   const [isWakingUp, setIsWakingUp] = useState(false);
   const [loggingIn, setLoggingIn] = useState(false);
-
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [gatewayPassed, setGatewayPassed] = useState(false);
   const [settings, setSettings] = useState(defaultSettings);
   const [globalBranchId, setGlobalBranchId] = useState("B1");
-
-  // --- BILLING ENGINE STATES ---
-  const [isDirty, setIsDirty] = useState(false);
-  const markDirty = () => setIsDirty(true);
   const [billBranchId, setBillBranchId] = useState("B1");
+
+  // // BILLING FORM STATES
   const [currentBillId, setCurrentBillId] = useState(null);
   const [mode, setMode] = useState("invoice");
   const [documentNumber, setDocumentNumber] = useState("");
   const [editingDocNumber, setEditingDocNumber] = useState(null);
   const [isNumberLoading, setIsNumberLoading] = useState(false);
   const [billDate, setBillDate] = useState(today());
-
   const [customer, setCustomer] = useState({ name: "", phone: "", address: "", email: "", points: 0, credit: 0 });
   const [bonusPoints, setBonusPoints] = useState("");
   const [suggestions, setSuggestions] = useState([]);
-
-  // Smart Dictionary States (For MS Word-style Dropdown)
+  
+  // Memory engine for Dropdown
   const defaultItemDictionary = ["CB Payal", "CB Chain", "Silver Ring", "T. Ring", "92.5 Tops", "Silver Coin", "Silver Biscuit", "Leg Chain", "Bichhiya"];
-  const [savedDescriptions, setSavedDescriptions] = useState(() => {
-    const local = localStorage.getItem("jj_item_dictionary");
-    return local ? JSON.parse(local) : defaultItemDictionary;
-  });
+  const [savedDescriptions, setSavedDescriptions] = useState(() => { const local = localStorage.getItem("jj_item_dictionary"); return local ? JSON.parse(local) : defaultItemDictionary; });
   const [focusedDescId, setFocusedDescId] = useState(null);
 
   const [items, setItems] = useState([createItem()]);
@@ -247,26 +224,22 @@ export default function App() {
   const [savedCredit, setSavedCredit] = useState("");
   const [manualRoundOff, setManualRoundOff] = useState("");
   const [notes, setNotes] = useState("");
-
   const [txType, setTxType] = useState("sale");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [splitCash, setSplitCash] = useState("");
   const [isPaymentDone, setIsPaymentDone] = useState(false); 
-
   const [advanceAmount, setAdvanceAmount] = useState("");
   const [advanceMethod, setAdvanceMethod] = useState("");
   const [advanceSplitCash, setAdvanceSplitCash] = useState("");
   const [isAdvancePaid, setIsAdvancePaid] = useState(false);
-
   const [balanceMethod, setBalanceMethod] = useState("");
   const [balanceSplitCash, setBalanceSplitCash] = useState("");
   const [isBalancePaid, setIsBalancePaid] = useState(false);
 
-  // --- OVERLAYS & LEDGER STATES ---
+  // // DRAWER & MENU STATES
   const [showSettings, setShowSettings] = useState(false);
   const [settingsTab, setSettingsTab] = useState("design"); 
   const [showAbout, setShowAbout] = useState(false);
-  
   const [showRecentBills, setShowRecentBills] = useState(false);
   const [recentBillsList, setRecentBillsList] = useState([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
@@ -293,7 +266,6 @@ export default function App() {
   const [manualCash, setManualCash] = useState("");
   const [manualEstBank, setManualEstBank] = useState("");
   const [manualInvBank, setManualInvBank] = useState("");
-  
   const [storageStats, setStorageStats] = useState({ used_bytes: 0, quota_bytes: 524288000, percentage: 0 });
   const [savingBill, setSavingBill] = useState(false);
   const [printScale, setPrintScale] = useState(getInitialPrintScale);
@@ -301,69 +273,36 @@ export default function App() {
   const [aboutUploadName, setAboutUploadName] = useState("");
   const [cloudStatus, setCloudStatus] = useState({ provider: "supabase", enabled: false, mode: "loading" });
 
-  // IOT/Hardware States
+  // // IOT & GRAPH STATES
   const [iotOnline, setIotOnline] = useState(false);
   const [isMqttSending, setIsMqttSending] = useState(false);
-
-  // Recharts/Analytics Graph States
   const [showGraph, setShowGraph] = useState(false);
   const [graphFilter, setGraphFilter] = useState("1_day");
   const [graphData, setGraphData] = useState({ barData: [], pieData: [], totalWeight: 0 });
   const [isGraphLoading, setIsGraphLoading] = useState(false);
-  
+
+  // // HOOKS & USE-MEMOS
   const authHeaders = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
   const activeGlobalBranch = (settings.branches || []).find(b => b.id === globalBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
   const activeBillBranch = (settings.branches || []).find(b => b.id === billBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
 
-  // --- EFFECT HOOKS (System Background Processes) ---
-  
-  // 1. Tracks window resizing for mobile layout
-  useEffect(() => {
-      const handleResize = () => setViewportWidth(window.innerWidth);
-      window.addEventListener("resize", handleResize); 
-      const handleBeforePrint = () => setIsPrinting(true);
-      const handleAfterPrint = () => setIsPrinting(false);
-      window.addEventListener("beforeprint", handleBeforePrint);
-      window.addEventListener("afterprint", handleAfterPrint);
-      return () => { 
-        window.removeEventListener("resize", handleResize); 
-        window.removeEventListener("beforeprint", handleBeforePrint);
-        window.removeEventListener("afterprint", handleAfterPrint);
-      };
-  }, []);
-
-  // 2. Checks if IoT ESP32 screen is powered on every 10 seconds
   useEffect(() => {
     if (!token || isPublicView) return;
-    const checkIot = async () => {
-      try {
-        const res = await axios.get(`${API}/cloud/mqtt/status`, { headers: authHeaders });
-        setIotOnline(res.data.online);
-      } catch (e) { setIotOnline(false); }
-    };
-    checkIot();
-    const interval = setInterval(checkIot, 10000); 
-    return () => clearInterval(interval);
+    const checkIot = async () => { try { const res = await axios.get(`${API}/cloud/mqtt/status`, { headers: authHeaders }); setIotOnline(res.data.online); } catch (e) { setIotOnline(false); } };
+    checkIot(); const interval = setInterval(checkIot, 10000); return () => clearInterval(interval);
   }, [token, isPublicView, authHeaders]);
 
-  // 3. Mounts custom fonts to document
-  useEffect(() => {
-    if (settings.custom_fonts && settings.custom_fonts.length > 0) { settings.custom_fonts.forEach(f => registerFont(f.name, f.dataUrl)); }
-  }, [settings.custom_fonts]);
+  useEffect(() => { if (settings.custom_fonts && settings.custom_fonts.length > 0) { settings.custom_fonts.forEach(f => registerFont(f.name, f.dataUrl)); } }, [settings.custom_fonts]);
 
-  // 4. Mounts the Public Link viewer if accessed via /?view=INV-001
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const viewDoc = params.get("view");
-    const adminParam = params.get("admin");
-    if (adminParam === "true") setIsAdminView(true);
-
+    if (params.get("admin") === "true") setIsAdminView(true);
     if (viewDoc) {
       setIsPublicView(true); setPublicLoading(true);
       const fetchPublicBill = async () => {
         try {
-          const res = await axios.get(`${API}/bills/public/${viewDoc}`);
-          setPublicBill(res.data.bill);
+          const res = await axios.get(`${API}/bills/public/${viewDoc}`); setPublicBill(res.data.bill);
           const sData = { ...defaultSettings, ...res.data.settings };
           if (!sData.branches) sData.branches = defaultSettings.branches;
           if (sData.custom_fonts) sData.custom_fonts.forEach(f => registerFont(f.name, f.dataUrl));
@@ -374,69 +313,13 @@ export default function App() {
     }
   }, []);
 
-  // 5. Handles ESC key closing menus
   useEffect(() => {
-    const handleEsc = (event) => {
-      if (event.key !== "Escape") return;
-      setShowSettings(false); setShowAbout(false); setShowRecentBills(false); setShowLedger(false); setShowFeedbackModal(false);
-    };
+    const handleEsc = (event) => { if (event.key === "Escape") { setShowSettings(false); setShowAbout(false); setShowRecentBills(false); setShowLedger(false); setShowFeedbackModal(false); } };
     window.addEventListener("keydown", handleEsc); return () => window.removeEventListener("keydown", handleEsc);
   }, [showSettings, showAbout, showRecentBills, showLedger, showFeedbackModal]);
 
-  // 6. Global Keyboard Shortcuts (Alt+S, Alt+P, etc.)
-  useEffect(() => {
-    const handleGlobalKeyDown = (e) => {
-      const activeTag = document.activeElement?.tagName.toLowerCase();
-      const isInput = activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select';
-      if (e.key === "Enter" && isInput && activeTag !== 'textarea') {
-          e.preventDefault();
-          const formElements = Array.from(document.querySelectorAll('input, select, textarea, button:not(:disabled)'));
-          const index = formElements.indexOf(document.activeElement);
-          if (index > -1 && index < formElements.length - 1) { formElements[index + 1].focus(); }
-          return;
-      }
-      if (isInput && !e.ctrlKey && !e.metaKey && !e.altKey) return; 
-
-      const scList = settings.shortcuts || defaultSettings.shortcuts;
-      const checkKey = (actionId) => {
-          const sc = scList.find(s => s.id === actionId);
-          if (!sc || !sc.keys) return false;
-          const parts = sc.keys.toLowerCase().split('+').map(p => p.trim());
-          const needsCtrl = parts.includes('ctrl') || parts.includes('cmd');
-          const needsShift = parts.includes('shift');
-          const needsAlt = parts.includes('alt');
-          const keyPart = parts[parts.length - 1]; 
-          const ctrlPressed = e.ctrlKey || e.metaKey;
-          const shiftPressed = e.shiftKey;
-          const altPressed = e.altKey;
-          const keyFromKey = e.key ? e.key.toLowerCase() : "";
-          const keyFromCode = e.code ? e.code.toLowerCase().replace("key", "").replace("digit", "") : "";
-          return (ctrlPressed === needsCtrl) && (shiftPressed === needsShift) && (altPressed === needsAlt) && (keyFromKey === keyPart || keyFromCode === keyPart);
-      };
-
-      if (checkKey('save_bill')) { e.preventDefault(); e.stopPropagation(); saveBill(); return; }
-      if (checkKey('add_item')) { e.preventDefault(); e.stopPropagation(); setItems(prev => [...prev, createItem(settings.default_hsn)]); markDirty(); return; }
-      if (checkKey('new_bill')) { e.preventDefault(); e.stopPropagation(); handleNewBillClick(); return; }
-      if (checkKey('share_wa')) { e.preventDefault(); e.stopPropagation(); shareWhatsApp(); return; }
-      if (checkKey('open_ledger')) { e.preventDefault(); e.stopPropagation(); setShowLedger(true); return; }
-      if (checkKey('open_recent')) { e.preventDefault(); e.stopPropagation(); setShowRecentBills(true); return; }
-      if (checkKey('focus_payment')) { e.preventDefault(); e.stopPropagation(); document.getElementById('paymentMethodSelect')?.focus(); return; }
-      if (checkKey('focus_customer')) { e.preventDefault(); e.stopPropagation(); document.getElementById('customerNameInput')?.focus(); return; }
-      if (checkKey('focus_item')) { e.preventDefault(); e.stopPropagation(); const itemInputs = document.querySelectorAll('.item-desc-input'); if(itemInputs.length > 0) itemInputs[itemInputs.length - 1].focus(); return; }
-      if (checkKey('focus_discount')) { e.preventDefault(); e.stopPropagation(); document.getElementById('discountInput')?.focus(); return; }
-      if (checkKey('focus_redeem')) { e.preventDefault(); e.stopPropagation(); document.getElementById('redeemedPointsInput')?.focus(); return; }
-      if (checkKey('focus_credit')) { e.preventDefault(); e.stopPropagation(); document.getElementById('appliedCreditInput')?.focus(); return; }
-      if (checkKey('download_pdf')) { e.preventDefault(); e.stopPropagation(); downloadPdf("bill-print-root", documentNumber || mode); return; }
-      if (checkKey('print_bill')) { e.preventDefault(); e.stopPropagation(); window.print(); return; }
-    };
-    window.addEventListener('keydown', handleGlobalKeyDown, true);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
-  }); 
-
-  // 7. Saves Print Scale state to local storage
   useEffect(() => { localStorage.setItem("jj_print_scale", String(clampPrintScale(printScale))); }, [printScale]);
-  
-  // 8. Verifies login session with backend
+
   useEffect(() => {
     if (isPublicView) return; 
     const verify = async () => {
@@ -449,44 +332,24 @@ export default function App() {
     verify();
   }, [token, isPublicView, authHeaders]);
 
-  // 9. Fetches Recent Bills when the drawer opens
   useEffect(() => {
     if (showRecentBills && token && !isPublicView) {
       const fetchRecent = async () => {
         setLoadingRecent(true);
-        try {
-          const limit = recentDateFilter === "ALL" ? 50 : 500;
-          const response = await axios.get(`${API}/bills/recent?limit=${limit}&branch_filter=${recentBranchFilter}&search=${encodeURIComponent(billSearchQuery)}`, { headers: authHeaders });
-          setRecentBillsList(response.data);
-        } catch { toast.error("Failed to load recent bills."); } 
-        finally { setLoadingRecent(false); }
+        try { const limit = recentDateFilter === "ALL" ? 50 : 500; const response = await axios.get(`${API}/bills/recent?limit=${limit}&branch_filter=${recentBranchFilter}&search=${encodeURIComponent(billSearchQuery)}`, { headers: authHeaders }); setRecentBillsList(response.data); } 
+        catch { toast.error("Failed to load recent bills."); } finally { setLoadingRecent(false); }
       };
       const timer = setTimeout(fetchRecent, 300); return () => clearTimeout(timer);
     }
   }, [showRecentBills, token, isPublicView, billSearchQuery, recentBranchFilter, recentDateFilter, authHeaders]); 
 
-  // 10. Filters Recent Bills based on dates and branch
   const filteredRecentBills = useMemo(() => {
     return (recentBillsList || []).filter(bill => {
       if (recentModeFilter !== "ALL" && bill.mode !== recentModeFilter) return false;
-      if (recentDateFilter === "THIS_MONTH") {
-        const billDateObj = parseBillDate(bill.date);
-        const now = new Date();
-        if (billDateObj.getMonth() !== now.getMonth() || billDateObj.getFullYear() !== now.getFullYear()) return false;
-      } 
-      else if (recentDateFilter === "LAST_MONTH") {
-        const billDateObj = parseBillDate(bill.date);
-        const now = new Date();
-        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        if (billDateObj.getMonth() !== lastMonth.getMonth() || billDateObj.getFullYear() !== lastMonth.getFullYear()) return false;
-      } 
+      if (recentDateFilter === "THIS_MONTH") { const billDateObj = parseBillDate(bill.date); const now = new Date(); if (billDateObj.getMonth() !== now.getMonth() || billDateObj.getFullYear() !== now.getFullYear()) return false; } 
+      else if (recentDateFilter === "LAST_MONTH") { const billDateObj = parseBillDate(bill.date); const now = new Date(); const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1); if (billDateObj.getMonth() !== lastMonth.getMonth() || billDateObj.getFullYear() !== lastMonth.getFullYear()) return false; } 
       else if (recentDateFilter === "CUSTOM") {
-        const fixBillDate = (dStr) => {
-            if(!dStr) return "";
-            const p = dStr.split("-");
-            if (p.length === 3 && p[0].length === 2) return `${p[2]}-${p[1]}-${p[0]}`;
-            return dStr;
-        };
+        const fixBillDate = (dStr) => { if(!dStr) return ""; const p = dStr.split("-"); if (p.length === 3 && p[0].length === 2) return `${p[2]}-${p[1]}-${p[0]}`; return dStr; };
         const bDate = fixBillDate(bill.date);
         if (customStartDate && bDate < customStartDate) return false;
         if (customEndDate && bDate > customEndDate) return false;
@@ -495,18 +358,14 @@ export default function App() {
     });
   }, [recentBillsList, recentModeFilter, recentDateFilter, customStartDate, customEndDate]);
 
-  // 11. Fetches Daily Ledger when drawer opens
   useEffect(() => {
     if (showLedger && token && !isPublicView) {
       const fetchLedger = async () => {
         setLedgerLoading(true);
         try { 
           await loadSettings(); 
-          const res = await axios.get(`${API}/bills/today?date=${today()}&branch_filter=${globalBranchId}`, { headers: authHeaders }); 
-          setTodayBills(res.data); 
-          
-          const resLogs = await axios.get(`${API}/settings/ledger/logs?branch_id=${globalBranchId}`, { headers: authHeaders }); 
-          setLedgerLogs(resLogs.data); 
+          const res = await axios.get(`${API}/bills/today?date=${today()}&branch_filter=${globalBranchId}`, { headers: authHeaders }); setTodayBills(res.data); 
+          const resLogs = await axios.get(`${API}/settings/ledger/logs?branch_id=${globalBranchId}`, { headers: authHeaders }); setLedgerLogs(resLogs.data); 
         } 
         catch { toast.error("Failed to load today's ledger."); } finally { setLedgerLoading(false); }
       };
@@ -514,7 +373,7 @@ export default function App() {
     }
   }, [showLedger, token, isPublicView, globalBranchId, authHeaders]);
 
-  // 12. FETCHES ANALYTICS GRAPH DATA
+  // // GRAPH ENGINE (CRASH PROOFED)
   useEffect(() => {
     if (showLedger && showGraph) {
       const fetchGraph = async () => {
@@ -525,14 +384,8 @@ export default function App() {
              const res = await axios.get(`${API}/bills/recent?limit=5000&branch_filter=${globalBranchId}`, { headers: authHeaders });
              billsToProcess = res.data;
           }
-          
-          const now = new Date();
-          const pastDate = new Date();
-          let formatKey = (d) => {
-            const day = String(d.getDate()).padStart(2, '0');
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            return `${day}/${month}`;
-          };
+          const now = new Date(); const pastDate = new Date();
+          let formatKey = (d) => { const day = String(d.getDate()).padStart(2, '0'); const month = String(d.getMonth() + 1).padStart(2, '0'); return `${day}/${month}`; };
 
           if (graphFilter === '1_day') { pastDate.setHours(0,0,0,0); formatKey = (d) => `${d.getHours()}:00`; }
           else if (graphFilter === '1_week') { pastDate.setDate(now.getDate() - 7); }
@@ -543,94 +396,41 @@ export default function App() {
           else if (graphFilter === '1_year') { pastDate.setFullYear(now.getFullYear() - 1); formatKey = (d) => `${d.toLocaleString('default', { month: 'short' })} '${String(d.getFullYear()).slice(-2)}`; }
           else if (graphFilter === 'all_time') { pastDate.setFullYear(2000); formatKey = (d) => `${d.getFullYear()}`; }
 
-          let barMap = {};
-          if (graphFilter === '1_day') { for(let i=9; i<=21; i++) barMap[`${i}:00`] = 0; }
-          
-          const payMap = { Cash: 0, UPI: 0, Card: 0 };
-          let totalW = 0;
+          let barMap = {}; if (graphFilter === '1_day') { for(let i=9; i<=21; i++) barMap[`${i}:00`] = 0; }
+          const payMap = { Cash: 0, UPI: 0, Card: 0 }; let totalW = 0;
 
-          const reversedBills = [...(billsToProcess || [])].reverse();
+          // SAFE REVERSE ARRAY (Prevents Vercel Crash)
+          const reversedBills = [...(Array.isArray(billsToProcess) ? billsToProcess : [])].reverse();
 
           reversedBills.forEach(b => {
              let bDate = new Date();
              if (b.created_at) bDate = new Date(b.created_at);
-             else if (b.date) {
-                 const p = b.date.split("-");
-                 if (p.length === 3) bDate = new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]));
-             }
+             else if (b.date) { const p = b.date.split("-"); if (p.length === 3) bDate = new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0])); }
 
              if (bDate >= pastDate) {
                 const key = formatKey(bDate);
                 if (barMap[key] === undefined) barMap[key] = 0;
                 barMap[key] += num(b.totals?.grand_total);
-
-                if (b.payment_method === 'Split') {
-                   payMap.Cash += num(b.split_cash);
-                   payMap.UPI += num(b.split_upi);
-                } else if (payMap[b.payment_method] !== undefined) {
-                   payMap[b.payment_method] += num(b.totals?.grand_total);
-                }
-
+                if (b.payment_method === 'Split') { payMap.Cash += num(b.split_cash); payMap.UPI += num(b.split_upi); } else if (payMap[b.payment_method] !== undefined) { payMap[b.payment_method] += num(b.totals?.grand_total); }
                 (b.items || []).forEach(item => { totalW += num(item.weight); });
              }
           });
 
-          const barData = [];
-          for(let k in barMap) { barData.push({ label: k, amount: barMap[k] }); }
+          const barData = []; for(let k in barMap) { barData.push({ label: k, amount: barMap[k] }); }
           const pieData = Object.keys(payMap).map(k => ({ name: k, value: payMap[k] })).filter(d => d.value > 0);
-
           setGraphData({ barData, pieData, totalWeight: totalW });
-        } catch (e) {
-          toast.error("Failed to load analytics");
-        } finally {
-          setIsGraphLoading(false);
-        }
+        } catch (e) { toast.error("Failed to load analytics"); } finally { setIsGraphLoading(false); }
       };
       fetchGraph();
     }
   }, [showLedger, showGraph, graphFilter, globalBranchId, todayBills, authHeaders]);
 
-  // 13. Fetches Storage Quota when settings open
   useEffect(() => {
     if (showSettings && token && !isPublicView) {
       const fetchStorageStats = async () => { try { const res = await axios.get(`${API}/system/storage`, { headers: authHeaders }); setStorageStats(res.data); } catch { console.error("Failed to load storage stats"); } };
       fetchStorageStats();
     }
   }, [showSettings, token, isPublicView, authHeaders]);
-
-  // 14. Server Bootstrappers & Background Pingers
-  const loadSettings = async () => {
-    const response = await axios.get(`${API}/settings`, { headers: authHeaders });
-    const savedLogo = localStorage.getItem("jj_logo_data_url");
-    let dbData = response.data || {};
-    if (!dbData.branches) dbData.branches = defaultSettings.branches;
-    let localFonts = []; const localFontsRaw = localStorage.getItem("jj_custom_fonts"); if (localFontsRaw) { try { localFonts = JSON.parse(localFontsRaw); } catch (e) {} }
-
-    let mergedShortcuts = defaultSettings.shortcuts;
-    if (dbData.shortcuts && dbData.shortcuts.length > 0) {
-        const customOnly = dbData.shortcuts.filter(sc => !sc.isSystem);
-        const systemUpdated = defaultSettings.shortcuts.map(sys => {
-            const savedSys = dbData.shortcuts.find(s => s.id === sys.id);
-            return savedSys ? savedSys : sys;
-        });
-        mergedShortcuts = [...systemUpdated, ...customOnly];
-    } else { mergedShortcuts = defaultSettings.shortcuts; }
-
-    const newSettings = { ...defaultSettings, ...dbData, logo_data_url: savedLogo || dbData.logo_data_url || "", custom_fonts: dbData.custom_fonts || localFonts, shortcuts: mergedShortcuts };
-    setSettings(newSettings);
-    if (!(newSettings.branches || []).find(b => b.id === globalBranchId)) { setGlobalBranchId((newSettings.branches || [])[0].id); setBillBranchId((newSettings.branches || [])[0].id); }
-    setItems((prev) => { if (prev.length === 1 && !prev[0].description && !prev[0].weight && !prev[0].hsn) return [{ ...prev[0], hsn: newSettings.default_hsn }]; return prev; });
-    setSettingsLoaded(true);
-  };
-
-  const reserveNumber = async (activeMode, activeBranch) => {
-    setIsNumberLoading(true);
-    try { const response = await axios.get(`${API}/bills/next-number`, { headers: authHeaders, params: { mode: activeMode, branch_id: activeBranch } }); setDocumentNumber(response.data.document_number || ""); } finally { setIsNumberLoading(false); }
-  };
-
-  const fetchCloudStatus = async () => {
-    try { const response = await axios.get(`${API}/cloud/status`, { headers: authHeaders }); setCloudStatus(response.data); } catch { setCloudStatus({ provider: "supabase", enabled: false, mode: "status-unavailable" }); }
-  };
 
   useEffect(() => {
     if (isPublicView) return;
@@ -643,7 +443,6 @@ export default function App() {
     const interval = setInterval(() => { fetchCloudStatus(); }, 30000); return () => clearInterval(interval);
   }, [token, isPublicView]); 
 
-  // 15. Real-time Customer Name/Phone Suggestion
   useEffect(() => {
     if (!token || isPublicView) return;
     const query = customer.phone.trim().length >= 2 ? customer.phone.trim() : customer.name.trim();
@@ -654,15 +453,13 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [customer.phone, customer.name, token, isPublicView, authHeaders]);
 
-  // --- CORE MATH COMPUTATION ENGINES ---
-  // Calculates live bill totals as user types
+  // // BILL CALCULATION ENGINES
   const computed = useMemo(() => {
     const baseSilverRate = num(settings.silver_rate_per_gram);
     const baseMCPerGram = num(settings.making_charge_per_gram);
     const flatMCBelow5g = num(settings.flat_mc_below_5g);
     const ptPerGram = num(settings.loyalty_points_per_gram !== undefined ? settings.loyalty_points_per_gram : 1);
     const rsPerPt = num(settings.loyalty_point_value_rs !== undefined ? settings.loyalty_point_value_rs : 1);
-
     let totalWeight = 0;
 
     const mapped = (items || []).map((item, index) => {
@@ -707,13 +504,11 @@ export default function App() {
   const todaysTotalEstBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'estimate').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
   const todaysTotalInvBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'invoice').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
 
-  // Calculates math for read-only customer links
   const publicComputed = useMemo(() => {
     if (!publicBill || !publicSettings) return { items: [], taxable: 0, cgst: 0, sgst: 0, igst: 0, mdr: 0, roundOff: 0, grandTotal: 0, discount: 0, exchange: 0 };
     const baseSilverRate = num(publicSettings.silver_rate_per_gram); const baseMCPerGram = num(publicSettings.making_charge_per_gram); const flatMCBelow5g = num(publicSettings.flat_mc_below_5g);
     const ptPerGram = num(publicSettings.loyalty_points_per_gram !== undefined ? publicSettings.loyalty_points_per_gram : 1);
     const rsPerPt = num(publicSettings.loyalty_point_value_rs !== undefined ? publicSettings.loyalty_point_value_rs : 1);
-
     let totalWeight = 0;
 
     const mapped = (publicBill.items || []).map((item, index) => {
@@ -754,12 +549,121 @@ export default function App() {
 
     return { items: mapped, taxable: publicBill.totals?.taxable_amount || publicBill.totals?.subtotal || taxable, cgst: publicBill.totals?.cgst ?? cgst, sgst: publicBill.totals?.sgst ?? sgst, igst: publicBill.totals?.igst ?? igst, mdr: publicBill.totals?.mdr ?? mdr, roundOff, grandTotal, discount, exchange, earnedPoints, redeemedPoints, redeemedValue, appliedCredit: appliedCreditVal, savedCredit: savedCreditVal };
   }, [publicBill, publicSettings]);
-// === PART 2 END ===
+  
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      const activeTag = document.activeElement?.tagName.toLowerCase();
+      const isInput = activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select';
+      if (e.key === "Enter" && isInput && activeTag !== 'textarea') {
+          e.preventDefault();
+          const formElements = Array.from(document.querySelectorAll('input, select, textarea, button:not(:disabled)'));
+          const index = formElements.indexOf(document.activeElement);
+          if (index > -1 && index < formElements.length - 1) { formElements[index + 1].focus(); }
+          return;
+      }
+      if (isInput && !e.ctrlKey && !e.metaKey && !e.altKey) return; 
+
+      const scList = settings.shortcuts || defaultSettings.shortcuts;
+      const checkKey = (actionId) => {
+          const sc = scList.find(s => s.id === actionId);
+          if (!sc || !sc.keys) return false;
+          const parts = sc.keys.toLowerCase().split('+').map(p => p.trim());
+          const needsCtrl = parts.includes('ctrl') || parts.includes('cmd');
+          const needsShift = parts.includes('shift');
+          const needsAlt = parts.includes('alt');
+          const keyPart = parts[parts.length - 1]; 
+          const ctrlPressed = e.ctrlKey || e.metaKey;
+          const shiftPressed = e.shiftKey;
+          const altPressed = e.altKey;
+          const keyFromKey = e.key ? e.key.toLowerCase() : "";
+          const keyFromCode = e.code ? e.code.toLowerCase().replace("key", "").replace("digit", "") : "";
+          return (ctrlPressed === needsCtrl) && (shiftPressed === needsShift) && (altPressed === needsAlt) && (keyFromKey === keyPart || keyFromCode === keyPart);
+      };
+
+      if (checkKey('save_bill')) { e.preventDefault(); e.stopPropagation(); saveBill(); return; }
+      if (checkKey('add_item')) { e.preventDefault(); e.stopPropagation(); setItems(prev => [...prev, createItem(settings.default_hsn)]); markDirty(); return; }
+      if (checkKey('new_bill')) { e.preventDefault(); e.stopPropagation(); handleNewBillClick(); return; }
+      if (checkKey('share_wa')) { e.preventDefault(); e.stopPropagation(); shareWhatsApp(); return; }
+      if (checkKey('open_ledger')) { e.preventDefault(); e.stopPropagation(); setShowLedger(true); return; }
+      if (checkKey('open_recent')) { e.preventDefault(); e.stopPropagation(); setShowRecentBills(true); return; }
+      if (checkKey('focus_payment')) { e.preventDefault(); e.stopPropagation(); document.getElementById('paymentMethodSelect')?.focus(); return; }
+      if (checkKey('focus_customer')) { e.preventDefault(); e.stopPropagation(); document.getElementById('customerNameInput')?.focus(); return; }
+      if (checkKey('focus_item')) { e.preventDefault(); e.stopPropagation(); const itemInputs = document.querySelectorAll('.item-desc-input'); if(itemInputs.length > 0) itemInputs[itemInputs.length - 1].focus(); return; }
+      if (checkKey('focus_discount')) { e.preventDefault(); e.stopPropagation(); document.getElementById('discountInput')?.focus(); return; }
+      if (checkKey('focus_redeem')) { e.preventDefault(); e.stopPropagation(); document.getElementById('redeemedPointsInput')?.focus(); return; }
+      if (checkKey('focus_credit')) { e.preventDefault(); e.stopPropagation(); document.getElementById('appliedCreditInput')?.focus(); return; }
+      if (checkKey('download_pdf')) { e.preventDefault(); e.stopPropagation(); downloadPdf("bill-print-root", documentNumber || mode); return; }
+      if (checkKey('print_bill')) { e.preventDefault(); e.stopPropagation(); window.print(); return; }
+      if (checkKey('iot_qr')) { e.preventDefault(); e.stopPropagation(); sendQrToDisplay(computed.grandTotal, mode === 'invoice' ? activeBillBranch.invoice_upi_id : activeBillBranch.estimate_upi_id); return; }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown, true);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
+  }); 
+// === PART 2 IS FINISH RIGHT HERE. PASTE PART 3 BELOW THIS LINE ===
 // === PART 3 START ===
-  const COLORS = ['#d97706', '#2563eb', '#dc2626']; 
+  // // ACTION HANDLERS & CORE FUNCTIONS
+  const sendQrToDisplay = async (amount, upiId) => {
+    if (!iotOnline) { toast.error("IoT Device is offline!"); return; }
+    setIsMqttSending(true);
+    try {
+      await axios.post(`${API}/cloud/mqtt/publish`, { topic: "Jalaram/QR", message: JSON.stringify({ amount: String(Math.round(amount)), upi_id: upiId }) }, { headers: authHeaders });
+      toast.success("QR Code sent to shop display!");
+    } catch (e) { toast.error("Failed to send QR to display."); } finally { setIsMqttSending(false); }
+  };
+
+  const sendSuccessToDisplay = async () => {
+    try { await axios.post(`${API}/cloud/mqtt/publish`, { topic: "Jalaram/QR", message: "SUCCESS" }, { headers: authHeaders }); } catch (e) { console.error("MQTT Success trigger failed"); }
+  };
+
+  const handleFontUpload = async (event) => {
+    const file = event.target.files?.[0]; if (!file) return;
+    const fontName = file.name.split('.')[0];
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const dataUrl = e.target.result; const newFont = { name: fontName, dataUrl };
+        const updatedFonts = [...(settings.custom_fonts || []), newFont];
+        setSettings(prev => ({ ...prev, custom_fonts: updatedFonts }));
+        localStorage.setItem("jj_custom_fonts", JSON.stringify(updatedFonts));
+        registerFont(fontName, dataUrl); toast.success(`Font "${fontName}" uploaded!`);
+      };
+      reader.readAsDataURL(file);
+    } catch { toast.error("Font upload failed."); }
+  };
+
+  const loadSettings = async () => {
+    const response = await axios.get(`${API}/settings`, { headers: authHeaders });
+    const savedLogo = localStorage.getItem("jj_logo_data_url");
+    let dbData = response.data || {};
+    if (!dbData.branches) dbData.branches = defaultSettings.branches;
+    let localFonts = []; const localFontsRaw = localStorage.getItem("jj_custom_fonts"); if (localFontsRaw) { try { localFonts = JSON.parse(localFontsRaw); } catch (e) {} }
+
+    let mergedShortcuts = defaultSettings.shortcuts;
+    if (dbData.shortcuts && dbData.shortcuts.length > 0) {
+        const customOnly = dbData.shortcuts.filter(sc => !sc.isSystem);
+        const systemUpdated = defaultSettings.shortcuts.map(sys => { const savedSys = dbData.shortcuts.find(s => s.id === sys.id); return savedSys ? savedSys : sys; });
+        mergedShortcuts = [...systemUpdated, ...customOnly];
+    } else { mergedShortcuts = defaultSettings.shortcuts; }
+
+    const newSettings = { ...defaultSettings, ...dbData, logo_data_url: savedLogo || dbData.logo_data_url || "", custom_fonts: dbData.custom_fonts || localFonts, shortcuts: mergedShortcuts };
+    setSettings(newSettings);
+    if (!(newSettings.branches || []).find(b => b.id === globalBranchId)) { setGlobalBranchId((newSettings.branches || [])[0].id); setBillBranchId((newSettings.branches || [])[0].id); }
+    setItems((prev) => { if (prev.length === 1 && !prev[0].description && !prev[0].weight && !prev[0].hsn) return [{ ...prev[0], hsn: newSettings.default_hsn }]; return prev; });
+    setSettingsLoaded(true);
+  };
+
+  const reserveNumber = async (activeMode, activeBranch) => {
+    setIsNumberLoading(true);
+    try { const response = await axios.get(`${API}/bills/next-number`, { headers: authHeaders, params: { mode: activeMode, branch_id: activeBranch } }); setDocumentNumber(response.data.document_number || ""); } finally { setIsNumberLoading(false); }
+  };
+
+  const fetchCloudStatus = async () => {
+    try { const response = await axios.get(`${API}/cloud/status`, { headers: authHeaders }); setCloudStatus(response.data); } catch { setCloudStatus({ provider: "supabase", enabled: false, mode: "status-unavailable" }); }
+  };
 
   const updateItem = (id, key, value) => { markDirty(); setItems((prev) => prev.map((item) => (item.id === id ? { ...item, [key]: value } : item))); };
   const checkIsBlank = () => { return !customer.name.trim() && !customer.phone.trim() && !customer.address.trim() && !(items || []).some(i => i.description.trim() || i.weight.trim() || i.amount_override.trim()) && (!discount || discount === "0") && (!exchange || exchange === "0") && !paymentMethod && !advanceMethod && !advanceAmount && !splitCash; };
+  
   const clearBill = async (nextMode = mode, nextBranch = billBranchId) => {
     setCurrentBillId(null); setEditingDocNumber(null); setItems([createItem(settings.default_hsn)]); setCustomer({ name: "", phone: "", address: "", email: "", points: 0, credit: 0 });
     setSuggestions([]); setDiscount("0"); setExchange("0"); setRedeemedPoints(""); setAppliedCredit(""); setSavedCredit(""); setBonusPoints(""); setManualRoundOff("");
@@ -790,16 +694,13 @@ export default function App() {
     catch { toast.error("Failed to delete the bill."); }
   };
 
-  // IoT Payment Status Toggle
   const handleQuickPaymentToggle = async (bill) => {
     if (bill.tx_type === "booking" || bill.tx_type === "service") { toast.info("Please open the bill and click Edit to manage Booking/Service balances."); return; }
     const newStatus = !bill.is_payment_done;
     try { 
       await axios.put(`${API}/bills/${bill.document_number}/toggle-payment`, { is_payment_done: newStatus }, { headers: authHeaders }); 
       toast.success(`Payment marked as ${newStatus ? 'DONE ✅' : 'PENDING ⏳'}`); 
-      
       if (newStatus && iotOnline) { sendSuccessToDisplay(); }
-
       if (currentBillId === bill.id) { setIsPaymentDone(newStatus); } 
       setRecentBillsList(prev => prev.map(b => b.document_number === bill.document_number ? { ...b, is_payment_done: newStatus } : b)); 
       await loadSettings(); 
@@ -837,23 +738,20 @@ export default function App() {
   const removeShortcut = (index) => { const list = [...(settings.shortcuts || defaultSettings.shortcuts)]; list.splice(index, 1); setSettings(prev => ({ ...prev, shortcuts: list })); };
   const handleLogin = async (event) => { event.preventDefault(); setLoggingIn(true); try { const response = await axios.post(`${API}/auth/login`, { passcode }, { timeout: 15000 }); localStorage.setItem("jj_auth_token", response.data.access_token); setToken(response.data.access_token); setPasscode(""); toast.success("Logged in successfully"); } catch (error) { if (error?.response?.status === 401) { toast.error("Wrong passcode."); } else { toast.error("Server is waking up. Please wait 15-20 seconds and try again."); } } finally { setLoggingIn(false); } };
   const handleLogout = () => { localStorage.removeItem("jj_auth_token"); setToken(""); setGatewayPassed(false); setSettingsLoaded(false); };
-  
   const optimizeImageDataUrl = async (file) => { const reader = new FileReader(); const original = await new Promise((resolve, reject) => { reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); }); const image = new Image(); await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; image.src = original; }); const ratio = Math.min(420 / image.width, 420 / image.height, 1); const targetWidth = Math.round(image.width * ratio); const targetHeight = Math.round(image.height * ratio); const canvas = document.createElement("canvas"); canvas.width = targetWidth; canvas.height = targetHeight; const context = canvas.getContext("2d"); context.drawImage(image, 0, 0, targetWidth, targetHeight); return canvas.toDataURL("image/png", 0.92); };
   const handleLogoUpload = async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const dataUrl = await optimizeImageDataUrl(file); localStorage.setItem("jj_logo_data_url", dataUrl); setSettings((prev) => ({ ...prev, logo_data_url: dataUrl })); setLogoUploadName(file.name); toast.success("Logo uploaded successfully."); } catch { toast.error("Logo upload failed."); } };
   const saveSettings = async () => { try { await axios.put(`${API}/settings`, settings, { headers: authHeaders }); toast.success("Settings saved."); } catch { toast.error("Could not save settings."); } };
   const submitLedgerLog = async () => { if (!logAmount || isNaN(logAmount) || num(logAmount) <= 0) { toast.error("Please enter a valid amount."); return; } if (!logReason.trim()) { toast.error("Please enter a reason/remark."); return; } setSubmittingLog(true); try { const payload = { branch_id: globalBranchId, reason: logReason, cash_change: 0, estimate_bank_change: 0, invoice_bank_change: 0 }; const amt = num(logAmount); const keyMap = { "cash": "cash_change", "estimate_bank": "estimate_bank_change", "invoice_bank": "invoice_bank_change" }; if (logType === "expense") payload[keyMap[logSourceVault]] = -amt; else if (logType === "add") payload[keyMap[logSourceVault]] = amt; else if (logType === "exchange") { if (logSourceVault === logTargetVault) { toast.error("Cannot exchange into the same vault."); setSubmittingLog(false); return; } payload[keyMap[logSourceVault]] = -amt; payload[keyMap[logTargetVault]] = amt; } await axios.post(`${API}/settings/ledger/adjust`, payload, { headers: authHeaders }); toast.success("Transaction logged successfully!"); setShowLogForm(false); setLogAmount(""); setLogReason(""); await loadSettings(); await fetchLedgerHistory(); } catch (error) { toast.error("Ledger update failed."); } finally { setSubmittingLog(false); } };
   const saveBalances = async () => { try { const payload = { branch_id: globalBranchId, cash_balance: num(manualCash), estimate_bank_balance: num(manualEstBank), invoice_bank_balance: num(manualInvBank) }; await axios.put(`${API}/settings/balances`, payload, { headers: authHeaders }); setSettings(prev => { const updatedBranches = (prev.branches || []).map(b => b.id === globalBranchId ? { ...b, ...payload } : b); return { ...prev, branches: updatedBranches }; }); setEditingBalances(false); toast.success(`Ledger balances for ${activeGlobalBranch.name} manually updated!`); } catch { toast.error("Failed to update balances."); } };
 
-  // MAIN BILL SAVER
+  // CORE BILL SAVING ENGINE
   const saveBill = async () => {
     if (txType === "sale" && !paymentMethod) { toast.error("Please select a payment method."); return; }
-    
     if ((txType === "booking" || txType === "service")) { 
       if (isAdvancePaid && !advanceMethod) { toast.error("Please select a method for the Advance payment."); return; } 
       if (isBalancePaid && !balanceMethod) { toast.error("Please select a method for the Balance payment."); return; } 
     }
 
-    // Updates dictionary memory
     const newItems = computed.items.map(i => i.description.trim()).filter(Boolean);
     setSavedDescriptions(prev => {
       const updated = Array.from(new Set([...prev, ...newItems]));
@@ -869,9 +767,7 @@ export default function App() {
         advance_amount: num(advanceAmount), advance_method: advanceMethod, advance_split_cash: num(advanceSplitCash), is_advance_paid: isAdvancePaid,
         balance_method: balanceMethod, balance_split_cash: num(balanceSplitCash), is_balance_paid: isBalancePaid,
         discount: num(discount), exchange: num(exchange), round_off: manualRoundOff === "" ? null : num(manualRoundOff), notes,
-        
         redeemed_points: num(redeemedPoints), earned_points: computed.earnedPoints, applied_credit: computed.appliedCredit, saved_credit: computed.savedCredit, bonus_points: computed.bonusPoints,
-
         items: computed.items.map((item) => ({ description: item.description, hsn: item.hsn, weight: num(item.weight), quantity: num(item.quantity), mc_override: item.mc_override === "" ? null : num(item.mc_override), rate_override: item.rate_override === "" ? null : num(item.rate_override), amount_override: item.amount_override === "" ? null : num(item.amount_override), rate: item.rate, amount: item.amount, sl_no: item.slNo })),
         totals: { grand_total: computed.grandTotal, subtotal: computed.subtotal }
       };
@@ -879,15 +775,11 @@ export default function App() {
       if (currentBillId) { 
         await axios.put(`${API}/bills/update-by-id/${currentBillId}`, payload, { headers: authHeaders }); 
         toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} updated & migrated successfully.`); 
-        setIsDirty(false); 
-        setEditingDocNumber(documentNumber); 
+        setIsDirty(false); setEditingDocNumber(documentNumber); 
       } else { 
         const res = await axios.post(`${API}/bills/save`, payload, { headers: authHeaders }); 
         toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} saved successfully.`); 
-        setIsDirty(false); 
-        setCurrentBillId(res.data.id); 
-        setEditingDocNumber(res.data.document_number); 
-        setDocumentNumber(res.data.document_number); 
+        setIsDirty(false); setCurrentBillId(res.data.id); setEditingDocNumber(res.data.document_number); setDocumentNumber(res.data.document_number); 
       }
       
       if (isPaymentDone && iotOnline) { sendSuccessToDisplay(); }
@@ -952,7 +844,7 @@ export default function App() {
   const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
   const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
 
-  // --- EARLY RETURNS (LOGIN GUARDS & VIEWERS) ---
+  // // EARLY RETURNS (LOGIN GUARDS & VIEWERS)
   if (isPublicView) {
     if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
     if (publicBill === "NOT_FOUND" || !publicBill) return <div className="loading-screen">Bill not found or has been deleted.</div>;
@@ -1169,15 +1061,15 @@ export default function App() {
         </div>
      );
   }
-// === PART 3 END ===
+// === PART 3 IS FINISH RIGHT HERE. PASTE PART 4 BELOW THIS LINE ===
 // === PART 4 START ===
-  // THE MAIN DASHBOARD
+  // // MAIN APPLICATION DASHBOARD UI
   return (
     <div className="billing-app" style={isPrinting ? { height: "auto", overflow: "visible" } : { display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", backgroundColor: "#f1f5f9" }}>
       <Toaster position="bottom-right" />
       <style>{GLOBAL_PRINT_CSS}</style>
 
-      {/* HIDDEN BULK PRINT SECTION */}
+      {/* HIDDEN BULK PRINT SECTION (Generates the giant PDF safely) */}
       <div style={{ position: "absolute", zIndex: -9999, opacity: 0, pointerEvents: "none", top: 0, left: 0, height: 0, overflow: "hidden" }}>
         {(filteredRecentBills || []).map(b => {
            const billBranch = (settings.branches || []).find(br => br.id === b.branch_id) || (settings.branches || [])[0] || defaultSettings.branches[0];
@@ -1319,10 +1211,10 @@ export default function App() {
         </div>
       </header>
 
-      {/* MAIN BILLING SCREEN LAYOUT */}
+      {/* MAIN LAYOUT (Bill Paper + Right Controls) */}
       <main className="main-layout" style={isPrinting ? { height: "auto", overflow: "visible", display: "block" } : { flex: 1, display: "flex", flexDirection: isMobileSplit ? "column" : "row", overflowY: isMobileSplit ? "auto" : "hidden", overflowX: "hidden", backgroundColor: "#f1f5f9", minHeight: 0, paddingBottom: isMobileSplit ? "40px" : "0" }}>
         
-        {/* LEFT SIDE: The Printable Bill Sheet */}
+        {/* THE BILL PAPER */}
         <section style={isPrinting ? { padding: 0, margin: 0, overflow: "visible" } : { flex: isMobileSplit ? "none" : "3", overflow: isMobileSplit ? "visible" : "auto", padding: "20px", height: isMobileSplit ? "max-content" : "100%" }}>
           <div id="bill-print-root" className="bill-sheet" style={{ "--print-scale-factor": (printScale / 100).toFixed(3), position: 'relative', zIndex: 1, margin: "0 auto" }}>
             {(txType === "sale" ? isPaymentDone : isBalancePaid) && <div className="watermark-done">FULLY PAID</div>}
@@ -1351,7 +1243,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="sheet-banner">{txType === "booking" ? "BOOKING RECEIPT" : txType === "service" ? "SERVICE ORDER" : mode === "invoice" ? "TAX invoice" : "ESTIMATE"}</div>
+            <div className="sheet-banner">{txType === "booking" ? "BOOKING RECEIPT" : txType === "service" ? "SERVICE ORDER" : mode === "invoice" ? "TAX INVOICE" : "ESTIMATE"}</div>
 
             <div className="meta-grid">
               <p><strong>{mode === "invoice" ? "Invoice No" : "Estimate No"}:</strong> {isNumberLoading ? "Generating..." : documentNumber || "-"}</p>
@@ -1434,7 +1326,7 @@ export default function App() {
           </div>
         </section>
 
-        {/* RIGHT SIDE: The Controls Sidebar */}
+        {/* RIGHT SIDE CONTROLS */}
         <aside className="controls no-print" style={{ flex: isMobileSplit ? "none" : "2", overflowY: isMobileSplit ? "visible" : "auto", overflowX: "hidden", padding: "20px", backgroundColor: "white", borderLeft: isMobileSplit ? "none" : "1px solid #cbd5e1", borderTop: isMobileSplit ? "1px solid #cbd5e1" : "none", height: isMobileSplit ? "max-content" : "100%" }}>
           
           <div className="control-card">
@@ -1479,7 +1371,7 @@ export default function App() {
             {(items || []).map((item) => (
               <div key={item.id} className="item-row-editor" style={{ overflow: "visible" }}>
                 
-                {/* --- SMART DESCRIPTION INPUT WITH LIVE SPELLCHECK UI (GRAMMARLY STYLE) --- */}
+                {/* THE GRAMMARLY DROPDOWN UI */}
                 <div style={{ position: "relative" }}>
                   <Input 
                     className="item-desc-input" 
@@ -1495,26 +1387,14 @@ export default function App() {
                     <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50, marginTop: "4px", maxHeight: "180px", overflowY: "auto", backgroundColor: "white", border: "1px solid #cbd5e1", borderRadius: "6px", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)" }}>
                       {(() => {
                         const typed = item.description.toLowerCase().trim();
-                        const typoMap = { "breclate": "Bracelet", "braclet": "Bracelet", "neckles": "Necklace", "neclace": "Necklace", "pyal": "Payal", "bichiya": "Bichhiya", "bichia": "Bichhiya", "silvr": "Silver", "chian": "Chain", "pendent": "Pendant", "ringg": "Ring" };
-                        
-                        // 1. Generate live typo correction (Grammarly style)
-                        let correctedText = item.description;
-                        let foundTypo = false;
-                        for (const [badSpell, goodSpell] of Object.entries(typoMap)) {
-                          const regex = new RegExp(`\\b${badSpell}\\b`, 'gi');
-                          if (regex.test(correctedText)) {
-                            correctedText = correctedText.replace(regex, goodSpell);
-                            foundTypo = true;
-                          }
-                        }
+                        let correctedText = autoCorrectText(item.description);
+                        let foundTypo = (correctedText !== item.description);
 
-                        // 2. Get matches from billing history
                         let historyMatches = savedDescriptions.filter(d => {
                           const target = d.toLowerCase();
                           return target.includes(typed) && target !== typed;
                         });
 
-                        // 3. Combine them (put the spell check fix at the very top!)
                         let finalSuggestions = [];
                         if (foundTypo) finalSuggestions.push(`✨ Did you mean: ${correctedText}`);
                         finalSuggestions = [...finalSuggestions, ...historyMatches].slice(0, 8);
@@ -1546,7 +1426,6 @@ export default function App() {
                     </div>
                   )}
                 </div>
-                {/* ----------------------------------------------------- */}
 
                 <Input value={item.hsn} onChange={(e) => updateItem(item.id, "hsn", e.target.value)} placeholder="HSN" />
                 <Input value={item.weight} onChange={(e) => updateItem(item.id, "weight", e.target.value)} placeholder="Weight" />
@@ -1681,11 +1560,11 @@ export default function App() {
         </aside>
       </main>
 
-      {/* DAILY SALES & LEDGER WITH HIDDEN GRAPH AND FILTERS */}
+      {/* DAILY SALES & LEDGER DRAWER */}
       {showLedger && (
         <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "650px", backgroundColor: "white", zIndex: 100, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
           <div className="drawer-header" style={{ backgroundColor: "#f0fdf4", borderBottom: "2px solid #bbf7d0", padding: "20px", position: "sticky", top: 0, zIndex: 10 }}>
-            <h3 style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", margin: 0 }}><Banknote /> Vaults & Ledger: {activeGlobalBranch.name}</h3>
+            <h3 style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", margin: 0 }}><Banknote /> Vaults & Ledger: {activeGlobalBranch?.name || "Branch"}</h3>
             <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowLedger(false)} style={{ marginTop: "10px" }}><ArrowLeft className="drawer-back-icon" style={{ marginRight: "5px" }} /><span>Close Menu</span></Button>
           </div>
 
@@ -1712,7 +1591,7 @@ export default function App() {
                     <option value="all_time">Till Opening (All Time)</option>
                   </select>
                   <div style={{ backgroundColor: "#0f172a", color: "white", padding: "4px 10px", borderRadius: "12px", fontSize: "0.85rem", fontWeight: "bold" }}>
-                     Weight Sold: {graphData.totalWeight.toFixed(3)} g
+                     Weight Sold: {graphData?.totalWeight?.toFixed(3) || "0.000"} g
                   </div>
                 </div>
 
@@ -1723,7 +1602,7 @@ export default function App() {
                     <div style={{ flex: "2 1 300px", backgroundColor: "white", border: "1px solid #e2e8f0", padding: "15px", borderRadius: "12px", height: "250px" }}>
                       <p style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "10px", fontWeight: "bold" }}>REVENUE TREND</p>
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={graphData.barData}>
+                        <BarChart data={graphData.barData || []}>
                           <CartesianGrid strokeDasharray="3 3" vertical={false} />
                           <XAxis dataKey="label" fontSize={10} />
                           <YAxis hide />
@@ -1737,8 +1616,8 @@ export default function App() {
                       <p style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "10px", fontWeight: "bold" }}>PAYMENT MODES</p>
                       <ResponsiveContainer width="100%" height="80%">
                         <PieChart>
-                          <Pie data={graphData.pieData} innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
-                            {graphData.pieData.map((entry, index) => (
+                          <Pie data={graphData.pieData || []} innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
+                            {(graphData.pieData || []).map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                             ))}
                           </Pie>
@@ -1746,7 +1625,7 @@ export default function App() {
                         </PieChart>
                       </ResponsiveContainer>
                       <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '5px' }}>
-                         {graphData.pieData.map((entry, i) => (
+                         {(graphData.pieData || []).map((entry, i) => (
                            <span key={i} style={{ fontSize: '0.65rem', fontWeight: 'bold', color: COLORS[i] }}>● {entry.name}</span>
                          ))}
                       </div>
@@ -1762,22 +1641,22 @@ export default function App() {
                 <div style={{ flex: "1 1 140px", backgroundColor: "#fffbeb", border: "1px solid #fde68a", padding: "15px", borderRadius: "10px", textAlign: "center" }}>
                   <Banknote size={24} color="#d97706" style={{ margin: "0 auto 8px auto" }} />
                   <p style={{ margin: "0 0 5px 0", fontSize: "0.85rem", color: "#92400e", fontWeight: "bold" }}>Cash Drawer</p>
-                  {editingBalances ? (<Input type="number" value={manualCash} onChange={(e) => setManualCash(e.target.value)} style={{ textAlign: "center", marginTop: "5px" }} />) : (<h3 style={{ margin: 0, color: "#b45309", fontSize: "1.3rem" }}>₹{money(activeGlobalBranch.cash_balance)}</h3>)}
+                  {editingBalances ? (<Input type="number" value={manualCash} onChange={(e) => setManualCash(e.target.value)} style={{ textAlign: "center", marginTop: "5px" }} />) : (<h3 style={{ margin: 0, color: "#b45309", fontSize: "1.3rem" }}>₹{money(activeGlobalBranch?.cash_balance || 0)}</h3>)}
                 </div>
                 <div style={{ flex: "1 1 140px", backgroundColor: "#eff6ff", border: "1px solid #bfdbfe", padding: "15px", borderRadius: "10px", textAlign: "center" }}>
                   <Wallet size={24} color="#2563eb" style={{ margin: "0 auto 8px auto" }} />
                   <p style={{ margin: "0 0 5px 0", fontSize: "0.85rem", color: "#1e40af", fontWeight: "bold" }}>Estimate Bank</p>
-                  {editingBalances ? (<Input type="number" value={manualEstBank} onChange={(e) => setManualEstBank(e.target.value)} style={{ textAlign: "center", marginTop: "5px" }} />) : (<h3 style={{ margin: 0, color: "#1d4ed8", fontSize: "1.3rem" }}>₹{money(activeGlobalBranch.estimate_bank_balance)}</h3>)}
+                  {editingBalances ? (<Input type="number" value={manualEstBank} onChange={(e) => setManualEstBank(e.target.value)} style={{ textAlign: "center", marginTop: "5px" }} />) : (<h3 style={{ margin: 0, color: "#1d4ed8", fontSize: "1.3rem" }}>₹{money(activeGlobalBranch?.estimate_bank_balance || 0)}</h3>)}
                 </div>
                 <div style={{ flex: "1 1 140px", backgroundColor: "#fef2f2", border: "1px solid #fecaca", padding: "15px", borderRadius: "10px", textAlign: "center" }}>
                   <Building2 size={24} color="#dc2626" style={{ margin: "0 auto 8px auto" }} />
                   <p style={{ margin: "0 0 5px 0", fontSize: "0.85rem", color: "#991b1b", fontWeight: "bold" }}>GST Bank</p>
-                  {editingBalances ? (<Input type="number" value={manualInvBank} onChange={(e) => setManualInvBank(e.target.value)} style={{ textAlign: "center", marginTop: "5px" }} />) : (<h3 style={{ margin: 0, color: "#b91c1c", fontSize: "1.3rem" }}>₹{money(activeGlobalBranch.invoice_bank_balance)}</h3>)}
+                  {editingBalances ? (<Input type="number" value={manualInvBank} onChange={(e) => setManualInvBank(e.target.value)} style={{ textAlign: "center", marginTop: "5px" }} />) : (<h3 style={{ margin: 0, color: "#b91c1c", fontSize: "1.3rem" }}>₹{money(activeGlobalBranch?.invoice_bank_balance || 0)}</h3>)}
                 </div>
               </div>
               <div style={{ textAlign: "right", marginTop: "10px" }}>
                  {!editingBalances ? (
-                   <Button size="sm" variant="outline" onClick={() => { setManualCash(activeGlobalBranch.cash_balance || 0); setManualEstBank(activeGlobalBranch.estimate_bank_balance || 0); setManualInvBank(activeGlobalBranch.invoice_bank_balance || 0); setEditingBalances(true); }}>Manually Edit Balances</Button>
+                   <Button size="sm" variant="outline" onClick={() => { setManualCash(activeGlobalBranch?.cash_balance || 0); setManualEstBank(activeGlobalBranch?.estimate_bank_balance || 0); setManualInvBank(activeGlobalBranch?.invoice_bank_balance || 0); setEditingBalances(true); }}>Manually Edit Balances</Button>
                  ) : (
                    <div style={{ display: "inline-flex", gap: "10px" }}><Button size="sm" variant="outline" onClick={() => setEditingBalances(false)}>Cancel</Button><Button size="sm" style={{ backgroundColor: "#16a34a" }} onClick={saveBalances}>Save Balances</Button></div>
                  )}
@@ -1862,7 +1741,7 @@ export default function App() {
         </section>
       )}
 
-      {/* RECENT BILLS */}
+      {/* RECENT BILLS DRAWER */}
       {showRecentBills && (
         <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "550px", backgroundColor: "white", zIndex: 100, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
           <div className="drawer-header" style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10, paddingBottom: "15px", borderBottom: "1px solid #e2e8f0" }}>
@@ -2056,7 +1935,7 @@ export default function App() {
 
             {settingsTab === "advanced" && (
               <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-                {/* --- NEW IOT DISPLAY SETTINGS --- */}
+                {/* --- IOT DISPLAY SETTINGS --- */}
                 <div style={{ padding: "15px", backgroundColor: "#f0f9ff", borderRadius: "8px", border: "1px solid #bae6fd" }}>
                   <h4 style={{ color: "#0369a1", margin: "0 0 10px 0", display: "flex", alignItems: "center", gap: "8px" }}>
                     <Cpu size={18} /> Counter Display Terminal
@@ -2089,11 +1968,11 @@ export default function App() {
                 <div style={{ padding: "15px", backgroundColor: "#f0fdfa", borderRadius: "8px", border: "1px solid #ccfbf1" }}>
                   <h4 style={{ color: "#0f766e", margin: "0 0 10px 0" }}>Data Backup & Storage</h4>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", fontSize: "0.85rem", color: "#0f766e" }}>
-                     <span>Storage Used: {(storageStats.used_bytes / 1024 / 1024).toFixed(2)} MB</span>
-                     <span>Limit: {(storageStats.quota_bytes / 1024 / 1024).toFixed(2)} MB</span>
+                     <span>Storage Used: {((storageStats?.used_bytes || 0) / 1024 / 1024).toFixed(2)} MB</span>
+                     <span>Limit: {((storageStats?.quota_bytes || 524288000) / 1024 / 1024).toFixed(2)} MB</span>
                   </div>
                   <div style={{ width: "100%", height: "8px", backgroundColor: "#ccfbf1", borderRadius: "4px", marginBottom: "15px", overflow: "hidden" }}>
-                     <div style={{ height: "100%", width: `${storageStats.percentage}%`, backgroundColor: storageStats.percentage > 80 ? "#ef4444" : "#14b8a6" }}></div>
+                     <div style={{ height: "100%", width: `${storageStats?.percentage || 0}%`, backgroundColor: (storageStats?.percentage || 0) > 80 ? "#ef4444" : "#14b8a6" }}></div>
                   </div>
                   <Button onClick={handleBackupBills} style={{ width: "100%", backgroundColor: "#0f766e", color: "white" }}><Download size={16} style={{ marginRight: "8px" }} /> Download JSON Backup</Button>
                 </div>
