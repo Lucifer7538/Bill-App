@@ -2956,17 +2956,16 @@ export default function App() {
           </div>
         </section>
       )}
-
-     {/* ANALYTICS DASHBOARD DRAWER */}
+{/* ANALYTICS DASHBOARD DRAWER */}
       {showAnalytics && (
-        <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "650px", backgroundColor: "#f8fafc", zIndex: 102, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
-          <div className="drawer-header" style={{ backgroundColor: "white", borderBottom: "1px solid #e2e8f0", padding: "20px", position: "sticky", top: 0, zIndex: 10 }}>
+        <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", backgroundColor: "#f8fafc", zIndex: 102, overflowY: "auto" }}>
+          <div className="drawer-header" style={{ backgroundColor: "white", borderBottom: "1px solid #e2e8f0", padding: "20px 40px", position: "sticky", top: 0, zIndex: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <h3 style={{ display: "flex", alignItems: "center", gap: "10px", margin: 0 }}><LineChart /> Business Analytics</h3>
-            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowAnalytics(false)} style={{ marginTop: "10px" }}><ArrowLeft className="drawer-back-icon" style={{ marginRight: "5px" }} /><span>Close Menu</span></Button>
+            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowAnalytics(false)}><ArrowLeft className="drawer-back-icon" style={{ marginRight: "5px" }} /><span>Close Menu</span></Button>
           </div>
           
-          <div style={{ padding: "20px" }}>
-             <select value={analyticsFilter} onChange={(e) => setAnalyticsFilter(e.target.value)} className="native-select" style={{ width: "100%", marginBottom: "20px", fontSize: "1.1rem", padding: "10px" }}>
+          <div style={{ padding: "40px", maxWidth: "1400px", margin: "0 auto" }}>
+             <select value={analyticsFilter} onChange={(e) => setAnalyticsFilter(e.target.value)} className="native-select" style={{ width: "100%", maxWidth: "300px", marginBottom: "30px", fontSize: "1.1rem", padding: "10px" }}>
                 <option value="TODAY">Current Day</option>
                 <option value="THIS_WEEK">Current Week</option>
                 <option value="THIS_HALF_MONTH">Current Half Month (15 Days)</option>
@@ -3022,29 +3021,29 @@ export default function App() {
 
                 return (
                    <div>
-                      <div style={{ display: "flex", gap: "15px", flexWrap: "wrap", marginBottom: "30px" }}>
-                         <div style={{ flex: "1 1 200px", padding: "20px", backgroundColor: "#8b5cf6", color: "white", borderRadius: "12px", boxShadow: "0 4px 6px rgba(0,0,0,0.1)" }}>
-                            <p style={{ margin: "0 0 5px 0", fontSize: "0.9rem", opacity: 0.9 }}>Total Revenue</p>
-                            <h2 style={{ margin: 0, fontSize: "2rem" }}>₹{money(totalRevenue)}</h2>
+                      <div style={{ display: "flex", gap: "20px", flexWrap: "wrap", marginBottom: "30px" }}>
+                         <div style={{ flex: "1 1 300px", padding: "30px", backgroundColor: "#8b5cf6", color: "white", borderRadius: "12px", boxShadow: "0 4px 6px rgba(0,0,0,0.1)" }}>
+                            <p style={{ margin: "0 0 10px 0", fontSize: "1rem", opacity: 0.9 }}>Total Revenue</p>
+                            <h2 style={{ margin: 0, fontSize: "2.5rem" }}>₹{money(totalRevenue)}</h2>
                          </div>
-                         <div style={{ flex: "1 1 120px", padding: "20px", backgroundColor: "white", border: "1px solid #cbd5e1", borderRadius: "12px" }}>
-                            <p style={{ margin: "0 0 5px 0", fontSize: "0.9rem", color: "#64748b" }}>Total Bills</p>
-                            <h2 style={{ margin: 0, fontSize: "1.8rem", color: "#0f172a" }}>{filteredStats.length}</h2>
+                         <div style={{ flex: "1 1 200px", padding: "30px", backgroundColor: "white", border: "1px solid #cbd5e1", borderRadius: "12px" }}>
+                            <p style={{ margin: "0 0 10px 0", fontSize: "1rem", color: "#64748b" }}>Total Bills</p>
+                            <h2 style={{ margin: 0, fontSize: "2.5rem", color: "#0f172a" }}>{filteredStats.length}</h2>
                          </div>
                       </div>
 
-                      <div style={{ padding: "20px", backgroundColor: "white", border: "1px solid #cbd5e1", borderRadius: "12px", marginBottom: "20px" }}>
-                         <h4 style={{ margin: "0 0 15px 0", color: "#0f172a" }}>Revenue Trend</h4>
+                      <div style={{ padding: "30px", backgroundColor: "white", border: "1px solid #cbd5e1", borderRadius: "12px", marginBottom: "30px" }}>
+                         <h4 style={{ margin: "0 0 20px 0", color: "#0f172a", fontSize: "1.2rem" }}>Revenue Trend</h4>
                          {chartData.length === 0 ? (
-                            <p style={{ fontSize: "0.85rem", color: "#64748b", textAlign: "center", padding: "20px 0" }}>No data to graph.</p>
+                            <p style={{ fontSize: "1rem", color: "#64748b", textAlign: "center", padding: "40px 0" }}>No data to graph.</p>
                          ) : (
-                            <div style={{ width: "100%", overflowX: "auto" }}>
-                               <div style={{ height: "260px", display: "flex", alignItems: "flex-end", gap: "20px", borderBottom: "2px solid #e2e8f0", paddingBottom: "5px", minWidth: "max-content", paddingTop: "40px", paddingLeft: "10px", paddingRight: "10px" }}>
+                            <div style={{ width: "100%" }}>
+                               <div style={{ height: "350px", display: "flex", alignItems: "flex-end", gap: chartData.length > 20 ? "2px" : "15px", borderBottom: "2px solid #e2e8f0", paddingBottom: "5px", width: "100%", paddingTop: "50px", justifyContent: "center" }}>
                                   {chartData.map((d, i) => (
-                                     <div key={i} style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center", width: "45px", height: "100%" }}>
-                                        <span style={{ fontSize: "0.65rem", color: "#64748b", marginBottom: "12px", transform: "rotate(-45deg)", transformOrigin: "left bottom", whiteSpace: "nowrap" }}>₹{Math.round(d.amount)}</span>
-                                        <div style={{ width: "100%", maxWidth: "35px", height: `${Math.max((d.amount / maxAmount) * 100, 2)}%`, minHeight: "5px", backgroundColor: "#8b5cf6", borderRadius: "4px 4px 0 0", transition: "height 0.3s ease" }} title={`${d.date}: ₹${money(d.amount)}`}></div>
-                                        <span style={{ fontSize: "0.7rem", color: "#475569", marginTop: "8px", fontWeight: "bold", whiteSpace: "nowrap" }}>{d.date.slice(0, 5)}</span>
+                                     <div key={i} style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center", flex: 1, maxWidth: "60px", height: "100%" }}>
+                                        <span style={{ fontSize: chartData.length > 20 ? "0.55rem" : "0.7rem", color: "#64748b", marginBottom: "12px", transform: "rotate(-45deg)", transformOrigin: "left bottom", whiteSpace: "nowrap" }}>₹{Math.round(d.amount)}</span>
+                                        <div style={{ width: "100%", maxWidth: "45px", height: `${Math.max((d.amount / maxAmount) * 100, 2)}%`, minHeight: "5px", backgroundColor: "#8b5cf6", borderRadius: "4px 4px 0 0", transition: "height 0.3s ease" }} title={`${d.date}: ₹${money(d.amount)}`}></div>
+                                        <span style={{ fontSize: chartData.length > 20 ? "0.6rem" : "0.75rem", color: "#475569", marginTop: "8px", fontWeight: "bold", whiteSpace: "nowrap" }}>{d.date.slice(0, 5)}</span>
                                      </div>
                                   ))}
                                </div>
@@ -3052,23 +3051,23 @@ export default function App() {
                          )}
                       </div>
                       
-                      <div style={{ padding: "20px", backgroundColor: "white", border: "1px solid #cbd5e1", borderRadius: "12px", marginBottom: "20px" }}>
-                         <h4 style={{ margin: "0 0 15px 0", color: "#0f172a" }}>Bill Type Breakdown</h4>
-                         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
-                            <div style={{ width: "20px", height: "20px", backgroundColor: "#dc2626", borderRadius: "4px" }}></div>
+                      <div style={{ padding: "30px", backgroundColor: "white", border: "1px solid #cbd5e1", borderRadius: "12px", marginBottom: "20px" }}>
+                         <h4 style={{ margin: "0 0 20px 0", color: "#0f172a", fontSize: "1.2rem" }}>Bill Type Breakdown</h4>
+                         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "15px", fontSize: "1.1rem" }}>
+                            <div style={{ width: "24px", height: "24px", backgroundColor: "#dc2626", borderRadius: "6px" }}></div>
                             <span style={{ flex: 1 }}>Tax Invoices ({totalInvoices})</span>
                          </div>
-                         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                            <div style={{ width: "20px", height: "20px", backgroundColor: "#2563eb", borderRadius: "4px" }}></div>
+                         <div style={{ display: "flex", alignItems: "center", gap: "10px", fontSize: "1.1rem" }}>
+                            <div style={{ width: "24px", height: "24px", backgroundColor: "#2563eb", borderRadius: "6px" }}></div>
                             <span style={{ flex: 1 }}>Estimates ({totalEstimates})</span>
                          </div>
-                         <div style={{ width: "100%", height: "12px", display: "flex", borderRadius: "6px", overflow: "hidden", marginTop: "15px" }}>
-                            <div style={{ width: `${(totalInvoices / (filteredStats.length || 1)) * 100}%`, backgroundColor: "#dc2626" }}></div>
-                            <div style={{ width: `${(totalEstimates / (filteredStats.length || 1)) * 100}%`, backgroundColor: "#2563eb" }}></div>
+                         <div style={{ width: "100%", height: "16px", display: "flex", borderRadius: "8px", overflow: "hidden", marginTop: "25px" }}>
+                            <div style={{ width: `${(totalInvoices / (filteredStats.length || 1)) * 100}%`, backgroundColor: "#dc2626", transition: "width 0.5s ease" }}></div>
+                            <div style={{ width: `${(totalEstimates / (filteredStats.length || 1)) * 100}%`, backgroundColor: "#2563eb", transition: "width 0.5s ease" }}></div>
                          </div>
                       </div>
                       
-                      {filteredStats.length === 0 && <p style={{ textAlign: "center", color: "#64748b", marginTop: "40px" }}>No data found for this time period.</p>}
+                      {filteredStats.length === 0 && <p style={{ textAlign: "center", color: "#64748b", marginTop: "50px", fontSize: "1.1rem" }}>No data found for this time period.</p>}
                    </div>
                 );
              })()}
