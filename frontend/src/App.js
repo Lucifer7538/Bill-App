@@ -26,7 +26,8 @@ const defaultSettings = {
   formula_note: "Line total = Weight x (Silver rate per gram + Making charge per gram)", logo_data_url: "", about_qr_data_url: STATIC_ABOUT_QR_URL, custom_fonts: [],
   shortcuts: [
     { id: "save_bill", action: "Save Bill", keys: "alt + s", isSystem: true }, { id: "add_item", action: "Add new item row", keys: "alt + a", isSystem: true }, { id: "new_bill", action: "New blank bill", keys: "alt + n", isSystem: true },
-    { id: "share_wa", action: "Share via WhatsApp", keys: "alt + w", isSystem: true }, { id: "focus_customer", action: "Jump to Customer Name", keys: "alt + c", isSystem: true }, { id: "focus_payment", action: "Jump to Payment Method", keys: "alt + p", isSystem: true },
+    { id: "share_wa", action: "Share via WhatsApp", keys: "alt + w", isSystem: true }, { id: "focus_customer", action: "Jump to Customer Name", keys: "alt + c", isSystem: true }, { id: "focus_item", action: "Jump to Item Description", keys: "alt + i", isSystem: true },
+    { id: "focus_discount", action: "Jump to Discount", keys: "alt + d", isSystem: true }, { id: "focus_redeem", action: "Jump to Redeem Points", keys: "alt + v", isSystem: true }, { id: "focus_credit", action: "Jump to Use Credit", keys: "alt + u", isSystem: true }, { id: "focus_payment", action: "Jump to Payment Method", keys: "alt + p", isSystem: true },
     { id: "open_ledger", action: "Open Ledger/Vaults", keys: "alt + l", isSystem: true }, { id: "open_recent", action: "Open Recent Bills", keys: "alt + r", isSystem: true }, { id: "download_pdf", action: "Download PDF", keys: "alt + f", isSystem: true }, { id: "print_bill", action: "Print Bill", keys: "alt + b", isSystem: true }, { id: "iot_qr", action: "Send QR to ESP32", keys: "alt + q", isSystem: true } 
   ],
   branches: [
@@ -35,6 +36,7 @@ const defaultSettings = {
   ]
 };
 
+// Safe Parsing Tools
 const today = () => { const d = new Date(); const day = String(d.getDate()).padStart(2, "0"); const month = String(d.getMonth() + 1).padStart(2, "0"); return `${day}-${month}-${d.getFullYear()}`; };
 const parseBillDate = (dStr) => { if (!dStr) return new Date(); const p = dStr.split("-"); if (p.length === 3 && p[0].length === 2) return new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0])); return new Date(dStr); };
 const num = (val) => { if (val === null || val === undefined || val === "") return 0; const parsed = Number.parseFloat(val); return Number.isFinite(parsed) ? parsed : 0; };
@@ -44,8 +46,26 @@ const getInitialPrintScale = () => { const saved = Number(localStorage.getItem("
 const splitAmount = (amt) => { const validAmt = Number.isFinite(amt) ? amt : 0; const rupees = Math.floor(validAmt); const paise = Math.round((validAmt - rupees) * 100).toString().padStart(2, "0"); return { rupees, paise }; };
 const registerFont = (name, dataUrl) => { const styleId = `custom-font-${name.replace(/\s+/g, '-').toLowerCase()}`; if (document.getElementById(styleId)) return; const style = document.createElement('style'); style.id = styleId; style.innerHTML = `@font-face { font-family: '${name}'; src: url('${dataUrl}'); }`; document.head.appendChild(style); };
 
-const FontSelectOptions = ({ customFonts }) => ( <><option value="sans-serif">Sans-serif</option><option value="Arial, Helvetica, sans-serif">Arial</option><option value="'Times New Roman', Times, serif">Times New Roman</option><option value="'Courier New', Courier, monospace">Courier New</option><option value="Georgia, serif">Georgia</option><option value="'Trebuchet MS', sans-serif">Trebuchet MS</option><option value="'Brush Script MT', cursive">Brush Script MT (Cursive)</option>{customFonts?.map(f => (<option key={f.name} value={`'${f.name}'`}>{f.name} (Custom)</option>))}</> );
+// Global Error-Proof Grammarly Engine
+const TYPO_MAP = {
+  "breclate": "Bracelet", "braclet": "Bracelet", "breslate": "Bracelet", "breslet": "Bracelet", "bracelate": "Bracelet", "brcalet": "Bracelet",
+  "neckles": "Necklace", "neclace": "Necklace", "nakles": "Necklace", "necklac": "Necklace",
+  "pyal": "Payal", "bichiya": "Bichhiya", "bichia": "Bichhiya", "silvr": "Silver",
+  "chian": "Chain", "pendent": "Pendant", "panden": "Pendant", "ringg": "Ring"
+};
 
+const autoCorrectText = (text) => {
+  if (!text) return "";
+  let newText = String(text);
+  for (const [badSpell, goodSpell] of Object.entries(TYPO_MAP)) {
+    const regex = new RegExp(`\\b${badSpell}\\b`, 'gi');
+    newText = newText.replace(regex, goodSpell);
+  }
+  return newText;
+};
+
+// Reusable Components
+const FontSelectOptions = ({ customFonts }) => ( <><option value="sans-serif">Sans-serif</option><option value="Arial, Helvetica, sans-serif">Arial</option><option value="'Times New Roman', Times, serif">Times New Roman</option><option value="'Courier New', Courier, monospace">Courier New</option><option value="Georgia, serif">Georgia</option><option value="'Trebuchet MS', sans-serif">Trebuchet MS</option><option value="'Brush Script MT', cursive">Brush Script MT (Cursive)</option>{(customFonts || []).map(f => (<option key={f.name} value={`'${f.name}'`}>{f.name} (Custom)</option>))}</> );
 const FooterLinksAndQRs = ({ branch, allBranches }) => {
   if (!branch) return null;
   return (
@@ -56,6 +76,7 @@ const FooterLinksAndQRs = ({ branch, allBranches }) => {
           {branch.whatsapp_url && (<a href={branch.whatsapp_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#25D366", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>💬 WhatsApp</a>)}
           {branch.instagram_url && (<a href={branch.instagram_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", background: "linear-gradient(45deg, #f09433 0%, #bc1888 100%)", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>📸 Instagram</a>)}
           {branch.map_url && (<a href={branch.map_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>⭐ Feedback</a>)}
+          {branch.about_url && (<a href={branch.about_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#3b82f6", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>ℹ️ About Us</a>)}
         </div>
       </div>
       <div className="print-only" style={{ display: 'flex', justifyContent: 'center', gap: '15px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
@@ -66,14 +87,13 @@ const FooterLinksAndQRs = ({ branch, allBranches }) => {
     </div>
   );
 };
-
 const BillTable = ({ mode, items }) => (
   <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
     <thead>
       {mode === "invoice" ? (<tr><th style={{ width: "8%" }}>Sl. No.</th><th style={{ width: "38%" }}>DESCRIPTION</th><th style={{ width: "10%" }}>HSN</th><th style={{ width: "14%", whiteSpace: "nowrap" }}>WEIGHT (g)</th><th style={{ width: "15%", whiteSpace: "nowrap" }}>RATE Rs.</th><th style={{ width: "15%", whiteSpace: "nowrap" }}>AMOUNT</th></tr>) : (<tr><th style={{ width: "8%" }}>Sl. No.</th><th style={{ width: "40%" }}>Particulars</th><th style={{ width: "14%", whiteSpace: "nowrap" }}>Weight</th><th style={{ width: "18%", whiteSpace: "nowrap" }}>Qty x Rate</th><th style={{ width: "12%", whiteSpace: "nowrap" }}>Rs.</th><th style={{ width: "8%", whiteSpace: "nowrap" }}>Ps.</th></tr>)}
     </thead>
     <tbody>
-      {items.map((item, idx) => (
+      {(items || []).map((item, idx) => (
         <tr key={idx}>
           {mode === "invoice" ? (<><td>{item.sl_no || item.slNo}</td><td>{item.description || "-"}</td><td>{item.hsn || "-"}</td><td>{money(item.weight)}</td><td>{money(item.rate)}</td><td>{item.rupees}.{item.paise}</td></>) : (<><td>{item.sl_no || item.slNo}</td><td>{item.description || "-"}</td><td>{money(item.weight)}</td><td>{money(item.quantity)} x {money(item.rate)}</td><td>{item.rupees}</td><td>{item.paise}</td></>)}
         </tr>
@@ -81,7 +101,6 @@ const BillTable = ({ mode, items }) => (
     </tbody>
   </table>
 );
-
 const DesignSettingRow = ({ title, fieldPrefix, settings, setSettings }) => (
   <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
     <h4 style={{ margin: "0 0 10px 0" }}>{title}</h4>
@@ -137,6 +156,10 @@ export default function App() {
   const [customer, setCustomer] = useState({ name: "", phone: "", address: "", email: "", points: 0, credit: 0 });
   const [bonusPoints, setBonusPoints] = useState("");
   const [suggestions, setSuggestions] = useState([]);
+
+  const defaultItemDictionary = ["CB Payal", "CB Chain", "Silver Ring", "T. Ring", "92.5 Tops", "Silver Coin", "Silver Biscuit", "Leg Chain", "Bichhiya"];
+  const [savedDescriptions, setSavedDescriptions] = useState(() => { const local = localStorage.getItem("jj_item_dictionary"); return local ? JSON.parse(local) : defaultItemDictionary; });
+  const [focusedDescId, setFocusedDescId] = useState(null);
 
   const [items, setItems] = useState([createItem()]);
   const [discount, setDiscount] = useState("0");
@@ -197,12 +220,14 @@ export default function App() {
   const [cloudStatus, setCloudStatus] = useState({ provider: "supabase", enabled: false, mode: "loading" });
   const [iotOnline, setIotOnline] = useState(false);
   const [isMqttSending, setIsMqttSending] = useState(false);
-
   const [showGraph, setShowGraph] = useState(false);
   const [graphFilter, setGraphFilter] = useState("1_day");
   const [graphData, setGraphData] = useState({ barData: [], pieData: [], totalWeight: 0 });
   const [isGraphLoading, setIsGraphLoading] = useState(false);
-  
+
+  const COLORS = ['#d97706', '#2563eb', '#dc2626']; 
+// === PART 2 END ===
+// === PART 3 START ===
   const authHeaders = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
   const activeGlobalBranch = (settings.branches || []).find(b => b.id === globalBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
   const activeBillBranch = (settings.branches || []).find(b => b.id === billBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
@@ -244,21 +269,20 @@ export default function App() {
       try { await axios.get(`${API}/auth/verify`, { headers: authHeaders }); } catch { localStorage.removeItem("jj_auth_token"); setToken(""); } finally { clearTimeout(slowServerTimeout); setCheckingSession(false); setIsWakingUp(false); }
     }; verify();
   }, [token, isPublicView, authHeaders]);
-// === PART 2 END ===
-// === PART 3 START ===
-  // CRASH GUARD FIX: Forces response into a clean array to prevent `.map` white screen crashes
+
+  // CRASH GUARDED RECENT BILLS
   useEffect(() => {
     if (showRecentBills && token && !isPublicView) {
       const fetchRecent = async () => {
         setLoadingRecent(true);
-        try {
-          const limit = recentDateFilter === "ALL" ? 50 : 500;
-          const response = await axios.get(`${API}/bills/recent?limit=${limit}&branch_filter=${recentBranchFilter}&search=${encodeURIComponent(billSearchQuery)}`, { headers: authHeaders });
-          // SAFELY parse data
+        try { 
+          const limit = recentDateFilter === "ALL" ? 50 : 500; 
+          const response = await axios.get(`${API}/bills/recent?limit=${limit}&branch_filter=${recentBranchFilter}&search=${encodeURIComponent(billSearchQuery)}`, { headers: authHeaders }); 
+          // Safely set array
           const rawData = response.data;
-          const safeArray = Array.isArray(rawData) ? rawData : (Array.isArray(rawData?.data) ? rawData.data : []);
-          setRecentBillsList(safeArray);
-        } catch { toast.error("Failed to load recent bills."); } finally { setLoadingRecent(false); }
+          setRecentBillsList(Array.isArray(rawData) ? rawData : (Array.isArray(rawData?.data) ? rawData.data : [])); 
+        } 
+        catch { toast.error("Failed to load recent bills."); } finally { setLoadingRecent(false); }
       };
       const timer = setTimeout(fetchRecent, 300); return () => clearTimeout(timer);
     }
@@ -280,19 +304,23 @@ export default function App() {
     });
   }, [recentBillsList, recentModeFilter, recentDateFilter, customStartDate, customEndDate]);
 
+  // CRASH GUARDED LEDGER DATA
   useEffect(() => {
     if (showLedger && token && !isPublicView) {
       const fetchLedger = async () => {
         setLedgerLoading(true);
         try { 
           await loadSettings(); 
-          const res = await axios.get(`${API}/bills/today?date=${today()}&branch_filter=${globalBranchId}`, { headers: authHeaders }); setTodayBills(Array.isArray(res.data) ? res.data : []); 
-          const resLogs = await axios.get(`${API}/settings/ledger/logs?branch_id=${globalBranchId}`, { headers: authHeaders }); setLedgerLogs(Array.isArray(resLogs.data) ? resLogs.data : []); 
+          const res = await axios.get(`${API}/bills/today?date=${today()}&branch_filter=${globalBranchId}`, { headers: authHeaders }); 
+          setTodayBills(Array.isArray(res.data) ? res.data : []); 
+          const resLogs = await axios.get(`${API}/settings/ledger/logs?branch_id=${globalBranchId}`, { headers: authHeaders }); 
+          setLedgerLogs(Array.isArray(resLogs.data) ? resLogs.data : []); 
         } catch { toast.error("Failed to load today's ledger."); } finally { setLedgerLoading(false); }
       }; fetchLedger();
     }
   }, [showLedger, token, isPublicView, globalBranchId, authHeaders]);
 
+  // CRASH GUARDED LEDGER GRAPHS
   useEffect(() => {
     if (showLedger && showGraph) {
       const fetchGraph = async () => {
@@ -301,7 +329,7 @@ export default function App() {
           let billsToProcess = Array.isArray(todayBills) ? todayBills : [];
           if (graphFilter !== "1_day") {
              const res = await axios.get(`${API}/bills/recent?limit=5000&branch_filter=${globalBranchId}`, { headers: authHeaders });
-             billsToProcess = Array.isArray(res.data) ? res.data : [];
+             billsToProcess = Array.isArray(res.data) ? res.data : (Array.isArray(res.data?.data) ? res.data.data : []);
           }
           const now = new Date(); const pastDate = new Date();
           let formatKey = (d) => { const day = String(d.getDate()).padStart(2, '0'); const month = String(d.getMonth() + 1).padStart(2, '0'); return `${day}/${month}`; };
@@ -322,7 +350,7 @@ export default function App() {
           reversedBills.forEach(b => {
              let bDate = new Date();
              if (b.created_at) bDate = new Date(b.created_at);
-             else if (b.date) { const p = b.date.split("-"); if (p.length === 3) bDate = new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0])); }
+             else if (b.date) { const p = String(b.date).split("-"); if (p.length === 3) bDate = new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0])); }
              if (bDate >= pastDate) {
                 const key = formatKey(bDate);
                 if (barMap[key] === undefined) barMap[key] = 0;
@@ -347,36 +375,52 @@ export default function App() {
     }
   }, [showSettings, token, isPublicView, authHeaders]);
 
-  const loadSettings = async () => {
-    const response = await axios.get(`${API}/settings`, { headers: authHeaders });
-    const savedLogo = localStorage.getItem("jj_logo_data_url");
-    let dbData = response.data || {}; if (!dbData.branches) dbData.branches = defaultSettings.branches;
-    let localFonts = []; const localFontsRaw = localStorage.getItem("jj_custom_fonts"); if (localFontsRaw) { try { localFonts = JSON.parse(localFontsRaw); } catch (e) {} }
-    let mergedShortcuts = defaultSettings.shortcuts;
-    if (dbData.shortcuts && dbData.shortcuts.length > 0) {
-        const customOnly = dbData.shortcuts.filter(sc => !sc.isSystem);
-        const systemUpdated = defaultSettings.shortcuts.map(sys => { const savedSys = dbData.shortcuts.find(s => s.id === sys.id); return savedSys ? savedSys : sys; });
-        mergedShortcuts = [...systemUpdated, ...customOnly];
-    }
-    const newSettings = { ...defaultSettings, ...dbData, logo_data_url: savedLogo || dbData.logo_data_url || "", custom_fonts: dbData.custom_fonts || localFonts, shortcuts: mergedShortcuts };
-    setSettings(newSettings);
-    if (!(newSettings.branches || []).find(b => b.id === globalBranchId)) { setGlobalBranchId((newSettings.branches || [])[0].id); setBillBranchId((newSettings.branches || [])[0].id); }
-    setItems((prev) => { if (prev.length === 1 && !prev[0].description && !prev[0].weight && !prev[0].hsn) return [{ ...prev[0], hsn: newSettings.default_hsn }]; return prev; });
-    setSettingsLoaded(true);
-  };
-
-  const reserveNumber = async (activeMode, activeBranch) => { setIsNumberLoading(true); try { const response = await axios.get(`${API}/bills/next-number`, { headers: authHeaders, params: { mode: activeMode, branch_id: activeBranch } }); setDocumentNumber(response.data.document_number || ""); } finally { setIsNumberLoading(false); } };
   const fetchCloudStatus = async () => { try { const response = await axios.get(`${API}/cloud/status`, { headers: authHeaders }); setCloudStatus(response.data); } catch { setCloudStatus({ provider: "supabase", enabled: false, mode: "status-unavailable" }); } };
   useEffect(() => { if (isPublicView) return; const bootstrap = async () => { if (!token) return; try { await loadSettings(); await fetchCloudStatus(); } catch { toast.error("Could not load billing settings."); } }; bootstrap(); }, [token, isPublicView]); 
   useEffect(() => { if (!token || isPublicView) return; const interval = setInterval(() => { fetchCloudStatus(); }, 30000); return () => clearInterval(interval); }, [token, isPublicView]); 
   useEffect(() => {
     if (!token || isPublicView) return;
-    const query = customer.phone.trim().length >= 2 ? customer.phone.trim() : customer.name.trim();
+    const query = String(customer.phone || "").trim().length >= 2 ? String(customer.phone || "").trim() : String(customer.name || "").trim();
     if (query.length < 2) { setSuggestions([]); return; }
     const timer = setTimeout(async () => { try { const response = await axios.get(`${API}/customers/suggest`, { headers: authHeaders, params: { query } }); setSuggestions(Array.isArray(response.data) ? response.data : []); } catch { setSuggestions([]); } }, 250);
     return () => clearTimeout(timer);
   }, [customer.phone, customer.name, token, isPublicView, authHeaders]);
 
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      const activeTag = document.activeElement?.tagName.toLowerCase();
+      const isInput = activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select';
+      if (e.key === "Enter" && isInput && activeTag !== 'textarea') { e.preventDefault(); const formElements = Array.from(document.querySelectorAll('input, select, textarea, button:not(:disabled)')); const index = formElements.indexOf(document.activeElement); if (index > -1 && index < formElements.length - 1) { formElements[index + 1].focus(); } return; }
+      if (isInput && !e.ctrlKey && !e.metaKey && !e.altKey) return; 
+      const scList = settings.shortcuts || defaultSettings.shortcuts;
+      const checkKey = (actionId) => {
+          const sc = scList.find(s => s.id === actionId); if (!sc || !sc.keys) return false;
+          const parts = sc.keys.toLowerCase().split('+').map(p => p.trim());
+          const needsCtrl = parts.includes('ctrl') || parts.includes('cmd'); const needsShift = parts.includes('shift'); const needsAlt = parts.includes('alt');
+          const keyPart = parts[parts.length - 1]; const ctrlPressed = e.ctrlKey || e.metaKey; const shiftPressed = e.shiftKey; const altPressed = e.altKey;
+          const keyFromKey = e.key ? e.key.toLowerCase() : ""; const keyFromCode = e.code ? e.code.toLowerCase().replace("key", "").replace("digit", "") : "";
+          return (ctrlPressed === needsCtrl) && (shiftPressed === needsShift) && (altPressed === needsAlt) && (keyFromKey === keyPart || keyFromCode === keyPart);
+      };
+      if (checkKey('save_bill')) { e.preventDefault(); e.stopPropagation(); saveBill(); return; }
+      if (checkKey('add_item')) { e.preventDefault(); e.stopPropagation(); setItems(prev => [...prev, createItem(settings.default_hsn)]); markDirty(); return; }
+      if (checkKey('new_bill')) { e.preventDefault(); e.stopPropagation(); handleNewBillClick(); return; }
+      if (checkKey('share_wa')) { e.preventDefault(); e.stopPropagation(); shareWhatsApp(); return; }
+      if (checkKey('open_ledger')) { e.preventDefault(); e.stopPropagation(); setShowLedger(true); return; }
+      if (checkKey('open_recent')) { e.preventDefault(); e.stopPropagation(); setShowRecentBills(true); return; }
+      if (checkKey('focus_payment')) { e.preventDefault(); e.stopPropagation(); document.getElementById('paymentMethodSelect')?.focus(); return; }
+      if (checkKey('focus_customer')) { e.preventDefault(); e.stopPropagation(); document.getElementById('customerNameInput')?.focus(); return; }
+      if (checkKey('focus_item')) { e.preventDefault(); e.stopPropagation(); const itemInputs = document.querySelectorAll('.item-desc-input'); if(itemInputs.length > 0) itemInputs[itemInputs.length - 1].focus(); return; }
+      if (checkKey('focus_discount')) { e.preventDefault(); e.stopPropagation(); document.getElementById('discountInput')?.focus(); return; }
+      if (checkKey('focus_redeem')) { e.preventDefault(); e.stopPropagation(); document.getElementById('redeemedPointsInput')?.focus(); return; }
+      if (checkKey('focus_credit')) { e.preventDefault(); e.stopPropagation(); document.getElementById('appliedCreditInput')?.focus(); return; }
+      if (checkKey('download_pdf')) { e.preventDefault(); e.stopPropagation(); downloadPdf("bill-print-root", documentNumber || mode); return; }
+      if (checkKey('print_bill')) { e.preventDefault(); e.stopPropagation(); window.print(); return; }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown, true); return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
+  }); 
+// === PART 3 END ===
+// === PART 4 START ===
+  // // BILL CALCULATION ENGINES
   const computed = useMemo(() => {
     const baseSilverRate = num(settings.silver_rate_per_gram); const baseMCPerGram = num(settings.making_charge_per_gram); const flatMCBelow5g = num(settings.flat_mc_below_5g);
     const ptPerGram = num(settings.loyalty_points_per_gram !== undefined ? settings.loyalty_points_per_gram : 1); const rsPerPt = num(settings.loyalty_point_value_rs !== undefined ? settings.loyalty_point_value_rs : 1);
@@ -399,8 +443,11 @@ export default function App() {
     const autoRound = Math.round(baseTotal) - baseTotal; const roundOff = manualRoundOff === "" ? autoRound : num(manualRoundOff); const grandTotal = baseTotal + roundOff;
     return { items: mapped, baseSilverRate, subtotal, taxable, cgst, sgst, igst, mdr, roundOff, grandTotal, totalWeight, earnedPoints, redeemedPoints: appliedRedeemedPoints, redeemedValue: appliedRedeemedValue, appliedCredit: appliedCreditVal, savedCredit: savedCreditVal, bonusPoints: bonusPointsVal };
   }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff, redeemedPoints, appliedCredit, savedCredit, bonusPoints]);
-// === PART 3 END ===
-// === PART 4 START ===
+
+  const todaysTotalCash = (todayBills || []).filter(b => b.is_payment_done).reduce((sum, b) => sum + (b.payment_method === 'Cash' ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_cash) : 0), 0);
+  const todaysTotalEstBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'estimate').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
+  const todaysTotalInvBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'invoice').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
+
   const publicComputed = useMemo(() => {
     if (!publicBill || !publicSettings) return { items: [], taxable: 0, cgst: 0, sgst: 0, igst: 0, mdr: 0, roundOff: 0, grandTotal: 0, discount: 0, exchange: 0 };
     const baseSilverRate = num(publicSettings.silver_rate_per_gram); const baseMCPerGram = num(publicSettings.making_charge_per_gram); const flatMCBelow5g = num(publicSettings.flat_mc_below_5g);
@@ -427,9 +474,24 @@ export default function App() {
     return { items: mapped, taxable: publicBill.totals?.taxable_amount || publicBill.totals?.subtotal || taxable, cgst: publicBill.totals?.cgst ?? cgst, sgst: publicBill.totals?.sgst ?? sgst, igst: publicBill.totals?.igst ?? igst, mdr: publicBill.totals?.mdr ?? mdr, roundOff, grandTotal, discount, exchange, earnedPoints, redeemedPoints, redeemedValue, appliedCredit: appliedCreditVal, savedCredit: savedCreditVal };
   }, [publicBill, publicSettings]);
 
+  // // ACTION HANDLERS
+  const loadSettings = async () => {
+    const response = await axios.get(`${API}/settings`, { headers: authHeaders });
+    const savedLogo = localStorage.getItem("jj_logo_data_url");
+    let dbData = response.data || {}; if (!dbData.branches) dbData.branches = defaultSettings.branches;
+    let localFonts = []; const localFontsRaw = localStorage.getItem("jj_custom_fonts"); if (localFontsRaw) { try { localFonts = JSON.parse(localFontsRaw); } catch (e) {} }
+    let mergedShortcuts = defaultSettings.shortcuts;
+    if (dbData.shortcuts && dbData.shortcuts.length > 0) { const customOnly = dbData.shortcuts.filter(sc => !sc.isSystem); const systemUpdated = defaultSettings.shortcuts.map(sys => { const savedSys = dbData.shortcuts.find(s => s.id === sys.id); return savedSys ? savedSys : sys; }); mergedShortcuts = [...systemUpdated, ...customOnly]; }
+    const newSettings = { ...defaultSettings, ...dbData, logo_data_url: savedLogo || dbData.logo_data_url || "", custom_fonts: dbData.custom_fonts || localFonts, shortcuts: mergedShortcuts };
+    setSettings(newSettings);
+    if (!(newSettings.branches || []).find(b => b.id === globalBranchId)) { setGlobalBranchId((newSettings.branches || [])[0].id); setBillBranchId((newSettings.branches || [])[0].id); }
+    setItems((prev) => { if (prev.length === 1 && !prev[0].description && !prev[0].weight && !prev[0].hsn) return [{ ...prev[0], hsn: newSettings.default_hsn }]; return prev; });
+    setSettingsLoaded(true);
+  };
+  const reserveNumber = async (activeMode, activeBranch) => { setIsNumberLoading(true); try { const response = await axios.get(`${API}/bills/next-number`, { headers: authHeaders, params: { mode: activeMode, branch_id: activeBranch } }); setDocumentNumber(response.data.document_number || ""); } finally { setIsNumberLoading(false); } };
+
   const updateItem = (id, key, value) => { markDirty(); setItems((prev) => prev.map((item) => (item.id === id ? { ...item, [key]: value } : item))); };
-  const checkIsBlank = () => { return !customer.name.trim() && !customer.phone.trim() && !customer.address.trim() && !(items || []).some(i => i.description.trim() || i.weight.trim() || i.amount_override.trim()) && (!discount || discount === "0") && (!exchange || exchange === "0") && !paymentMethod && !advanceMethod && !advanceAmount && !splitCash; };
-  
+  const checkIsBlank = () => { return !String(customer.name || "").trim() && !String(customer.phone || "").trim() && !String(customer.address || "").trim() && !(items || []).some(i => String(i.description || "").trim() || String(i.weight || "").trim() || String(i.amount_override || "").trim()) && (!discount || discount === "0") && (!exchange || exchange === "0") && !paymentMethod && !advanceMethod && !advanceAmount && !splitCash; };
   const clearBill = async (nextMode = mode, nextBranch = billBranchId) => {
     setCurrentBillId(null); setEditingDocNumber(null); setItems([createItem(settings.default_hsn)]); setCustomer({ name: "", phone: "", address: "", email: "", points: 0, credit: 0 });
     setSuggestions([]); setDiscount("0"); setExchange("0"); setRedeemedPoints(""); setAppliedCredit(""); setSavedCredit(""); setBonusPoints(""); setManualRoundOff("");
@@ -437,7 +499,7 @@ export default function App() {
     setBillDate(today()); setIsDirty(false); await reserveNumber(nextMode, nextBranch); goToBillTop();
   };
 
-  const handleNewBillClick = async () => { if (currentBillId && isDirty) { if (!window.confirm("⚠️ You have unsaved edits to this saved bill! Discard edits and start a new bill?")) return; } else if (!currentBillId && !checkIsBlank()) { if (!window.confirm("⚠️ You have entered data! Are you sure you want to discard it and start a blank new bill?")) return; } await clearBill(mode, billBranchId); };
+  const handleNewBillClick = async () => { if (currentBillId && isDirty) { if (!window.confirm("⚠️ You have unsaved edits! Discard and start a new bill?")) return; } else if (!currentBillId && !checkIsBlank()) { if (!window.confirm("⚠️ You have entered data! Discard and start a blank new bill?")) return; } await clearBill(mode, billBranchId); };
   
   const loadBillForEditing = (bill) => {
     setCurrentBillId(bill.id); setEditingDocNumber(bill.document_number); setMode(bill.mode); setBillBranchId(bill.branch_id || (settings.branches || [])[0].id); setDocumentNumber(bill.document_number); setBillDate(bill.date || today());
@@ -448,55 +510,40 @@ export default function App() {
     setNotes(bill.notes || ""); setDiscount(bill.discount ? String(bill.discount) : (bill.totals?.discount ? String(bill.totals.discount) : "0")); setExchange(bill.exchange ? String(bill.exchange) : (bill.totals?.exchange ? String(bill.totals.exchange) : "0")); setManualRoundOff(bill.totals?.round_off !== null && bill.totals?.round_off !== undefined ? String(bill.totals.round_off) : "");
     setRedeemedPoints(bill.redeemed_points ? String(bill.redeemed_points) : ""); setAppliedCredit(bill.applied_credit ? String(bill.applied_credit) : ""); setSavedCredit(bill.saved_credit ? String(bill.saved_credit) : ""); setBonusPoints(bill.bonus_points ? String(bill.bonus_points) : "");
     const loadedItems = (bill.items || []).map((item) => ({ id: `${Date.now()}-${Math.random()}`, description: item.description || "", hsn: item.hsn || "", weight: item.weight ? String(item.weight) : "", quantity: item.quantity ? String(item.quantity) : "1", mc_override: item.mc_override !== null && item.mc_override !== undefined ? String(item.mc_override) : "", rate_override: item.rate_override !== null && item.rate_override !== undefined ? String(item.rate_override) : "", amount_override: item.amount_override !== null && item.amount_override !== undefined ? String(item.amount_override) : "", }));
-    setItems(loadedItems.length > 0 ? loadedItems : [createItem(settings.default_hsn)]); setIsDirty(false); setShowRecentBills(false); setShowLedger(false); toast.success(`Loaded ${bill.document_number} for editing`); goToBillTop();
+    setItems(loadedItems.length > 0 ? loadedItems : [createItem(settings.default_hsn)]); setIsDirty(false); setShowRecentBills(false); setShowLedger(false); toast.success(`Loaded ${bill.document_number}`); goToBillTop();
   };
 
-  const handleDeleteBill = async (bill) => {
-    if (!window.confirm(`Are you sure you want to permanently delete ${bill.document_number}?`)) return;
-    try { await axios.delete(`${API}/bills/${bill.document_number}`, { headers: authHeaders }); setRecentBillsList((prev) => prev.filter((b) => b.document_number !== bill.document_number)); if (currentBillId === bill.id) await clearBill(mode, billBranchId); toast.success(`${bill.document_number} deleted successfully.`); await loadSettings(); } catch { toast.error("Failed to delete the bill."); }
-  };
-
+  const handleDeleteBill = async (bill) => { if (!window.confirm(`Permanently delete ${bill.document_number}?`)) return; try { await axios.delete(`${API}/bills/${bill.document_number}`, { headers: authHeaders }); setRecentBillsList((prev) => Array.isArray(prev) ? prev.filter((b) => b.document_number !== bill.document_number) : []); if (currentBillId === bill.id) await clearBill(mode, billBranchId); toast.success(`${bill.document_number} deleted.`); await loadSettings(); } catch { toast.error("Failed to delete bill."); } };
   const handleQuickPaymentToggle = async (bill) => {
-    if (bill.tx_type === "booking" || bill.tx_type === "service") { toast.info("Please open the bill and click Edit to manage Booking/Service balances."); return; }
+    if (bill.tx_type === "booking" || bill.tx_type === "service") { toast.info("Open the bill and click Edit to manage Booking/Service balances."); return; }
     const newStatus = !bill.is_payment_done;
-    try { 
-      await axios.put(`${API}/bills/${bill.document_number}/toggle-payment`, { is_payment_done: newStatus }, { headers: authHeaders }); 
-      toast.success(`Payment marked as ${newStatus ? 'DONE ✅' : 'PENDING ⏳'}`); 
-      if (newStatus && iotOnline) { sendSuccessToDisplay(); }
-      if (currentBillId === bill.id) { setIsPaymentDone(newStatus); } 
-      setRecentBillsList(prev => prev.map(b => b.document_number === bill.document_number ? { ...b, is_payment_done: newStatus } : b)); 
-      await loadSettings(); 
-    } catch { toast.error("Failed to update payment status."); }
+    try { await axios.put(`${API}/bills/${bill.document_number}/toggle-payment`, { is_payment_done: newStatus }, { headers: authHeaders }); toast.success(`Payment marked as ${newStatus ? 'DONE ✅' : 'PENDING ⏳'}`); if (newStatus && iotOnline) { sendSuccessToDisplay(); } if (currentBillId === bill.id) { setIsPaymentDone(newStatus); } setRecentBillsList(prev => Array.isArray(prev) ? prev.map(b => b.document_number === bill.document_number ? { ...b, is_payment_done: newStatus } : b) : []); await loadSettings(); } catch { toast.error("Failed to update status."); }
   };
-
-  const handleResetCounter = async (resetMode) => { if (!window.confirm(`Are you SURE you want to restart the ${resetMode.toUpperCase()} counter for ${activeGlobalBranch.name} back to 0001?`)) return; try { await axios.post(`${API}/bills/reset-counter`, { mode: resetMode, branch_id: globalBranchId }, { headers: authHeaders }); toast.success(`${resetMode.toUpperCase()} counter for ${activeGlobalBranch.name} has been reset.`); if (mode === resetMode && billBranchId === globalBranchId) { await reserveNumber(mode, billBranchId); } } catch { toast.error(`Failed to reset the ${resetMode} counter.`); } };
-  const handleBackupBills = async () => { try { toast.info("Preparing backup file..."); const res = await axios.get(`${API}/bills/export`, { headers: authHeaders }); const dataStr = JSON.stringify(res.data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `Jalaram_Bills_Backup_${today()}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link); toast.success("Backup downloaded successfully!"); } catch { toast.error("Failed to download backup."); } };
-  const handleDeleteAllBills = async () => { if (!window.confirm("🚨 WARNING! This will permanently delete ALL bills. Have you downloaded your backup first?")) return; if (window.prompt("Type 'DELETE' to confirm wiping all bills:") !== "DELETE") { toast.error("Deletion cancelled."); return; } try { await axios.delete(`${API}/bills/all`, { headers: authHeaders }); toast.success("All bills wiped. (Ledger balances remain intact)"); setRecentBillsList([]); const res = await axios.get(`${API}/system/storage`, { headers: authHeaders }); setStorageStats(res.data); } catch { toast.error("Failed to delete bills."); } };
-  const handleModeChange = async (nextMode) => { if (mode === nextMode) return; if (currentBillId) { try { const res = await axios.get(`${API}/bills/next-number?mode=${nextMode}&branch_id=${billBranchId}`, { headers: authHeaders }); setDocumentNumber(res.data.document_number); setMode(nextMode); markDirty(); toast.info(`Migrating to ${nextMode.toUpperCase()}`); } catch (err) { toast.error("Failed to fetch new number for migration."); } } else { if (!checkIsBlank()) { if (!window.confirm("⚠️ You have unsaved changes! Switching modes will clear the screen. Continue?")) return; } setMode(nextMode); await clearBill(nextMode, billBranchId); } };
+  const handleResetCounter = async (resetMode) => { if (!window.confirm(`SURE you want to restart ${resetMode.toUpperCase()} counter?`)) return; try { await axios.post(`${API}/bills/reset-counter`, { mode: resetMode, branch_id: globalBranchId }, { headers: authHeaders }); toast.success(`Counter reset.`); if (mode === resetMode && billBranchId === globalBranchId) { await reserveNumber(mode, billBranchId); } } catch { toast.error(`Failed to reset.`); } };
+  const handleBackupBills = async () => { try { toast.info("Preparing backup..."); const res = await axios.get(`${API}/bills/export`, { headers: authHeaders }); const dataStr = JSON.stringify(res.data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `JJ_Backup_${today()}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link); toast.success("Backup downloaded!"); } catch { toast.error("Failed to download."); } };
+  const handleDeleteAllBills = async () => { if (!window.confirm("🚨 WARNING! WIPE ALL BILLS? Have you downloaded your backup?")) return; if (window.prompt("Type 'DELETE' to confirm:") !== "DELETE") return; try { await axios.delete(`${API}/bills/all`, { headers: authHeaders }); toast.success("All bills wiped."); setRecentBillsList([]); const res = await axios.get(`${API}/system/storage`, { headers: authHeaders }); setStorageStats(res.data); } catch { toast.error("Failed to delete bills."); } };
+  const handleModeChange = async (nextMode) => { if (mode === nextMode) return; if (currentBillId) { try { const res = await axios.get(`${API}/bills/next-number?mode=${nextMode}&branch_id=${billBranchId}`, { headers: authHeaders }); setDocumentNumber(res.data.document_number); setMode(nextMode); markDirty(); toast.info(`Migrating to ${nextMode.toUpperCase()}`); } catch (err) { toast.error("Failed to migrate."); } } else { if (!checkIsBlank()) { if (!window.confirm("⚠️ Unsaved changes! Switch modes?")) return; } setMode(nextMode); await clearBill(nextMode, billBranchId); } };
   const handleGlobalBranchChange = async (nextBranchId) => { setGlobalBranchId(nextBranchId); if (!currentBillId && checkIsBlank()) { setBillBranchId(nextBranchId); await reserveNumber(mode, nextBranchId); } };
   
   const updateBranch = (index, field, value) => { const updatedBranches = [...(settings.branches || [])]; updatedBranches[index] = { ...updatedBranches[index], [field]: value }; setSettings({ ...settings, branches: updatedBranches }); };
   const addBranch = () => { const newId = `B${Date.now()}`; const newBranch = { id: newId, name: `New Branch`, address: "", location_url: "", map_url: "", whatsapp_url: "", instagram_url: "", about_url: "", invoice_upi_id: "", estimate_upi_id: "", gstin: "", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 }; setSettings({ ...settings, branches: [...(settings.branches || []), newBranch] }); };
-  const removeBranch = (index) => { if ((settings.branches || []).length <= 1) { toast.error("You must have at least one branch."); return; } if (!window.confirm("Remove this branch from settings?")) return; const updatedBranches = (settings.branches || []).filter((_, i) => i !== index); setSettings({ ...settings, branches: updatedBranches }); };
+  const removeBranch = (index) => { if ((settings.branches || []).length <= 1) { toast.error("Must have at least one branch."); return; } if (!window.confirm("Remove branch?")) return; const updatedBranches = (settings.branches || []).filter((_, i) => i !== index); setSettings({ ...settings, branches: updatedBranches }); };
   const addShortcut = () => { const newSc = { id: `custom_${Date.now()}`, action: "", keys: "", isSystem: false }; setSettings(prev => ({ ...prev, shortcuts: [...(prev.shortcuts || defaultSettings.shortcuts), newSc] })); };
   const updateShortcut = (index, field, value) => { const list = [...(settings.shortcuts || defaultSettings.shortcuts)]; list[index] = { ...list[index], [field]: value }; setSettings(prev => ({ ...prev, shortcuts: list })); };
   const removeShortcut = (index) => { const list = [...(settings.shortcuts || defaultSettings.shortcuts)]; list.splice(index, 1); setSettings(prev => ({ ...prev, shortcuts: list })); };
   
-  const handleLogin = async (event) => { event.preventDefault(); setLoggingIn(true); try { const response = await axios.post(`${API}/auth/login`, { passcode }, { timeout: 15000 }); localStorage.setItem("jj_auth_token", response.data.access_token); setToken(response.data.access_token); setPasscode(""); toast.success("Logged in successfully"); } catch (error) { if (error?.response?.status === 401) { toast.error("Wrong passcode."); } else { toast.error("Server is waking up. Please wait 15-20 seconds and try again."); } } finally { setLoggingIn(false); } };
+  const handleLogin = async (event) => { event.preventDefault(); setLoggingIn(true); try { const response = await axios.post(`${API}/auth/login`, { passcode }, { timeout: 15000 }); localStorage.setItem("jj_auth_token", response.data.access_token); setToken(response.data.access_token); setPasscode(""); toast.success("Logged in successfully"); } catch (error) { if (error?.response?.status === 401) { toast.error("Wrong passcode."); } else { toast.error("Server waking up, please wait."); } } finally { setLoggingIn(false); } };
   const handleLogout = () => { localStorage.removeItem("jj_auth_token"); setToken(""); setGatewayPassed(false); setSettingsLoaded(false); };
   
-  const optimizeImageDataUrl = async (file) => { const reader = new FileReader(); const original = await new Promise((resolve, reject) => { reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); }); const image = new Image(); await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; image.src = original; }); const ratio = Math.min(420 / image.width, 420 / image.height, 1); const targetWidth = Math.round(image.width * ratio); const targetHeight = Math.round(image.height * ratio); const canvas = document.createElement("canvas"); canvas.width = targetWidth; canvas.height = targetHeight; const context = canvas.getContext("2d"); context.drawImage(image, 0, 0, targetWidth, targetHeight); return canvas.toDataURL("image/png", 0.92); };
-  const handleLogoUpload = async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const dataUrl = await optimizeImageDataUrl(file); localStorage.setItem("jj_logo_data_url", dataUrl); setSettings((prev) => ({ ...prev, logo_data_url: dataUrl })); setLogoUploadName(file.name); toast.success("Logo uploaded successfully."); } catch { toast.error("Logo upload failed."); } };
   const saveSettings = async () => { try { await axios.put(`${API}/settings`, settings, { headers: authHeaders }); toast.success("Settings saved."); } catch { toast.error("Could not save settings."); } };
-  
-  const submitLedgerLog = async () => { if (!logAmount || isNaN(logAmount) || num(logAmount) <= 0) { toast.error("Please enter a valid amount."); return; } if (!logReason.trim()) { toast.error("Please enter a reason/remark."); return; } setSubmittingLog(true); try { const payload = { branch_id: globalBranchId, reason: logReason, cash_change: 0, estimate_bank_change: 0, invoice_bank_change: 0 }; const amt = num(logAmount); const keyMap = { "cash": "cash_change", "estimate_bank": "estimate_bank_change", "invoice_bank": "invoice_bank_change" }; if (logType === "expense") payload[keyMap[logSourceVault]] = -amt; else if (logType === "add") payload[keyMap[logSourceVault]] = amt; else if (logType === "exchange") { if (logSourceVault === logTargetVault) { toast.error("Cannot exchange into the same vault."); setSubmittingLog(false); return; } payload[keyMap[logSourceVault]] = -amt; payload[keyMap[logTargetVault]] = amt; } await axios.post(`${API}/settings/ledger/adjust`, payload, { headers: authHeaders }); toast.success("Transaction logged successfully!"); setShowLogForm(false); setLogAmount(""); setLogReason(""); await loadSettings(); const resLogs = await axios.get(`${API}/settings/ledger/logs?branch_id=${globalBranchId}`, { headers: authHeaders }); setLedgerLogs(Array.isArray(resLogs.data) ? resLogs.data : []); } catch (error) { toast.error("Ledger update failed."); } finally { setSubmittingLog(false); } };
-  const saveBalances = async () => { try { const payload = { branch_id: globalBranchId, cash_balance: num(manualCash), estimate_bank_balance: num(manualEstBank), invoice_bank_balance: num(manualInvBank) }; await axios.put(`${API}/settings/balances`, payload, { headers: authHeaders }); setSettings(prev => { const updatedBranches = (prev.branches || []).map(b => b.id === globalBranchId ? { ...b, ...payload } : b); return { ...prev, branches: updatedBranches }; }); setEditingBalances(false); toast.success(`Ledger balances manually updated!`); } catch { toast.error("Failed to update balances."); } };
+  const submitLedgerLog = async () => { if (!logAmount || isNaN(logAmount) || num(logAmount) <= 0) { toast.error("Enter a valid amount."); return; } if (!logReason.trim()) { toast.error("Enter a reason."); return; } setSubmittingLog(true); try { const payload = { branch_id: globalBranchId, reason: logReason, cash_change: 0, estimate_bank_change: 0, invoice_bank_change: 0 }; const amt = num(logAmount); const keyMap = { "cash": "cash_change", "estimate_bank": "estimate_bank_change", "invoice_bank": "invoice_bank_change" }; if (logType === "expense") payload[keyMap[logSourceVault]] = -amt; else if (logType === "add") payload[keyMap[logSourceVault]] = amt; else if (logType === "exchange") { if (logSourceVault === logTargetVault) { toast.error("Cannot exchange into the same vault."); setSubmittingLog(false); return; } payload[keyMap[logSourceVault]] = -amt; payload[keyMap[logTargetVault]] = amt; } await axios.post(`${API}/settings/ledger/adjust`, payload, { headers: authHeaders }); toast.success("Transaction logged!"); setShowLogForm(false); setLogAmount(""); setLogReason(""); await loadSettings(); const resLogs = await axios.get(`${API}/settings/ledger/logs?branch_id=${globalBranchId}`, { headers: authHeaders }); setLedgerLogs(Array.isArray(resLogs.data) ? resLogs.data : []); } catch (error) { toast.error("Ledger update failed."); } finally { setSubmittingLog(false); } };
+  const saveBalances = async () => { try { const payload = { branch_id: globalBranchId, cash_balance: num(manualCash), estimate_bank_balance: num(manualEstBank), invoice_bank_balance: num(manualInvBank) }; await axios.put(`${API}/settings/balances`, payload, { headers: authHeaders }); setSettings(prev => { const updatedBranches = (prev.branches || []).map(b => b.id === globalBranchId ? { ...b, ...payload } : b); return { ...prev, branches: updatedBranches }; }); setEditingBalances(false); toast.success(`Balances updated!`); } catch { toast.error("Failed to update balances."); } };
 
   const saveBill = async () => {
-    if (txType === "sale" && !paymentMethod) { toast.error("Please select a payment method."); return; }
-    if ((txType === "booking" || txType === "service")) { if (isAdvancePaid && !advanceMethod) { toast.error("Please select a method for the Advance payment."); return; } if (isBalancePaid && !balanceMethod) { toast.error("Please select a method for the Balance payment."); return; } }
-    const newItems = computed.items.map(i => i.description.trim()).filter(Boolean);
-    setSavedDescriptions(prev => { const updated = Array.from(new Set([...prev, ...newItems])); localStorage.setItem("jj_item_dictionary", JSON.stringify(updated)); return updated; });
+    if (txType === "sale" && !paymentMethod) { toast.error("Select payment method."); return; }
+    if ((txType === "booking" || txType === "service")) { if (isAdvancePaid && !advanceMethod) { toast.error("Select method for Advance."); return; } if (isBalancePaid && !balanceMethod) { toast.error("Select method for Balance."); return; } }
+    const newItems = computed.items.map(i => String(i.description || "").trim()).filter(Boolean);
+    setSavedDescriptions(prev => { const updated = Array.from(new Set([...(Array.isArray(prev)?prev:[]), ...newItems])); localStorage.setItem("jj_item_dictionary", JSON.stringify(updated)); return updated; });
     setSavingBill(true);
     try {
       const payload = {
@@ -504,22 +551,23 @@ export default function App() {
         items: computed.items.map((item) => ({ description: item.description, hsn: item.hsn, weight: num(item.weight), quantity: num(item.quantity), mc_override: item.mc_override === "" ? null : num(item.mc_override), rate_override: item.rate_override === "" ? null : num(item.rate_override), amount_override: item.amount_override === "" ? null : num(item.amount_override), rate: item.rate, amount: item.amount, sl_no: item.slNo })),
         totals: { grand_total: computed.grandTotal, subtotal: computed.subtotal }
       };
-      if (currentBillId) { await axios.put(`${API}/bills/update-by-id/${currentBillId}`, payload, { headers: authHeaders }); toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} updated & migrated successfully.`); setIsDirty(false); setEditingDocNumber(documentNumber); } 
-      else { const res = await axios.post(`${API}/bills/save`, payload, { headers: authHeaders }); toast.success(`${mode === "invoice" ? "Invoice" : "Estimate"} saved successfully.`); setIsDirty(false); setCurrentBillId(res.data.id); setEditingDocNumber(res.data.document_number); setDocumentNumber(res.data.document_number); }
+      if (currentBillId) { await axios.put(`${API}/bills/update-by-id/${currentBillId}`, payload, { headers: authHeaders }); toast.success(`Bill updated.`); setIsDirty(false); setEditingDocNumber(documentNumber); } 
+      else { const res = await axios.post(`${API}/bills/save`, payload, { headers: authHeaders }); toast.success(`Bill saved.`); setIsDirty(false); setCurrentBillId(res.data.id); setEditingDocNumber(res.data.document_number); setDocumentNumber(res.data.document_number); }
       if (isPaymentDone && iotOnline) { sendSuccessToDisplay(); }
-      await loadSettings(); const resLogs = await axios.get(`${API}/settings/ledger/logs?branch_id=${globalBranchId}`, { headers: authHeaders }); setLedgerLogs(Array.isArray(resLogs.data) ? resLogs.data : []);
-    } catch (error) { toast.error("Failed to save bill."); } finally { setSavingBill(false); }
+      await loadSettings(); 
+    } catch (error) { toast.error("Failed to save."); } finally { setSavingBill(false); }
   };
 
-  const downloadPdf = async (elementId, filename) => { 
-    toast.info("Preparing PDF..."); const node = document.getElementById(elementId); if (!node) return; 
-    try { 
-      const canvas = await html2canvas(node, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#ffffff", windowWidth: 1024, onclone: (clonedDoc) => { const clonedNode = clonedDoc.getElementById(elementId); if (clonedNode) { clonedNode.style.transform = "none"; clonedNode.style.width = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.position = "relative"; clonedNode.style.top = "auto"; clonedNode.style.left = "auto"; clonedNode.style.margin = "0"; clonedNode.style.padding = "20px"; clonedNode.style.height = "max-content"; clonedNode.style.boxSizing = "border-box"; const noPrint = clonedNode.querySelectorAll('.no-print'); noPrint.forEach(el => el.style.display = 'none'); const printOnly = clonedNode.querySelectorAll('.print-only'); printOnly.forEach(el => { el.style.position = 'static'; el.style.width = '100%'; el.style.height = 'auto'; el.style.opacity = '1'; el.style.visibility = 'visible'; el.style.display = 'flex'; }); } } }); 
-      const imageData = canvas.toDataURL("image/png", 1.0); const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" }); const pageWidth = pdf.internal.pageSize.getWidth(); const pageHeight = (canvas.height * pageWidth) / canvas.width; pdf.addImage(imageData, "PNG", 0, 0, pageWidth, pageHeight); pdf.save(`${filename}.pdf`); toast.success("PDF Downloaded Successfully"); 
-    } catch (error) { toast.error("Failed to download PDF."); } 
-  };
+  const downloadPdf = async (elementId, filename) => { toast.info("Preparing PDF..."); const node = document.getElementById(elementId); if (!node) return; try { const canvas = await html2canvas(node, { scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#ffffff", windowWidth: 1024, onclone: (clonedDoc) => { const clonedNode = clonedDoc.getElementById(elementId); if (clonedNode) { clonedNode.style.transform = "none"; clonedNode.style.width = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.position = "relative"; clonedNode.style.top = "auto"; clonedNode.style.left = "auto"; clonedNode.style.margin = "0"; clonedNode.style.padding = "20px"; clonedNode.style.height = "max-content"; clonedNode.style.boxSizing = "border-box"; const noPrint = clonedNode.querySelectorAll('.no-print'); noPrint.forEach(el => el.style.display = 'none'); const printOnly = clonedNode.querySelectorAll('.print-only'); printOnly.forEach(el => { el.style.position = 'static'; el.style.width = '100%'; el.style.height = 'auto'; el.style.opacity = '1'; el.style.visibility = 'visible'; el.style.display = 'flex'; }); } } }); const imageData = canvas.toDataURL("image/png", 1.0); const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" }); const pageWidth = pdf.internal.pageSize.getWidth(); const pageHeight = (canvas.height * pageWidth) / canvas.width; pdf.addImage(imageData, "PNG", 0, 0, pageWidth, pageHeight); pdf.save(`${filename}.pdf`); toast.success("PDF Downloaded"); } catch (error) { toast.error("Failed to download PDF."); } };
   
-  const shareWhatsApp = () => { const link = `${window.location.origin}/?view=${documentNumber}`; const text = `*Hello* ${customer.name || "Customer"},\n Thank you for visiting Jalaram Jewellers\n\n Official ${mode === "invoice" ? "Invoice" : "Estimate"} Bill\n Here Is Your Bill No. ${documentNumber}\n Amount: ₹${money(computed.grandTotal)}.\n\n Here You can view and download it securely\n Link: ${link}\n\n *Stay Connected With us*\n WhatsApp Group\n Link (https://bit.ly/Jalaram-Group-WP)\n Instagram\n Link (https://bit.ly/Jalaram-IG)\n\n*We value Your Feedback*\n Dear ${customer.name || "Customer"}, Please Give us a minute to Rate our Behaviour and Service. Give us your Valuable Feedback so we can make your experience even better:\n ${activeBillBranch.map_url}\n\n   Thank you,\n${settings.shop_name} : The Silver Specialist\n\n  `; let cleanedPhone = customer.phone.replace(/\D/g, ""); if (cleanedPhone.length === 10) cleanedPhone = `91${cleanedPhone}`; window.open(`https://wa.me/${cleanedPhone}?text=${encodeURIComponent(text)}`, "_blank"); };
+  // CRASH GUARDED WHATSAPP (Handles Phone Integer TypeError)
+  const shareWhatsApp = () => { 
+    const link = `${window.location.origin}/?view=${documentNumber}`; 
+    const text = `*Hello* ${customer.name || "Customer"},\n Thank you for visiting Jalaram Jewellers\n\n Official ${mode === "invoice" ? "Invoice" : "Estimate"} Bill\n Here Is Your Bill No. ${documentNumber}\n Amount: ₹${money(computed.grandTotal)}.\n\n Here You can view and download it securely\n Link: ${link}\n\n *Stay Connected With us*\n WhatsApp Group\n Link (https://bit.ly/Jalaram-Group-WP)\n Instagram\n Link (https://bit.ly/Jalaram-IG)\n\n*We value Your Feedback*\n Dear ${customer.name || "Customer"}, Please Give us a minute to Rate our Behaviour and Service. Give us your Valuable Feedback so we can make your experience even better:\n ${activeBillBranch.map_url}\n\n   Thank you,\n${settings.shop_name} : The Silver Specialist\n\n  `; 
+    // Safely cast phone to string before replace to prevent fatal crash
+    let cleanedPhone = String(customer.phone || "").replace(/\D/g, ""); 
+    if (cleanedPhone.length === 10) cleanedPhone = `91${cleanedPhone}`; window.open(`https://wa.me/${cleanedPhone}?text=${encodeURIComponent(text)}`, "_blank"); 
+  };
   const shareEmail = () => { const link = `${window.location.origin}/?view=${documentNumber}`; const subject = `${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber}`; const body = `Dear ${customer.name || "Customer"},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`; window.location.href = `mailto:${customer.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; };
   const goToBillTop = () => { document.getElementById("bill-print-root")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
 
@@ -532,8 +580,9 @@ export default function App() {
   const upiId = mode === "invoice" ? activeBillBranch.invoice_upi_id : activeBillBranch.estimate_upi_id;
   const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
   const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
-
-  // --- EARLY RETURNS (LOGIN GUARDS & VIEWERS) ---
+// === PART 4 END ===
+// === PART 5 START ===
+  // // EARLY RETURNS (LOGIN GUARDS & VIEWERS)
   if (isPublicView) {
     if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
     if (publicBill === "NOT_FOUND" || !publicBill) return <div className="loading-screen">Bill not found or has been deleted.</div>;
@@ -567,27 +616,17 @@ export default function App() {
             </div>
           </div>
         )}
-        <div className="no-print" style={{ marginBottom: '20px', display: 'flex', gap: '15px' }}>
-          <Button onClick={() => downloadPdf("public-bill-root", publicBill.document_number)}>Download PDF</Button>
-          <Button variant="outline" onClick={() => window.print()}>Print Bill</Button>
-        </div>
-
+        <div className="no-print" style={{ marginBottom: '20px', display: 'flex', gap: '15px' }}><Button onClick={() => downloadPdf("public-bill-root", publicBill.document_number)}>Download PDF</Button><Button variant="outline" onClick={() => window.print()}>Print Bill</Button></div>
         <section id="public-bill-root" className="bill-sheet" style={{ "--print-scale-factor": 1, position: 'relative', zIndex: 1 }}>
           {isPaid && <div className="watermark-done">FULLY PAID</div>}
           <div className="bill-header">
             <div className="logo-area">
               {publicSettings?.logo_data_url ? <img src={publicSettings.logo_data_url} alt="Shop Logo" className="shop-logo" crossOrigin="anonymous" /> : <div className="shop-logo-fallback">JJ</div>}
-              <div style={{ width: "100%", textAlign: publicSettings?.shop_name_align || "center" }}>
-                <h2 className="sheet-shop-title" style={{ fontFamily: publicSettings?.shop_name_font || "sans-serif", color: publicSettings?.shop_name_color || "#000", fontSize: `${publicSettings?.shop_name_size}px`, margin: 0 }}>{publicSettings?.shop_name}</h2>
-              </div>
-              <div style={{ width: "100%", textAlign: publicSettings?.tagline_align || "center" }}>
-                <p className="sheet-tagline" style={{ fontFamily: publicSettings?.tagline_font || "sans-serif", color: publicSettings?.tagline_color || "#475569", fontSize: `${publicSettings?.tagline_size}px`, margin: "5px 0" }}>{publicSettings?.tagline}</p>
-              </div>
+              <div style={{ width: "100%", textAlign: publicSettings?.shop_name_align || "center" }}><h2 className="sheet-shop-title" style={{ fontFamily: publicSettings?.shop_name_font || "sans-serif", color: publicSettings?.shop_name_color || "#000", fontSize: `${publicSettings?.shop_name_size}px`, margin: 0 }}>{publicSettings?.shop_name}</h2></div>
+              <div style={{ width: "100%", textAlign: publicSettings?.tagline_align || "center" }}><p className="sheet-tagline" style={{ fontFamily: publicSettings?.tagline_font || "sans-serif", color: publicSettings?.tagline_color || "#475569", fontSize: `${publicSettings?.tagline_size}px`, margin: "5px 0" }}>{publicSettings?.tagline}</p></div>
             </div>
             <div className="contact-area">
-              <div className="contact-address" style={{ fontFamily: publicSettings?.address_font || "sans-serif", display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '8px', alignItems: publicSettings?.address_align === 'left' ? 'flex-start' : publicSettings?.address_align === 'right' ? 'flex-end' : 'center', textAlign: publicSettings?.address_align || "center" }}>
-                  <a href={pbBranch.location_url && pbBranch.location_url !== "#" ? pbBranch.location_url : "#"} target="_blank" rel="noopener noreferrer" style={{ color: publicSettings?.address_color || "#475569", fontSize: `${publicSettings?.address_size || 14}px`, textDecoration: 'none' }}>{pbBranch.address}</a>
-              </div>
+              <div className="contact-address" style={{ fontFamily: publicSettings?.address_font || "sans-serif", display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '8px', alignItems: publicSettings?.address_align === 'left' ? 'flex-start' : publicSettings?.address_align === 'right' ? 'flex-end' : 'center', textAlign: publicSettings?.address_align || "center" }}><a href={pbBranch.location_url && pbBranch.location_url !== "#" ? pbBranch.location_url : "#"} target="_blank" rel="noopener noreferrer" style={{ color: publicSettings?.address_color || "#475569", fontSize: `${publicSettings?.address_size || 14}px`, textDecoration: 'none' }}>{pbBranch.address}</a></div>
               <div style={{ width: "100%", textAlign: publicSettings?.phone_align || "center", fontFamily: publicSettings?.phone_font || "sans-serif", fontSize: `${publicSettings?.phone_size || 13}px`, marginBottom: "4px" }}>{(publicSettings?.phone_numbers || []).join(" | ")}</div>
               <div style={{ width: "100%", textAlign: publicSettings?.email_align || "center", fontFamily: publicSettings?.email_font || "sans-serif", fontSize: `${publicSettings?.email_size || 13}px`, marginBottom: "4px" }}><a href={`mailto:${publicSettings?.email}`} style={{ color: publicSettings?.email_color || "#475569", textDecoration: 'none' }}>{publicSettings?.email}</a></div>
               {publicBill.mode === "invoice" && pbBranch.gstin && <p style={{ margin: "4px 0", textAlign: "center", fontWeight: "bold" }}>GSTIN: {pbBranch.gstin}</p>}
@@ -613,9 +652,7 @@ export default function App() {
             </div>
 
             {publicComputed.earnedPoints > 0 && (<div style={{ textAlign: "center", marginTop: "15px", padding: "10px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px dashed #22c55e", color: "#166534", fontWeight: "bold", fontSize: "0.9rem" }}>🎉 You earned {publicComputed.earnedPoints} Loyalty Points on this bill!</div>)}
-            <div className="declaration">
-              {publicBill.mode === "invoice" ? (<><p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p><p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></>) : (<><p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></>)}
-            </div>
+            <div className="declaration">{publicBill.mode === "invoice" ? (<><p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p><p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></>) : (<><p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></>)}</div>
             <FooterLinksAndQRs branch={pbBranch} allBranches={publicSettings?.branches} />
           </div>
           <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
@@ -628,12 +665,7 @@ export default function App() {
     return (
       <div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#0f172a' }}>Loading billing dashboard...</div>
-        {isWakingUp && (
-          <div style={{ marginTop: '20px', textAlign: 'center', padding: '15px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', maxWidth: '320px' }}>
-            <p style={{ margin: '0 0 15px 0', fontSize: '0.9rem', color: '#64748b' }}>The database server is currently waking up from sleep mode. This usually takes about <strong>30 to 60 seconds</strong>.</p>
-            <Button variant="outline" onClick={() => { localStorage.clear(); window.location.reload(); }} style={{ width: '100%', borderColor: '#ef4444', color: '#ef4444' }}>Force Quit & Clear Session</Button>
-          </div>
-        )}
+        {isWakingUp && (<div style={{ marginTop: '20px', textAlign: 'center', padding: '15px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', maxWidth: '320px' }}><p style={{ margin: '0 0 15px 0', fontSize: '0.9rem', color: '#64748b' }}>The database server is currently waking up from sleep mode. This usually takes about <strong>30 to 60 seconds</strong>.</p><Button variant="outline" onClick={() => { localStorage.clear(); window.location.reload(); }} style={{ width: '100%', borderColor: '#ef4444', color: '#ef4444' }}>Force Quit & Clear Session</Button></div>)}
       </div>
     );
   }
@@ -652,8 +684,7 @@ export default function App() {
       <div className="login-shell">
         <Toaster position="bottom-right" />
         <form className="login-card" onSubmit={handleLogin}>
-          <h1 className="login-title">{settings?.shop_name || "Jalaram Jewellers"}</h1>
-          <p className="login-subtitle">Enter passcode to access billing panel</p>
+          <h1 className="login-title">{settings?.shop_name || "Jalaram Jewellers"}</h1><p className="login-subtitle">Enter passcode to access billing panel</p>
           <Input type="password" value={passcode} onChange={(e) => setPasscode(e.target.value)} placeholder="Enter passcode" />
           <Button type="submit" disabled={loggingIn}>{loggingIn ? "Checking..." : "Login"}</Button>
         </form>
@@ -665,9 +696,7 @@ export default function App() {
      return (
         <div className="login-shell" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9', height: '100vh' }}>
            <div className="login-card" style={{ maxWidth: '400px', width: '90%', textAlign: 'center', backgroundColor: 'white', padding: '30px', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-              <Store size={48} color="#0f172a" style={{ margin: '0 auto 15px auto' }} />
-              <h2 style={{ marginBottom: '10px', color: '#0f172a' }}>Select Branch</h2>
-              <p style={{ color: '#64748b', marginBottom: '25px', fontSize: '0.9rem' }}>Which branch are you working in today?</p>
+              <Store size={48} color="#0f172a" style={{ margin: '0 auto 15px auto' }} /><h2 style={{ marginBottom: '10px', color: '#0f172a' }}>Select Branch</h2><p style={{ color: '#64748b', marginBottom: '25px', fontSize: '0.9rem' }}>Which branch are you working in today?</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                  {(settings.branches || []).map(b => (
                     <Button key={b.id} onClick={() => { setGlobalBranchId(b.id); setBillBranchId(b.id); reserveNumber(mode, b.id); setGatewayPassed(true); }} style={{ padding: '15px', height: 'auto', fontSize: '1.1rem', backgroundColor: '#f8fafc', color: '#0f172a', border: '1px solid #cbd5e1', justifyContent: 'flex-start', textAlign: 'left' }} variant="outline">📍 {b.name}</Button>
@@ -677,8 +706,9 @@ export default function App() {
         </div>
      );
   }
-// === PART 4 END ===
-// === PART 5 START ===
+// === PART 5 END ===
+// === PART 6 START ===
+  // // MAIN APPLICATION DASHBOARD UI
   return (
     <div className="billing-app" style={isPrinting ? { height: "auto", overflow: "visible" } : { display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", backgroundColor: "#f1f5f9" }}>
       <Toaster position="bottom-right" />
@@ -756,10 +786,10 @@ export default function App() {
         </div>
       </header>
 
-      {/* MAIN BILLING SCREEN LAYOUT */}
+      {/* MAIN LAYOUT (Bill Paper + Right Controls) */}
       <main className="main-layout" style={isPrinting ? { height: "auto", overflow: "visible", display: "block" } : { flex: 1, display: "flex", flexDirection: isMobileSplit ? "column" : "row", overflowY: isMobileSplit ? "auto" : "hidden", overflowX: "hidden", backgroundColor: "#f1f5f9", minHeight: 0, paddingBottom: isMobileSplit ? "40px" : "0" }}>
         
-        {/* LEFT SIDE: Printable Bill Sheet */}
+        {/* THE BILL PAPER */}
         <section style={isPrinting ? { padding: 0, margin: 0, overflow: "visible" } : { flex: isMobileSplit ? "none" : "3", overflow: isMobileSplit ? "visible" : "auto", padding: "20px", height: isMobileSplit ? "max-content" : "100%" }}>
           <div id="bill-print-root" className="bill-sheet" style={{ "--print-scale-factor": (printScale / 100).toFixed(3), position: 'relative', zIndex: 1, margin: "0 auto" }}>
             {(txType === "sale" ? isPaymentDone : isBalancePaid) && <div className="watermark-done">FULLY PAID</div>}
@@ -784,11 +814,11 @@ export default function App() {
               <div className="totals">
                 <div className="totals-row"><span>{mode === "invoice" ? "Taxable Amt." : "TOTAL"}</span><strong>₹{money(computed.taxable)}</strong></div>
                 {mode === "invoice" ? (<><div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(computed.cgst)}</strong></div><div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(computed.sgst)}</strong></div><div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(computed.igst)}</strong></div></>) : (<><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(discount)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(exchange)}</strong></div></>)}
-                {computed.redeemedPoints > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED ({computed.redeemedPoints} pts)</span><strong style={{color:"#16a34a"}}>- ₹{money(computed.redeemedValue)}</strong></div>}
-                {computed.appliedCredit > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>STORE CREDIT APPLIED</span><strong style={{color:"#16a34a"}}>- ₹{money(computed.appliedCredit)}</strong></div>}
+                {num(b.redeemed_points) > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED ({b.redeemed_points} pts)</span><strong style={{color:"#16a34a"}}>- ₹{money(num(b.redeemed_points) * rsPerPt)}</strong></div>}
+                {num(b.applied_credit) > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>STORE CREDIT APPLIED</span><strong style={{color:"#16a34a"}}>- ₹{money(b.applied_credit)}</strong></div>}
                 <div className="totals-row"><span>MDR (Card 2%)</span><strong>₹{money(computed.mdr)}</strong></div>
                 <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(computed.roundOff)}</strong></div>
-                {computed.savedCredit > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(computed.savedCredit)}</strong></div>}
+                {num(b.saved_credit) > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(b.saved_credit)}</strong></div>}
                 <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(computed.grandTotal)}</strong></div>
                 {txType === "sale" ? (<div className="totals-row" style={{ color: isPaymentDone ? "#16a34a" : "#b45309", marginTop: "10px" }}><span>{isPaymentDone ? "PAID VIA" : "PAYMENT STATUS"}</span><strong>{isPaymentDone ? (paymentMethod === "Split" ? `SPLIT (Cash: ₹${money(splitCash)}, UPI: ₹${money(Math.max(0, computed.grandTotal - num(splitCash)))})` : (paymentMethod || "CASH").toUpperCase()) : "PENDING"}</strong></div>) : (<><div className="totals-row" style={{ marginTop: "10px", color: isAdvancePaid ? "#16a34a" : "#b45309" }}><span>ADVANCE {isAdvancePaid ? "RECEIVED" : "PENDING"} {advanceMethod ? `(${advanceMethod === 'Split' ? `Cash: ₹${money(advanceSplitCash)}, UPI: ₹${money(Math.max(0, num(advanceAmount) - num(advanceSplitCash)))}` : advanceMethod})` : ""}</span><strong>₹{money(advanceAmount)}</strong></div><div className="totals-row" style={{ color: isBalancePaid ? "#16a34a" : "#dc2626" }}><span>BALANCE {isBalancePaid ? "RECEIVED" : "DUE"} {balanceMethod ? `(${balanceMethod === 'Split' ? `Cash: ₹${money(balanceSplitCash)}, UPI: ₹${money(Math.max(0, (computed.grandTotal - num(advanceAmount)) - num(balanceSplitCash)))}` : balanceMethod})` : ""}</span><strong>₹{money(Math.max(0, computed.grandTotal - num(advanceAmount)))}</strong></div></>)}
                 {showDashboardUpi && (<div className="payment-qr-box" data-html2canvas-ignore="true"><p className="scan-title">Scan Here For Payment (₹{money(upiAmountToPay)})</p><img src={dynamicQrUrl} alt="Dynamic payment QR" className="upi-qr" crossOrigin="anonymous" /><p className="upi-id">UPI: {upiId}</p></div>)}
@@ -803,7 +833,7 @@ export default function App() {
           </div>
         </section>
 
-        {/* RIGHT SIDE: The Controls Sidebar */}
+        {/* RIGHT SIDE CONTROLS */}
         <aside className="controls no-print" style={{ flex: isMobileSplit ? "none" : "2", overflowY: isMobileSplit ? "visible" : "auto", overflowX: "hidden", padding: "20px", backgroundColor: "white", borderLeft: isMobileSplit ? "none" : "1px solid #cbd5e1", borderTop: isMobileSplit ? "1px solid #cbd5e1" : "none", height: isMobileSplit ? "max-content" : "100%" }}>
           <div className="control-card">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
@@ -824,20 +854,10 @@ export default function App() {
           <div className="control-card">
             <h3>Item Lines</h3>
             {(items || []).map((item) => {
-              
-              // --- SMART TYPO ENGINE UI (The red inline dot fix for mobile) ---
-              let correctedText = item.description;
-              let hasTypo = false;
-              if (item.description) {
-                const words = item.description.split(/\s+/);
-                const correctedWords = words.map(w => {
-                   const lowerW = w.toLowerCase();
-                   if (TYPO_MAP[lowerW]) { hasTypo = true; return TYPO_MAP[lowerW]; }
-                   return w;
-                });
-                if (hasTypo) correctedText = correctedWords.join(" ");
-              }
-              // ----------------------------------------------------------------
+              // --- CRASH PROOF TYPO ENGINE ---
+              const safeDesc = String(item.description || "");
+              let correctedText = autoCorrectText(safeDesc);
+              let hasTypo = (safeDesc !== correctedText);
               
               return (
               <div key={item.id} className="item-row-editor" style={{ overflow: "visible" }}>
@@ -845,16 +865,51 @@ export default function App() {
                   <Input 
                     className="item-desc-input" spellCheck={true} value={item.description} 
                     onChange={(e) => updateItem(item.id, "description", e.target.value)} 
+                    onFocus={() => setFocusedDescId(item.id)}
+                    onBlur={() => {
+                      setTimeout(() => setFocusedDescId(null), 200);
+                      // Silent Backup Fix
+                      if (hasTypo) updateItem(item.id, "description", correctedText);
+                    }}
                     placeholder="Description" style={{ width: "100%", paddingRight: hasTypo ? "110px" : "10px" }}
                   />
                   {hasTypo && (
                     <button 
                       type="button"
-                      onClick={() => updateItem(item.id, 'description', correctedText)}
+                      onMouseDown={(e) => { e.preventDefault(); updateItem(item.id, 'description', correctedText); setFocusedDescId(null); }}
                       style={{ position: 'absolute', right: '5px', top: '50%', transform: 'translateY(-50%)', backgroundColor: '#fef2f2', border: '1px solid #ef4444', color: '#ef4444', fontSize: '0.75rem', padding: '4px 8px', borderRadius: '12px', cursor: 'pointer', zIndex: 10, fontWeight: 'bold' }}
                     >
                       🔴 {correctedText}
                     </button>
+                  )}
+
+                  {focusedDescId === item.id && safeDesc.length >= 1 && (
+                    <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50, marginTop: "4px", maxHeight: "180px", overflowY: "auto", backgroundColor: "white", border: "1px solid #cbd5e1", borderRadius: "6px", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)" }}>
+                      {(() => {
+                        const typed = safeDesc.toLowerCase().trim();
+                        let historyMatches = savedDescriptions.filter(d => { const target = String(d || "").toLowerCase(); return target.includes(typed) && target !== typed; });
+                        let finalSuggestions = [];
+                        if (hasTypo) finalSuggestions.push(`✨ Did you mean: ${correctedText}`);
+                        finalSuggestions = [...finalSuggestions, ...historyMatches].slice(0, 8);
+                        if (finalSuggestions.length === 0) return null;
+
+                        return finalSuggestions.map((desc, idx) => {
+                          const isTypoFix = desc.startsWith('✨ Did you mean: ');
+                          const cleanDesc = isTypoFix ? desc.replace('✨ Did you mean: ', '') : desc;
+                          return (
+                            <button
+                              key={idx} type="button"
+                              onMouseDown={(e) => { e.preventDefault(); updateItem(item.id, "description", cleanDesc); setFocusedDescId(null); }}
+                              style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 12px", border: "none", borderBottom: "1px solid #f1f5f9", backgroundColor: isTypoFix ? "#f0fdf4" : "transparent", cursor: "pointer", fontSize: "0.9rem", color: isTypoFix ? "#166534" : "#0f172a", fontWeight: isTypoFix ? "bold" : "normal" }}
+                              onMouseOver={(e) => e.target.style.backgroundColor = isTypoFix ? "#dcfce7" : "#f8fafc"}
+                              onMouseOut={(e) => e.target.style.backgroundColor = isTypoFix ? "#f0fdf4" : "transparent"}
+                            >
+                              {desc}
+                            </button>
+                          );
+                        });
+                      })()}
+                    </div>
                   )}
                 </div>
 
@@ -938,7 +993,8 @@ export default function App() {
           </div>
         </aside>
       </main>
-
+// === PART 6 CONTINUED BELOW ===
+// === PART 6 (CONTINUED) START ===
       {/* DAILY SALES & LEDGER DRAWER */}
       {showLedger && (
         <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "650px", backgroundColor: "white", zIndex: 100, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
@@ -960,7 +1016,7 @@ export default function App() {
                   <select value={graphFilter} onChange={(e) => setGraphFilter(e.target.value)} className="native-select" style={{ maxWidth: "200px" }}>
                     <option value="1_day">Today (Hourly)</option><option value="1_week">Last 7 Days</option><option value="15_days">Last 15 Days</option><option value="1_month">Last 1 Month</option><option value="3_months">Last 3 Months</option><option value="6_months">Last 6 Months</option><option value="1_year">Last 1 Year</option><option value="all_time">Till Opening (All Time)</option>
                   </select>
-                  <div style={{ backgroundColor: "#0f172a", color: "white", padding: "4px 10px", borderRadius: "12px", fontSize: "0.85rem", fontWeight: "bold" }}>Weight Sold: {graphData?.totalWeight?.toFixed(3) || "0.000"} g</div>
+                  <div style={{ backgroundColor: "#0f172a", color: "white", padding: "4px 10px", borderRadius: "12px", fontSize: "0.85rem", fontWeight: "bold" }}>Weight Sold: {num(graphData?.totalWeight || 0).toFixed(3)} g</div>
                 </div>
 
                 {isGraphLoading ? (<p style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>Loading chart data from server...</p>) : (
@@ -976,13 +1032,13 @@ export default function App() {
                       <ResponsiveContainer width="100%" height="80%">
                         <PieChart>
                           <Pie data={graphData?.pieData || []} innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
-                            {(graphData?.pieData || []).map((entry, index) => (<Cell key={`cell-${index}`} fill={['#d97706', '#2563eb', '#dc2626'][index % 3]} />))}
+                            {(graphData?.pieData || []).map((entry, idx) => (<Cell key={`cell-${idx}`} fill={COLORS[idx % COLORS.length]} />))}
                           </Pie>
                           <RechartsTooltip formatter={(value) => `₹${money(value)}`} />
                         </PieChart>
                       </ResponsiveContainer>
                       <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '5px' }}>
-                         {(graphData?.pieData || []).map((entry, i) => (<span key={i} style={{ fontSize: '0.65rem', fontWeight: 'bold', color: ['#d97706', '#2563eb', '#dc2626'][i % 3] }}>● {entry.name}</span>))}
+                         {(graphData?.pieData || []).map((entry, i) => (<span key={i} style={{ fontSize: '0.65rem', fontWeight: 'bold', color: COLORS[i % COLORS.length] }}>● {entry.name}</span>))}
                       </div>
                     </div>
                   </div>
@@ -1091,7 +1147,7 @@ export default function App() {
           </div>
 
           <div style={{ padding: "15px" }}>
-            <div style={{ marginBottom: "20px" }}><Button onClick={handleBulkDownload} disabled={isBulkDownloading || (filteredRecentBills || []).length === 0} style={{ width: "100%", backgroundColor: "#0f172a", height: "auto", padding: "10px", display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", justifyContent: "center", fontSize: "1rem", boxSizing: "border-box" }}>{isBulkDownloading ? "Generating PDF... Please Wait" : <><Download size={18} /> Download {(filteredRecentBills || []).length} Bills as PDF</>}</Button></div>
+            <div style={{ marginBottom: "20px" }}><Button onClick={handleBulkDownload} disabled={isBulkDownloading || (Array.isArray(filteredRecentBills)?filteredRecentBills:[]).length === 0} style={{ width: "100%", backgroundColor: "#0f172a", height: "auto", padding: "10px", display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", justifyContent: "center", fontSize: "1rem", boxSizing: "border-box" }}>{isBulkDownloading ? "Generating PDF... Please Wait" : <><Download size={18} /> Download {(Array.isArray(filteredRecentBills)?filteredRecentBills:[]).length} Bills as PDF</>}</Button></div>
             
             <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "20px" }}>
               <Input placeholder="Search Customer Name, Phone, or Bill No..." value={billSearchQuery} onChange={(e) => setBillSearchQuery(e.target.value)} />
@@ -1227,4 +1283,4 @@ export default function App() {
     </div>
   );
 }
-// === PART 5 END ===
+// === PART 6 END ===
