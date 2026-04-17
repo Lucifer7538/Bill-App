@@ -87,7 +87,6 @@ const FooterLinksAndQRs = ({ branch, allBranches }) => {
           {branch.map_url && (<a href={branch.map_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>⭐ Feedback</a>)}
           {branch.about_url && (<a href={branch.about_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#3b82f6", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>ℹ️ About Us</a>)}
         </div>
-        
         <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Visit Our Branches:</p>
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
           {(allBranches || []).map(b => b.location_url && (
@@ -95,7 +94,6 @@ const FooterLinksAndQRs = ({ branch, allBranches }) => {
           ))}
         </div>
       </div>
-      
       <div className="print-only" style={{ display: 'flex', justifyContent: 'center', gap: '15px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
         {branch.whatsapp_url && (<div style={{ textAlign: 'center' }}><img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.whatsapp_url)}&size=100`} alt="WA QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} /><p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>WhatsApp</p></div>)}
         {branch.instagram_url && (<div style={{ textAlign: 'center' }}><img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.instagram_url)}&size=100`} alt="Insta QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} /><p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>Instagram</p></div>)}
@@ -282,7 +280,6 @@ export default function App() {
   const [graphFilter, setGraphFilter] = useState("1_day");
   const [graphData, setGraphData] = useState({ barData: [], pieData: [], totalWeight: 0 });
   const [isGraphLoading, setIsGraphLoading] = useState(false);
-  
   const authHeaders = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
   const activeGlobalBranch = (settings.branches || []).find(b => b.id === globalBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
   const activeBillBranch = (settings.branches || []).find(b => b.id === billBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
@@ -532,7 +529,6 @@ export default function App() {
     }
   }, [showLedger, token, isPublicView, globalBranchId, authHeaders]);
 
-  // --- ANALYTICS GRAPH FETCH EFFECT ---
   useEffect(() => {
     if (showLedger && showGraph) {
       const fetchGraph = async () => {
@@ -608,9 +604,6 @@ export default function App() {
     }
   }, [showLedger, showGraph, graphFilter, globalBranchId, todayBills, authHeaders]);
 
-  const COLORS = ['#d97706', '#2563eb', '#dc2626']; 
-  // ----------------------------------------
-
   useEffect(() => {
     if (showSettings && token && !isPublicView) {
       const fetchStorageStats = async () => { try { const res = await axios.get(`${API}/system/storage`, { headers: authHeaders }); setStorageStats(res.data); } catch { console.error("Failed to load storage stats"); } };
@@ -671,7 +664,6 @@ export default function App() {
     }, 250);
     return () => clearTimeout(timer);
   }, [customer.phone, customer.name, token, isPublicView, authHeaders]);
-
   const computed = useMemo(() => {
     const baseSilverRate = num(settings.silver_rate_per_gram);
     const baseMCPerGram = num(settings.making_charge_per_gram);
@@ -717,7 +709,9 @@ export default function App() {
     const grandTotal = baseTotal + roundOff;
     
     return { items: mapped, baseSilverRate, subtotal, taxable, cgst, sgst, igst, mdr, roundOff, grandTotal, totalWeight, earnedPoints, redeemedPoints: appliedRedeemedPoints, redeemedValue: appliedRedeemedValue, appliedCredit: appliedCreditVal, savedCredit: savedCreditVal, bonusPoints: bonusPointsVal };
-  }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff, redeemedPoints, appliedCredit, savedCredit,   const updateItem = (id, key, value) => { markDirty(); setItems((prev) => prev.map((item) => (item.id === id ? { ...item, [key]: value } : item))); };
+  }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff, redeemedPoints, appliedCredit, savedCredit, bonusPoints]);
+
+  const updateItem = (id, key, value) => { markDirty(); setItems((prev) => prev.map((item) => (item.id === id ? { ...item, [key]: value } : item))); };
   const checkIsBlank = () => { return !customer.name.trim() && !customer.phone.trim() && !customer.address.trim() && !(items || []).some(i => i.description.trim() || i.weight.trim() || i.amount_override.trim()) && (!discount || discount === "0") && (!exchange || exchange === "0") && !paymentMethod && !advanceMethod && !advanceAmount && !splitCash; };
   const clearBill = async (nextMode = mode, nextBranch = billBranchId) => {
     setCurrentBillId(null); setEditingDocNumber(null); setItems([createItem(settings.default_hsn)]); setCustomer({ name: "", phone: "", address: "", email: "", points: 0, credit: 0 });
@@ -756,15 +750,11 @@ export default function App() {
       await axios.put(`${API}/bills/${bill.document_number}/toggle-payment`, { is_payment_done: newStatus }, { headers: authHeaders }); 
       toast.success(`Payment marked as ${newStatus ? 'DONE ✅' : 'PENDING ⏳'}`); 
       
-      if (newStatus && iotOnline) {
-        sendSuccessToDisplay();
-      }
-
+      if (newStatus && iotOnline) { sendSuccessToDisplay(); }
       if (currentBillId === bill.id) { setIsPaymentDone(newStatus); } 
       setRecentBillsList(prev => prev.map(b => b.document_number === bill.document_number ? { ...b, is_payment_done: newStatus } : b)); 
       await loadSettings(); 
-    } 
-    catch { toast.error("Failed to update payment status."); }
+    } catch { toast.error("Failed to update payment status."); }
   };
 
   const handleResetCounter = async (resetMode) => {
@@ -847,17 +837,10 @@ export default function App() {
         setDocumentNumber(res.data.document_number); 
       }
       
-      if (isPaymentDone && iotOnline) {
-        sendSuccessToDisplay();
-      }
-
+      if (isPaymentDone && iotOnline) { sendSuccessToDisplay(); }
       await loadSettings(); 
       await fetchLedgerHistory();
-    } catch (error) { 
-      toast.error("Failed to save bill."); 
-    } finally { 
-      setSavingBill(false); 
-    }
+    } catch (error) { toast.error("Failed to save bill."); } finally { setSavingBill(false); }
   };
 
   const downloadPdf = async (elementId, filename) => { 
@@ -967,6 +950,7 @@ export default function App() {
   const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
   const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
 
+  const COLORS = ['#d97706', '#2563eb', '#dc2626']; 
   if (isPublicView) {
     if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
     if (publicBill === "NOT_FOUND" || !publicBill) return <div className="loading-screen">Bill not found or has been deleted.</div>;
@@ -2046,7 +2030,6 @@ export default function App() {
 
             {settingsTab === "advanced" && (
               <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-                {/* --- NEW IOT DISPLAY SETTINGS --- */}
                 <div style={{ padding: "15px", backgroundColor: "#f0f9ff", borderRadius: "8px", border: "1px solid #bae6fd" }}>
                   <h4 style={{ color: "#0369a1", margin: "0 0 10px 0", display: "flex", alignItems: "center", gap: "8px" }}>
                     <Cpu size={18} /> Counter Display Terminal
@@ -2067,7 +2050,6 @@ export default function App() {
                     This device is synchronized with your cloud billing app to automate customer payments.
                   </p>
                 </div>
-                {/* --------------------------------- */}
 
                 <div style={{ padding: "15px", backgroundColor: "#fef2f2", borderRadius: "8px", border: "1px solid #fecaca" }}>
                   <h4 style={{ color: "#991b1b", margin: "0 0 10px 0" }}>Danger Zone</h4>
