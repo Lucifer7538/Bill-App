@@ -397,6 +397,7 @@ export default function App() {
   const [showInvLogs, setShowInvLogs] = useState(false);
   const [invItemName, setInvItemName] = useState("");
   const [invWeight, setInvWeight] = useState("");
+  const [invQuantity, setInvQuantity] = useState("");
   const [invUnit, setInvUnit] = useState("g");
   
   const [descFocusId, setDescFocusId] = useState(null);
@@ -1505,7 +1506,7 @@ export default function App() {
       } 
   };
 
-  const saveBill = async () => {
+ const saveBill = async () => {
     if (txType === "sale" && !paymentMethod) { 
         toast.error("Please select a payment method."); 
         return; 
@@ -1582,7 +1583,7 @@ export default function App() {
         setEditingDocNumber(res.data.document_number); 
         setDocumentNumber(res.data.document_number); 
 
-        // --- NEW FEATURE: AUTO-DEDUCT INVENTORY ON NEW BILL ---
+        // --- AUTO-DEDUCT INVENTORY ON NEW BILL ---
         let updatedInventory = [...(settings.inventory || [])];
         let inventoryChanged = false;
         
@@ -1591,31 +1592,40 @@ export default function App() {
            const invIndex = updatedInventory.findIndex(inv => (inv.name || "").trim().toLowerCase() === desc);
            
            if (invIndex !== -1 && num(item.weight) > 0) {
+              // 1. Deduct the Weight
               const totalItemWeight = num(item.weight) * num(item.quantity || 1);
               updatedInventory[invIndex].weightInGrams = Math.max(0, (updatedInventory[invIndex].weightInGrams || 0) - totalItemWeight);
+              
+              // 2. Deduct the Quantity (Pieces)
+              const piecesSold = num(item.quantity || 1);
+              updatedInventory[invIndex].quantity = Math.max(0, (updatedInventory[invIndex].quantity || 0) - piecesSold);
+
               inventoryChanged = true;
            }
         });
-        
+
+        // PUSH THE DEDUCTION TO THE DATABASE
         if (inventoryChanged) {
-           const newSettings = { ...settings, inventory: updatedInventory };
-           setSettings(newSettings);
-           axios.put(`${API}/settings`, newSettings, { headers: authHeaders })
-                .catch(() => console.error("Background inventory update failed"));
+           try {
+             await axios.put(`${API}/settings`, { inventory: updatedInventory }, { headers: authHeaders });
+             await loadSettings(); 
+           } catch (invError) {
+             console.error("Failed to update inventory automatically:", invError);
+             toast.error("Bill saved, but failed to auto-deduct inventory.");
+           }
         }
-        // --------------------------------------------------------
       }
       
-      if (isPaymentDone && iotOnline) {
-        sendSuccessToDisplay();
+      const updatedBills = await axios.get(`${API}/bills/recent`, { headers: authHeaders });
+      if (updatedBills.data) {
+         setRecentBillsList(updatedBills.data);
       }
 
-      await loadSettings(); 
-      await fetchLedgerHistory();
-    } catch (error) { 
-      toast.error("Failed to save bill."); 
-    } finally { 
-      setSavingBill(false); 
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to save the bill.");
+    } finally {
+      setSavingBill(false);
     }
   };
 
@@ -2839,7 +2849,7 @@ export default function App() {
         </section>
       )}
 
-      {/* INVENTORY MANAGER DRAWER */}
+    {/* INVENTORY MANAGER DRAWER */}
       {showInventory && (
         <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "550px", backgroundColor: "white", zIndex: 105, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
           <div className="drawer-header" style={{ backgroundColor: "#f8fafc", borderBottom: "1px solid #e2e8f0", padding: "20px", position: "sticky", top: 0, zIndex: 10 }}>
@@ -2871,6 +2881,7 @@ export default function App() {
                         <tr style={{ borderBottom: "2px solid #cbd5e1", textAlign: "left" }}>
                           <th style={{ padding: "8px" }}>Date</th>
                           <th style={{ padding: "8px" }}>Item Name</th>
+                          <th style={{ padding: "8px" }}>Qty Added</th>
                           <th style={{ padding: "8px" }}>Weight Added</th>
                         </tr>
                       </thead>
@@ -2879,6 +2890,7 @@ export default function App() {
                           <tr key={log.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
                             <td style={{ padding: "8px" }}>{log.date}</td>
                             <td style={{ padding: "8px", fontWeight: "bold" }}>{log.name}</td>
+                            <td style={{ padding: "8px", color: "#0284c7" }}>+{log.quantity || 0} Pcs</td>
                             <td style={{ padding: "8px", color: "#16a34a" }}>+{log.weight} {log.unit}</td>
                           </tr>
                         ))}
@@ -2892,18 +2904,20 @@ export default function App() {
             <div style={{ padding: "15px", backgroundColor: "#f0f9ff", borderRadius: "8px", border: "1px solid #bae6fd", marginBottom: "20px" }}>
               <h4 style={{ margin: "0 0 10px 0", color: "#0369a1" }}>Add Incoming Stock</h4>
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                <Input placeholder="Item Name (e.g. CB Payal)" value={invItemName} onChange={(e) => setInvItemName(e.target.value)} style={{ flex: "1 1 200px" }} />
-                <div style={{ display: "flex", gap: "5px", flex: "1 1 150px" }}>
-                   <Input type="number" placeholder="Weight" value={invWeight} onChange={(e) => setInvWeight(e.target.value)} style={{ flex: 2 }} />
-                   <select value={invUnit} onChange={(e) => setInvUnit(e.target.value)} className="native-select" style={{ flex: 1, minWidth: "60px" }}>
+                <Input placeholder="Item Name (e.g. CB Payal)" value={invItemName} onChange={(e) => setInvItemName(e.target.value)} style={{ flex: "1 1 100%" }} />
+                <div style={{ display: "flex", gap: "10px", width: "100%" }}>
+                   <Input type="number" placeholder="Qty (Pieces)" value={invQuantity} onChange={(e) => setInvQuantity(e.target.value)} style={{ flex: 1 }} />
+                   <Input type="number" placeholder="Weight" value={invWeight} onChange={(e) => setInvWeight(e.target.value)} style={{ flex: 1.5 }} />
+                   <select value={invUnit} onChange={(e) => setInvUnit(e.target.value)} className="native-select" style={{ flex: 0.8 }}>
                       <option value="g">Grams</option>
                       <option value="kg">KGs</option>
                    </select>
                 </div>
               </div>
-              <Button style={{ width: "100%", marginTop: "10px", backgroundColor: "#0284c7" }} onClick={() => {
+              <Button style={{ width: "100%", marginTop: "15px", backgroundColor: "#0284c7" }} onClick={() => {
                  if(!invItemName || !invWeight) return toast.error("Enter item name and weight.");
                  const weightGrams = num(invWeight) * (invUnit === "kg" ? 1000 : 1);
+                 const addedQty = num(invQuantity) || 0; // Default to 0 if left blank
                  
                  let currentInv = [...(settings.inventory || [])];
                  let currentLogs = [...(settings.inventory_logs || [])];
@@ -2911,17 +2925,19 @@ export default function App() {
                  const existingIndex = currentInv.findIndex(i => i.name.toLowerCase() === invItemName.toLowerCase().trim());
                  if (existingIndex !== -1) { 
                      currentInv[existingIndex].weightInGrams += weightGrams; 
+                     currentInv[existingIndex].quantity = (currentInv[existingIndex].quantity || 0) + addedQty;
                  } else { 
-                     currentInv.push({ id: Date.now().toString(), name: invItemName.trim(), weightInGrams: weightGrams }); 
+                     currentInv.push({ id: Date.now().toString(), name: invItemName.trim(), weightInGrams: weightGrams, quantity: addedQty }); 
                  }
 
-                 const newLog = { id: Date.now().toString(), date: today(), name: invItemName.trim(), weight: invWeight, unit: invUnit };
+                 const newLog = { id: Date.now().toString(), date: today(), name: invItemName.trim(), weight: invWeight, unit: invUnit, quantity: addedQty };
                  currentLogs.unshift(newLog); 
 
                  const newSettings = { ...settings, inventory: currentInv, inventory_logs: currentLogs };
                  setSettings(newSettings);
                  setInvItemName(""); 
                  setInvWeight("");
+                 setInvQuantity(""); // Clear the quantity input
                  
                  axios.put(`${API}/settings`, newSettings, { headers: authHeaders })
                       .then(() => toast.success("Stock added and logged!"))
@@ -2936,6 +2952,9 @@ export default function App() {
                     <div key={inv.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px", border: "1px solid #cbd5e1", borderRadius: "8px", backgroundColor: "white" }}>
                        <strong style={{ fontSize: "1.1rem" }}>{inv.name}</strong>
                        <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
+                          <span style={{ fontSize: "1rem", color: "#475569", fontWeight: "600", backgroundColor: "#f1f5f9", padding: "4px 8px", borderRadius: "4px" }}>
+                             {inv.quantity || 0} Pcs
+                          </span>
                           <span style={{ fontSize: "1.1rem", color: inv.weightInGrams > 500 ? "#16a34a" : "#b45309", fontWeight: "bold" }}>
                              {inv.weightInGrams >= 1000 ? `${(inv.weightInGrams / 1000).toFixed(3)} KG` : `${inv.weightInGrams.toFixed(2)} g`}
                           </span>
@@ -2952,7 +2971,7 @@ export default function App() {
                  ))}
                </div>
             )}
-            <p style={{ fontSize: "0.8rem", color: "#64748b", marginTop: "15px" }}>*Stock is automatically deducted in grams when bills are successfully saved for these exact item names.</p>
+            <p style={{ fontSize: "0.85rem", color: "#64748b", marginTop: "15px", lineHeight: "1.4" }}>*Stock weight and quantity are automatically deducted when bills are successfully saved for these exact item names.</p>
           </div>
         </section>
       )}
