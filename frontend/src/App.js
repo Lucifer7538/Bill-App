@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Store, Upload, Download, Keyboard, Cpu, Wifi, CheckCircle2, LineChart, Package, AlertCircle, Lock } from "lucide-react"; // Added Lock icon
+import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Store, Upload, Download, Keyboard, Cpu, Wifi, CheckCircle2, LineChart, Package, AlertCircle, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Toaster, toast } from "sonner";
@@ -28,7 +28,7 @@ const defaultSettings = {
   formula_note: "Line total = Weight x (Silver rate per gram + Making charge per gram)", logo_data_url: "", about_qr_data_url: STATIC_ABOUT_QR_URL, custom_fonts: [],
   master_items: [], 
   inventory: [], 
-  inventory_logs: [], // NEW: Stores history of stock additions
+  inventory_logs: [],
   shortcuts: [
     { id: "save_bill", action: "Save Bill", keys: "alt + s", isSystem: true },
     { id: "add_item", action: "Add new item row", keys: "alt + a", isSystem: true },
@@ -240,12 +240,14 @@ export default function App() {
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [analyticsFilter, setAnalyticsFilter] = useState("THIS_MONTH");
   const [showInventory, setShowInventory] = useState(false);
-  const [showInvLogs, setShowInvLogs] = useState(false); // NEW: Toggles the stock history view
+  const [showInvLogs, setShowInvLogs] = useState(false);
   const [invItemName, setInvItemName] = useState("");
   const [invWeight, setInvWeight] = useState("");
   const [invUnit, setInvUnit] = useState("g");
+  
   const [descFocusId, setDescFocusId] = useState(null);
   const [spellCheckOpenId, setSpellCheckOpenId] = useState(null);
+  const [spellSuggestions, setSpellSuggestions] = useState({}); // NEW STATE FOR INTERNET ENGINE
 
   const [recentBillsList, setRecentBillsList] = useState([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
@@ -285,6 +287,56 @@ export default function App() {
   const activeGlobalBranch = (settings.branches || []).find(b => b.id === globalBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
   const activeBillBranch = (settings.branches || []).find(b => b.id === billBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
 
+  // --- NEW: HYBRID INTERNET SPELL CHECKER ENGINE ---
+  useEffect(() => {
+    const timers = {};
+    const jewelryTypos = { "breclate": "Bracelet", "braclet": "Bracelet", "bracelete": "Bracelet", "breslate": "Bracelet", "braslet": "Bracelet", "necklas": "Necklace", "neckles": "Necklace", "neclace": "Necklace", "anklit": "Anklet", "earings": "Earrings", "pendantt": "Pendant", "ringg": "Ring" };
+
+    items.forEach(item => {
+      const desc = (item.description || "").trim();
+      if (desc.length < 3) {
+          setSpellSuggestions(prev => { if(prev[item.id]) { const next = {...prev}; delete next[item.id]; return next; } return prev; });
+          return;
+      }
+
+      const words = desc.split(/\s+/);
+      const lastWord = words[words.length - 1].toLowerCase();
+
+      // 1. Check Master Items (if exact match, it's correct)
+      if ((settings.master_items || []).some(mi => mi.name.toLowerCase().includes(lastWord))) {
+         setSpellSuggestions(prev => { if(prev[item.id]) { const next = {...prev}; delete next[item.id]; return next; } return prev; });
+         return;
+      }
+
+      // 2. Check Local Jewelry Dictionary first (fastest, most accurate for shop)
+      if (jewelryTypos[lastWord]) {
+         setSpellSuggestions(prev => ({...prev, [item.id]: jewelryTypos[lastWord]}));
+         return;
+      }
+
+      // 3. Fallback to Internet (Datamuse API)
+      timers[item.id] = setTimeout(async () => {
+        try {
+           if(lastWord.length > 2) {
+               const res = await axios.get(`https://api.datamuse.com/sug?s=${lastWord}`);
+               if (res.data && res.data.length > 0) {
+                   const best = res.data[0].word;
+                   // Only suggest if the best guess is actually a different word
+                   if (best.toLowerCase() !== lastWord) {
+                       setSpellSuggestions(prev => ({...prev, [item.id]: best.charAt(0).toUpperCase() + best.slice(1)}));
+                   } else {
+                       setSpellSuggestions(prev => { const next = {...prev}; delete next[item.id]; return next; });
+                   }
+               }
+           }
+        } catch(e) {}
+      }, 600); // Wait 600ms after user stops typing
+    });
+
+    return () => Object.values(timers).forEach(clearTimeout);
+  }, [items, settings.master_items]);
+  // ------------------------------------------------
+
   useEffect(() => {
     if (!token || isPublicView) return;
     const checkIot = async () => {
@@ -297,446 +349,6 @@ export default function App() {
     const interval = setInterval(checkIot, 10000); 
     return () => clearInterval(interval);
   }, [token, isPublicView, authHeaders]);
-
-  const sendQrToDisplay = async (amount, upiId) => {
-    if (!iotOnline) { toast.error("IoT Device is offline!"); return; }
-    setIsMqttSending(true);
-    try {
-      await axios.post(`${API}/cloud/mqtt/publish`, {
-        topic: "Jalaram/QR",
-        message: JSON.stringify({ amount: String(Math.round(amount)), upi_id: upiId })
-      }, { headers: authHeaders });
-      toast.success("QR Code sent to shop display!");
-    } catch (e) { toast.error("Failed to send QR to display."); }
-    finally { setIsMqttSending(false); }
-  };
-
-  const sendSuccessToDisplay = async () => {
-    try {
-      await axios.post(`${API}/cloud/mqtt/publish`, {
-        topic: "Jalaram/QR",
-        message: "SUCCESS"
-      }, { headers: authHeaders });
-    } catch (e) { console.error("MQTT Success trigger failed"); }
-  };
-
-  useEffect(() => {
-    if (settings.custom_fonts && settings.custom_fonts.length > 0) { settings.custom_fonts.forEach(f => registerFont(f.name, f.dataUrl)); }
-  }, [settings.custom_fonts]);
-
-  const handleFontUpload = async (event) => {
-    const file = event.target.files?.[0]; if (!file) return;
-    const fontName = file.name.split('.')[0];
-    try {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const dataUrl = e.target.result; const newFont = { name: fontName, dataUrl };
-        const updatedFonts = [...(settings.custom_fonts || []), newFont];
-        setSettings(prev => ({ ...prev, custom_fonts: updatedFonts }));
-        localStorage.setItem("jj_custom_fonts", JSON.stringify(updatedFonts));
-        registerFont(fontName, dataUrl); toast.success(`Font "${fontName}" uploaded!`);
-      };
-      reader.readAsDataURL(file);
-    } catch { toast.error("Font upload failed."); }
-  };
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const viewDoc = params.get("view");
-    const adminParam = params.get("admin");
-    
-    if (adminParam === "true") { setIsAdminView(true); }
-
-    if (viewDoc) {
-      setIsPublicView(true); setPublicLoading(true);
-      const fetchPublicBill = async () => {
-        try {
-          const res = await axios.get(`${API}/bills/public/${viewDoc}`);
-          setPublicBill(res.data.bill);
-          const sData = { ...defaultSettings, ...res.data.settings };
-          if (!sData.branches) sData.branches = defaultSettings.branches;
-          if (sData.custom_fonts) sData.custom_fonts.forEach(f => registerFont(f.name, f.dataUrl));
-          setPublicSettings(sData);
-        } catch (err) { setPublicBill("NOT_FOUND"); } finally { setPublicLoading(false); }
-      };
-      fetchPublicBill();
-    }
-  }, []);
-
-  useEffect(() => {
-    const handleEsc = (event) => {
-      if (event.key !== "Escape") return;
-      setShowSettings(false); setShowAbout(false); setShowRecentBills(false); setShowLedger(false); setShowFeedbackModal(false);
-      setShowAnalytics(false); setShowInventory(false); setSpellCheckOpenId(null);
-    };
-    window.addEventListener("keydown", handleEsc); return () => window.removeEventListener("keydown", handleEsc);
-  }, [showSettings, showAbout, showRecentBills, showLedger, showFeedbackModal, showAnalytics, showInventory]);
-
-  useEffect(() => {
-    const handleGlobalKeyDown = (e) => {
-      const activeTag = document.activeElement?.tagName.toLowerCase();
-      const isInput = activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select';
-      if (e.key === "Enter" && isInput && activeTag !== 'textarea') {
-          e.preventDefault();
-          const formElements = Array.from(document.querySelectorAll('input, select, textarea, button:not(:disabled)'));
-          const index = formElements.indexOf(document.activeElement);
-          if (index > -1 && index < formElements.length - 1) { formElements[index + 1].focus(); }
-          return;
-      }
-      if (isInput && !e.ctrlKey && !e.metaKey && !e.altKey) return; 
-
-      const scList = settings.shortcuts || defaultSettings.shortcuts;
-      const checkKey = (actionId) => {
-          const sc = scList.find(s => s.id === actionId);
-          if (!sc || !sc.keys) return false;
-          const parts = sc.keys.toLowerCase().split('+').map(p => p.trim());
-          const needsCtrl = parts.includes('ctrl') || parts.includes('cmd');
-          const needsShift = parts.includes('shift');
-          const needsAlt = parts.includes('alt');
-          const keyPart = parts[parts.length - 1]; 
-          const ctrlPressed = e.ctrlKey || e.metaKey;
-          const shiftPressed = e.shiftKey;
-          const altPressed = e.altKey;
-          const keyFromKey = e.key ? e.key.toLowerCase() : "";
-          const keyFromCode = e.code ? e.code.toLowerCase().replace("key", "").replace("digit", "") : "";
-          return (ctrlPressed === needsCtrl) && (shiftPressed === needsShift) && (altPressed === needsAlt) && (keyFromKey === keyPart || keyFromCode === keyPart);
-      };
-
-      if (checkKey('save_bill')) { e.preventDefault(); e.stopPropagation(); saveBill(); return; }
-      if (checkKey('add_item')) { e.preventDefault(); e.stopPropagation(); setItems(prev => [...prev, createItem(settings.default_hsn)]); markDirty(); return; }
-      if (checkKey('new_bill')) { e.preventDefault(); e.stopPropagation(); handleNewBillClick(); return; }
-      if (checkKey('share_wa')) { e.preventDefault(); e.stopPropagation(); shareWhatsApp(); return; }
-      if (checkKey('open_ledger')) { e.preventDefault(); e.stopPropagation(); setShowLedger(true); return; }
-      if (checkKey('open_recent')) { e.preventDefault(); e.stopPropagation(); setShowRecentBills(true); return; }
-      if (checkKey('focus_payment')) { e.preventDefault(); e.stopPropagation(); document.getElementById('paymentMethodSelect')?.focus(); return; }
-      if (checkKey('focus_customer')) { e.preventDefault(); e.stopPropagation(); document.getElementById('customerNameInput')?.focus(); return; }
-      if (checkKey('focus_item')) { e.preventDefault(); e.stopPropagation(); const itemInputs = document.querySelectorAll('.item-desc-input'); if(itemInputs.length > 0) itemInputs[itemInputs.length - 1].focus(); return; }
-      if (checkKey('focus_discount')) { e.preventDefault(); e.stopPropagation(); document.getElementById('discountInput')?.focus(); return; }
-      if (checkKey('focus_redeem')) { e.preventDefault(); e.stopPropagation(); document.getElementById('redeemedPointsInput')?.focus(); return; }
-      if (checkKey('focus_credit')) { e.preventDefault(); e.stopPropagation(); document.getElementById('appliedCreditInput')?.focus(); return; }
-      if (checkKey('download_pdf')) { e.preventDefault(); e.stopPropagation(); downloadPdf("bill-print-root", documentNumber || mode); return; }
-      if (checkKey('print_bill')) { e.preventDefault(); e.stopPropagation(); window.print(); return; }
-      if (checkKey('iot_qr')) { e.preventDefault(); e.stopPropagation(); sendQrToDisplay(computed.grandTotal, mode === 'invoice' ? activeBillBranch.invoice_upi_id : activeBillBranch.estimate_upi_id); return; }
-    };
-    window.addEventListener('keydown', handleGlobalKeyDown, true);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
-  }); 
-
-  useEffect(() => { localStorage.setItem("jj_print_scale", String(clampPrintScale(printScale))); }, [printScale]);
-  
-  useEffect(() => {
-    if (isPublicView) return; 
-    const verify = async () => {
-      if (!token) { setCheckingSession(false); return; }
-      const slowServerTimeout = setTimeout(() => setIsWakingUp(true), 3000);
-      try { await axios.get(`${API}/auth/verify`, { headers: authHeaders }); } 
-      catch { localStorage.removeItem("jj_auth_token"); setToken(""); } 
-      finally { clearTimeout(slowServerTimeout); setCheckingSession(false); setIsWakingUp(false); }
-    };
-    verify();
-  }, [token, isPublicView, authHeaders]);
-
-  useEffect(() => {
-    if (showRecentBills && token && !isPublicView) {
-      const fetchRecent = async () => {
-        setLoadingRecent(true);
-        try {
-          const limit = recentDateFilter === "ALL" ? 50 : 500;
-          const response = await axios.get(`${API}/bills/recent?limit=${limit}&branch_filter=${recentBranchFilter}&search=${encodeURIComponent(billSearchQuery)}`, { headers: authHeaders });
-          setRecentBillsList(response.data);
-        } catch { toast.error("Failed to load recent bills."); } 
-        finally { setLoadingRecent(false); }
-      };
-      const timer = setTimeout(fetchRecent, 300); return () => clearTimeout(timer);
-    }
-  }, [showRecentBills, token, isPublicView, billSearchQuery, recentBranchFilter, recentDateFilter, authHeaders]); 
-
-  useEffect(() => {
-    if (showAnalytics && token && !isPublicView) {
-      const fetchAllForAnalytics = async () => {
-        try {
-          const response = await axios.get(`${API}/bills/recent?limit=1000&branch_filter=ALL&search=`, { headers: authHeaders });
-          setRecentBillsList(response.data);
-        } catch { console.error("Failed to load analytics data."); }
-      };
-      fetchAllForAnalytics();
-    }
-  }, [showAnalytics, token, isPublicView, authHeaders]);
-
-  const filteredRecentBills = useMemo(() => {
-    return (recentBillsList || []).filter(bill => {
-      if (recentModeFilter !== "ALL" && bill.mode !== recentModeFilter) return false;
-      if (recentDateFilter === "THIS_MONTH") {
-        const billDateObj = parseBillDate(bill.date);
-        const now = new Date();
-        if (billDateObj.getMonth() !== now.getMonth() || billDateObj.getFullYear() !== now.getFullYear()) return false;
-      } 
-      else if (recentDateFilter === "LAST_MONTH") {
-        const billDateObj = parseBillDate(bill.date);
-        const now = new Date();
-        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        if (billDateObj.getMonth() !== lastMonth.getMonth() || billDateObj.getFullYear() !== lastMonth.getFullYear()) return false;
-      } 
-      else if (recentDateFilter === "CUSTOM") {
-        const fixBillDate = (dStr) => {
-            if(!dStr) return "";
-            const p = dStr.split("-");
-            if (p.length === 3 && p[0].length === 2) return `${p[2]}-${p[1]}-${p[0]}`;
-            return dStr;
-        };
-        const bDate = fixBillDate(bill.date);
-        if (customStartDate && bDate < customStartDate) return false;
-        if (customEndDate && bDate > customEndDate) return false;
-      }
-      return true;
-    });
-  }, [recentBillsList, recentModeFilter, recentDateFilter, customStartDate, customEndDate]);
-
-  const handleBulkDownload = async () => {
-    if ((filteredRecentBills || []).length === 0) { toast.error("No bills to download!"); return; }
-    if ((filteredRecentBills || []).length > 20) { if (!window.confirm(`Generate PDF with ${filteredRecentBills.length} pages? This might take a minute.`)) return; }
-    setIsBulkDownloading(true); toast.info(`Generating PDF for ${filteredRecentBills.length} bills...`);
-    await new Promise(resolve => setTimeout(resolve, 800));
-    try {
-      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      for (let i = 0; i < filteredRecentBills.length; i++) {
-        const bill = filteredRecentBills[i];
-        const node = document.getElementById(`bulk-bill-${bill.document_number}`);
-        if (!node) continue;
-        const canvas = await html2canvas(node, { 
-          scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#ffffff", windowWidth: 1024,
-          onclone: (clonedDoc) => {
-            const clonedNode = clonedDoc.getElementById(`bulk-bill-${bill.document_number}`);
-            if (clonedNode) {
-              clonedNode.style.display = "block"; clonedNode.style.transform = "none";
-              clonedNode.style.width = "800px"; clonedNode.style.minWidth = "800px"; clonedNode.style.maxWidth = "800px"; 
-              clonedNode.style.height = "max-content";
-              clonedNode.style.padding = "20px"; clonedNode.style.boxSizing = "border-box";
-              const noPrint = clonedDoc.querySelectorAll('.no-print'); noPrint.forEach(el => el.style.display = 'none');
-              const printOnly = clonedDoc.querySelectorAll('.print-only'); printOnly.forEach(el => { el.style.position = 'static'; el.style.width = '100%'; el.style.height = 'auto'; el.style.opacity = '1'; el.style.visibility = 'visible'; el.style.display = 'flex'; });
-            }
-          }
-        });
-        const imgData = canvas.toDataURL("image/png", 1.0);
-        const pageHeight = (canvas.height * pageWidth) / canvas.width;
-        if (i > 0) pdf.addPage();
-        pdf.addImage(imgData, "PNG", 0, 0, pageWidth, pageHeight);
-      }
-      pdf.save(`Jalaram_Bills_Export_${today()}.pdf`); toast.success("Bulk PDF Downloaded!");
-    } catch (error) { toast.error("Error generating bulk PDF."); } finally { setIsBulkDownloading(false); }
-  };
-
-  const fetchLedgerHistory = async () => {
-    try { const res = await axios.get(`${API}/settings/ledger/logs?branch_id=${globalBranchId}`, { headers: authHeaders }); setLedgerLogs(res.data); } catch { toast.error("Failed to load ledger history."); }
-  };
-
-  useEffect(() => {
-    if (showLedger && token && !isPublicView) {
-      const fetchLedger = async () => {
-        setLedgerLoading(true);
-        try { await loadSettings(); const res = await axios.get(`${API}/bills/today?date=${today()}&branch_id=${globalBranchId}`, { headers: authHeaders }); setTodayBills(res.data); await fetchLedgerHistory(); } 
-        catch { toast.error("Failed to load today's ledger."); } finally { setLedgerLoading(false); }
-      };
-      fetchLedger();
-    }
-  }, [showLedger, token, isPublicView, globalBranchId, authHeaders]);
-
-  useEffect(() => {
-    if (showSettings && token && !isPublicView) {
-      const fetchStorageStats = async () => { try { const res = await axios.get(`${API}/system/storage`, { headers: authHeaders }); setStorageStats(res.data); } catch { console.error("Failed to load storage stats"); } };
-      fetchStorageStats();
-    }
-  }, [showSettings, token, isPublicView, authHeaders]);
-
-  const loadSettings = async () => {
-    const response = await axios.get(`${API}/settings`, { headers: authHeaders });
-    const savedLogo = localStorage.getItem("jj_logo_data_url");
-    let dbData = response.data || {};
-    if (!dbData.branches) dbData.branches = defaultSettings.branches;
-    if (!dbData.master_items) dbData.master_items = [];
-    if (!dbData.inventory) dbData.inventory = [];
-    if (!dbData.inventory_logs) dbData.inventory_logs = []; // Initialize logs array
-
-    let localFonts = []; const localFontsRaw = localStorage.getItem("jj_custom_fonts"); if (localFontsRaw) { try { localFonts = JSON.parse(localFontsRaw); } catch (e) {} }
-
-    let mergedShortcuts = defaultSettings.shortcuts;
-    if (dbData.shortcuts && dbData.shortcuts.length > 0) {
-        const customOnly = dbData.shortcuts.filter(sc => !sc.isSystem);
-        const systemUpdated = defaultSettings.shortcuts.map(sys => {
-            const savedSys = dbData.shortcuts.find(s => s.id === sys.id);
-            return savedSys ? savedSys : sys;
-        });
-        mergedShortcuts = [...systemUpdated, ...customOnly];
-    } else { mergedShortcuts = defaultSettings.shortcuts; }
-
-    const newSettings = { ...defaultSettings, ...dbData, logo_data_url: savedLogo || dbData.logo_data_url || "", custom_fonts: dbData.custom_fonts || localFonts, shortcuts: mergedShortcuts };
-    setSettings(newSettings);
-    if (!(newSettings.branches || []).find(b => b.id === globalBranchId)) { setGlobalBranchId((newSettings.branches || [])[0].id); setBillBranchId((newSettings.branches || [])[0].id); }
-    setItems((prev) => { if (prev.length === 1 && !prev[0].description && !prev[0].weight && !prev[0].hsn) return [{ ...prev[0], hsn: newSettings.default_hsn }]; return prev; });
-    setSettingsLoaded(true);
-  };
-
-  const reserveNumber = async (activeMode, activeBranch) => {
-    setIsNumberLoading(true);
-    try { const response = await axios.get(`${API}/bills/next-number`, { headers: authHeaders, params: { mode: activeMode, branch_id: activeBranch } }); setDocumentNumber(response.data.document_number || ""); } finally { setIsNumberLoading(false); }
-  };
-
-  const fetchCloudStatus = async () => {
-    try { const response = await axios.get(`${API}/cloud/status`, { headers: authHeaders }); setCloudStatus(response.data); } catch { setCloudStatus({ provider: "supabase", enabled: false, mode: "status-unavailable" }); }
-  };
-
-  useEffect(() => {
-    if (isPublicView) return;
-    const bootstrap = async () => { if (!token) return; try { await loadSettings(); await fetchCloudStatus(); } catch { toast.error("Could not load billing settings."); } };
-    bootstrap();
-  }, [token, isPublicView]); 
-
-  useEffect(() => {
-    if (!token || isPublicView) return;
-    const interval = setInterval(() => { fetchCloudStatus(); }, 30000); return () => clearInterval(interval);
-  }, [token, isPublicView]); 
-
-  useEffect(() => {
-    if (!token || isPublicView) return;
-    const query = customer.phone.trim().length >= 2 ? customer.phone.trim() : customer.name.trim();
-    if (query.length < 2) { setSuggestions([]); return; }
-    const timer = setTimeout(async () => {
-      try { const response = await axios.get(`${API}/customers/suggest`, { headers: authHeaders, params: { query } }); setSuggestions(response.data || []); } catch { setSuggestions([]); }
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [customer.phone, customer.name, token, isPublicView, authHeaders]);
-
-  const computed = useMemo(() => {
-    const baseSilverRate = num(settings.silver_rate_per_gram);
-    const baseMCPerGram = num(settings.making_charge_per_gram);
-    const flatMCBelow5g = num(settings.flat_mc_below_5g);
-    const ptPerGram = num(settings.loyalty_points_per_gram !== undefined ? settings.loyalty_points_per_gram : 1);
-    const rsPerPt = num(settings.loyalty_point_value_rs !== undefined ? settings.loyalty_point_value_rs : 1);
-
-    let totalWeight = 0;
-
-    const mapped = (items || []).map((item, index) => {
-      const weight = num(item.weight); totalWeight += weight;
-      const quantity = Math.max(num(item.quantity || 1), 1);
-      const silverRate = item.rate_override !== "" ? num(item.rate_override) : baseSilverRate;
-
-      let mcAmount = 0;
-      if (item.mc_override !== "") { mcAmount = weight * num(item.mc_override); } 
-      else if (flatMCBelow5g > 0 && weight > 0 && weight < 5) { mcAmount = flatMCBelow5g; } 
-      else { mcAmount = weight * baseMCPerGram; }
-
-      const totalItemCost = (weight * silverRate) + mcAmount;
-      const formulaAmount = mode === "estimate" ? totalItemCost * quantity : totalItemCost;
-      const amount = item.amount_override !== "" ? num(item.amount_override) : formulaAmount;
-      const rateForPrint = weight > 0 ? (amount / (mode === "estimate" ? quantity : 1)) / weight : 0;
-      const { rupees, paise } = splitAmount(amount);
-      return { ...item, slNo: index + 1, rate: rateForPrint, quantity, amount, rupees, paise, weight };
-    });
-
-    const subtotal = mapped.reduce((sum, row) => sum + row.amount, 0); const taxable = subtotal;
-    const cgst = mode === "invoice" ? taxable * 0.015 : 0; const sgst = mode === "invoice" ? taxable * 0.015 : 0; const igst = 0;
-    const gstApplied = mode === "invoice" ? cgst + sgst + igst : 0;
-    const mdr = paymentMethod === "Card" ? (taxable + gstApplied) * 0.02 : 0;
-    
-    const bonusPointsVal = num(bonusPoints);
-    const earnedPoints = Math.floor(totalWeight * ptPerGram) + bonusPointsVal;
-    const appliedRedeemedPoints = num(redeemedPoints);
-    const appliedRedeemedValue = appliedRedeemedPoints * rsPerPt;
-    const appliedCreditVal = num(appliedCredit);
-    const savedCreditVal = num(savedCredit);
-
-    const baseTotal = taxable + gstApplied + mdr - num(discount) - num(exchange) - appliedRedeemedValue - appliedCreditVal + savedCreditVal;
-    const autoRound = Math.round(baseTotal) - baseTotal;
-    const roundOff = manualRoundOff === "" ? autoRound : num(manualRoundOff);
-    const grandTotal = baseTotal + roundOff;
-    
-    return { items: mapped, baseSilverRate, subtotal, taxable, cgst, sgst, igst, mdr, roundOff, grandTotal, totalWeight, earnedPoints, redeemedPoints: appliedRedeemedPoints, redeemedValue: appliedRedeemedValue, appliedCredit: appliedCreditVal, savedCredit: savedCreditVal, bonusPoints: bonusPointsVal };
-  }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff, redeemedPoints, appliedCredit, savedCredit, bonusPoints]);
-
-  const updateItem = (id, key, value) => { markDirty(); setItems((prev) => prev.map((item) => (item.id === id ? { ...item, [key]: value } : item))); };
-  const checkIsBlank = () => { return !customer.name.trim() && !customer.phone.trim() && !customer.address.trim() && !(items || []).some(i => i.description.trim() || i.weight.trim() || i.amount_override.trim()) && (!discount || discount === "0") && (!exchange || exchange === "0") && !paymentMethod && !advanceMethod && !advanceAmount && !splitCash; };
-  const clearBill = async (nextMode = mode, nextBranch = billBranchId) => {
-    setCurrentBillId(null); setEditingDocNumber(null); setItems([createItem(settings.default_hsn)]); setCustomer({ name: "", phone: "", address: "", email: "", points: 0, credit: 0 });
-    setSuggestions([]); setDiscount("0"); setExchange("0"); setRedeemedPoints(""); setAppliedCredit(""); setSavedCredit(""); setBonusPoints(""); setManualRoundOff("");
-    setTxType("sale"); setPaymentMethod(""); setSplitCash(""); setIsPaymentDone(false); setAdvanceAmount(""); setAdvanceMethod(""); setAdvanceSplitCash(""); setIsAdvancePaid(false); setBalanceMethod(""); setBalanceSplitCash(""); setIsBalancePaid(false); setNotes("");
-    setBillDate(today()); setIsDirty(false); await reserveNumber(nextMode, nextBranch); goToBillTop();
-  };
-
-  const handleNewBillClick = async () => {
-    if (currentBillId && isDirty) { if (!window.confirm("⚠️ You have unsaved edits to this saved bill! Discard edits and start a new bill?")) return; } else if (!currentBillId && !checkIsBlank()) { if (!window.confirm("⚠️ You have entered data! Are you sure you want to discard it and start a blank new bill?")) return; }
-    await clearBill(mode, billBranchId);
-  };
-
-  const loadBillForEditing = (bill) => {
-    setCurrentBillId(bill.id); setEditingDocNumber(bill.document_number); setMode(bill.mode); setBillBranchId(bill.branch_id || (settings.branches || [])[0].id); setDocumentNumber(bill.document_number); setBillDate(bill.date || today());
-    setCustomer({ name: bill.customer_name || bill.customer?.name || "", phone: bill.customer_phone || bill.customer?.phone || "", address: bill.customer_address || bill.customer?.address || "", email: bill.customer_email || bill.customer?.email || "", points: bill.customer?.points || 0, credit: bill.customer?.credit || 0 });
-    setTxType(bill.tx_type || "sale"); setPaymentMethod(bill.payment_method || ""); setSplitCash(bill.split_cash !== null && bill.split_cash !== undefined ? String(bill.split_cash) : ""); setIsPaymentDone(bill.is_payment_done || false); 
-    setAdvanceAmount(bill.advance_amount ? String(bill.advance_amount) : ""); setAdvanceMethod(bill.advance_method || ""); setAdvanceSplitCash(bill.advance_split_cash ? String(bill.advance_split_cash) : ""); setIsAdvancePaid(bill.is_advance_paid || false);
-    setBalanceMethod(bill.balance_method || ""); setBalanceSplitCash(bill.balance_split_cash ? String(bill.balance_split_cash) : ""); setIsBalancePaid(bill.is_balance_paid || false);
-    setNotes(bill.notes || ""); setDiscount(bill.discount ? String(bill.discount) : (bill.totals?.discount ? String(bill.totals.discount) : "0")); setExchange(bill.exchange ? String(bill.exchange) : (bill.totals?.exchange ? String(bill.totals.exchange) : "0")); setManualRoundOff(bill.totals?.round_off !== null && bill.totals?.round_off !== undefined ? String(bill.totals.round_off) : "");
-    setRedeemedPoints(bill.redeemed_points ? String(bill.redeemed_points) : ""); setAppliedCredit(bill.applied_credit ? String(bill.applied_credit) : ""); setSavedCredit(bill.saved_credit ? String(bill.saved_credit) : ""); setBonusPoints(bill.bonus_points ? String(bill.bonus_points) : "");
-    const loadedItems = (bill.items || []).map((item) => ({ id: `${Date.now()}-${Math.random()}`, description: item.description || "", hsn: item.hsn || "", weight: item.weight ? String(item.weight) : "", quantity: item.quantity ? String(item.quantity) : "1", mc_override: item.mc_override !== null && item.mc_override !== undefined ? String(item.mc_override) : "", rate_override: item.rate_override !== null && item.rate_override !== undefined ? String(item.rate_override) : "", amount_override: item.amount_override !== null && item.amount_override !== undefined ? String(item.amount_override) : "", }));
-    setItems(loadedItems.length > 0 ? loadedItems : [createItem(settings.default_hsn)]); setIsDirty(false); setShowRecentBills(false); setShowLedger(false); toast.success(`Loaded ${bill.document_number} for editing`); goToBillTop();
-  };
-
-  const handleDeleteBill = async (bill) => {
-    if (!window.confirm(`Are you sure you want to permanently delete ${bill.document_number}?`)) return;
-    try { await axios.delete(`${API}/bills/${bill.document_number}`, { headers: authHeaders }); setRecentBillsList((prev) => prev.filter((b) => b.document_number !== bill.document_number)); if (currentBillId === bill.id) await clearBill(mode, billBranchId); toast.success(`${bill.document_number} deleted successfully.`); await loadSettings(); } 
-    catch { toast.error("Failed to delete the bill."); }
-  };
-
-  const handleQuickPaymentToggle = async (bill) => {
-    if (bill.tx_type === "booking" || bill.tx_type === "service") { toast.info("Please open the bill and click Edit to manage Booking/Service balances."); return; }
-    const newStatus = !bill.is_payment_done;
-    try { 
-      await axios.put(`${API}/bills/${bill.document_number}/toggle-payment`, { is_payment_done: newStatus }, { headers: authHeaders }); 
-      toast.success(`Payment marked as ${newStatus ? 'DONE ✅' : 'PENDING ⏳'}`); 
-      
-      if (newStatus && iotOnline) { sendSuccessToDisplay(); }
-
-      if (currentBillId === bill.id) { setIsPaymentDone(newStatus); } 
-      setRecentBillsList(prev => prev.map(b => b.document_number === bill.document_number ? { ...b, is_payment_done: newStatus } : b)); 
-      await loadSettings(); 
-    } 
-    catch { toast.error("Failed to update payment status."); }
-  };
-
-  const handleResetCounter = async (resetMode) => {
-    if (!window.confirm(`Are you SURE you want to restart the ${resetMode.toUpperCase()} counter for ${activeGlobalBranch.name} back to 0001?`)) return;
-    try { await axios.post(`${API}/bills/reset-counter`, { mode: resetMode, branch_id: globalBranchId }, { headers: authHeaders }); toast.success(`${resetMode.toUpperCase()} counter for ${activeGlobalBranch.name} has been reset.`); if (mode === resetMode && billBranchId === globalBranchId) { await reserveNumber(mode, billBranchId); } } catch { toast.error(`Failed to reset the ${resetMode} counter.`); }
-  };
-
-  const handleBackupBills = async () => {
-    try { toast.info("Preparing backup file..."); const res = await axios.get(`${API}/bills/export`, { headers: authHeaders }); const dataStr = JSON.stringify(res.data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = `Jalaram_Bills_Backup_${today()}.json`; document.body.appendChild(link); link.click(); document.body.removeChild(link); toast.success("Backup downloaded successfully!"); } catch { toast.error("Failed to download backup."); }
-  };
-
-  const handleDeleteAllBills = async () => {
-    if (!window.confirm("🚨 WARNING! This will permanently delete ALL bills. Have you downloaded your backup first?")) return;
-    if (window.prompt("Type 'DELETE' to confirm wiping all bills:") !== "DELETE") { toast.error("Deletion cancelled."); return; }
-    try { await axios.delete(`${API}/bills/all`, { headers: authHeaders }); toast.success("All bills wiped. (Ledger balances remain intact)"); setRecentBillsList([]); const res = await axios.get(`${API}/system/storage`, { headers: authHeaders }); setStorageStats(res.data); } catch { toast.error("Failed to delete bills."); }
-  };
-
-  const handleModeChange = async (nextMode) => {
-    if (mode === nextMode) return;
-    if (currentBillId) { try { const res = await axios.get(`${API}/bills/next-number?mode=${nextMode}&branch_id=${billBranchId}`, { headers: authHeaders }); setDocumentNumber(res.data.document_number); setMode(nextMode); markDirty(); toast.info(`Migrating to ${nextMode.toUpperCase()}`); } catch (err) { toast.error("Failed to fetch new number for migration."); } } 
-    else { if (!checkIsBlank()) { if (!window.confirm("⚠️ You have unsaved changes! Switching modes will clear the screen. Continue?")) return; } setMode(nextMode); await clearBill(nextMode, billBranchId); }
-  };
-
-  const handleGlobalBranchChange = async (nextBranchId) => { setGlobalBranchId(nextBranchId); if (!currentBillId && checkIsBlank()) { setBillBranchId(nextBranchId); await reserveNumber(mode, nextBranchId); } };
-  const updateBranch = (index, field, value) => { const updatedBranches = [...(settings.branches || [])]; updatedBranches[index] = { ...updatedBranches[index], [field]: value }; setSettings({ ...settings, branches: updatedBranches }); };
-  const addBranch = () => { const newId = `B${Date.now()}`; const newBranch = { id: newId, name: `New Branch`, address: "", location_url: "", map_url: "", whatsapp_url: "", instagram_url: "", about_url: "", invoice_upi_id: "", estimate_upi_id: "", gstin: "", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 }; setSettings({ ...settings, branches: [...(settings.branches || []), newBranch] }); };
-  const removeBranch = (index) => { if ((settings.branches || []).length <= 1) { toast.error("You must have at least one branch."); return; } if (!window.confirm("Remove this branch from settings?")) return; const updatedBranches = (settings.branches || []).filter((_, i) => i !== index); setSettings({ ...settings, branches: updatedBranches }); };
-  const addShortcut = () => { const newSc = { id: `custom_${Date.now()}`, action: "", keys: "", isSystem: false }; setSettings(prev => ({ ...prev, shortcuts: [...(prev.shortcuts || defaultSettings.shortcuts), newSc] })); };
-  const updateShortcut = (index, field, value) => { const list = [...(settings.shortcuts || defaultSettings.shortcuts)]; list[index] = { ...list[index], [field]: value }; setSettings(prev => ({ ...prev, shortcuts: list })); };
-  const removeShortcut = (index) => { const list = [...(settings.shortcuts || defaultSettings.shortcuts)]; list.splice(index, 1); setSettings(prev => ({ ...prev, shortcuts: list })); };
-  const handleLogin = async (event) => { event.preventDefault(); setLoggingIn(true); try { const response = await axios.post(`${API}/auth/login`, { passcode }, { timeout: 15000 }); localStorage.setItem("jj_auth_token", response.data.access_token); setToken(response.data.access_token); setPasscode(""); toast.success("Logged in successfully"); } catch (error) { if (error?.response?.status === 401) { toast.error("Wrong passcode."); } else { toast.error("Server is waking up. Please wait 15-20 seconds and try again."); } } finally { setLoggingIn(false); } };
-  const handleLogout = () => { localStorage.removeItem("jj_auth_token"); setToken(""); setGatewayPassed(false); setSettingsLoaded(false); };
-  const optimizeImageDataUrl = async (file) => { const reader = new FileReader(); const original = await new Promise((resolve, reject) => { reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); }); const image = new Image(); await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; image.src = original; }); const ratio = Math.min(420 / image.width, 420 / image.height, 1); const targetWidth = Math.round(image.width * ratio); const targetHeight = Math.round(image.height * ratio); const canvas = document.createElement("canvas"); canvas.width = targetWidth; canvas.height = targetHeight; const context = canvas.getContext("2d"); context.drawImage(image, 0, 0, targetWidth, targetHeight); return canvas.toDataURL("image/png", 0.92); };
-  const handleLogoUpload = async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const dataUrl = await optimizeImageDataUrl(file); localStorage.setItem("jj_logo_data_url", dataUrl); setSettings((prev) => ({ ...prev, logo_data_url: dataUrl })); setLogoUploadName(file.name); toast.success("Logo uploaded successfully."); } catch { toast.error("Logo upload failed."); } };
-  const saveSettings = async () => { try { await axios.put(`${API}/settings`, settings, { headers: authHeaders }); toast.success("Settings saved."); } catch { toast.error("Could not save settings."); } };
-  const submitLedgerLog = async () => { if (!logAmount || isNaN(logAmount) || num(logAmount) <= 0) { toast.error("Please enter a valid amount."); return; } if (!logReason.trim()) { toast.error("Please enter a reason/remark."); return; } setSubmittingLog(true); try { const payload = { branch_id: globalBranchId, reason: logReason, cash_change: 0, estimate_bank_change: 0, invoice_bank_change: 0 }; const amt = num(logAmount); const keyMap = { "cash": "cash_change", "estimate_bank": "estimate_bank_change", "invoice_bank": "invoice_bank_change" }; if (logType === "expense") payload[keyMap[logSourceVault]] = -amt; else if (logType === "add") payload[keyMap[logSourceVault]] = amt; else if (logType === "exchange") { if (logSourceVault === logTargetVault) { toast.error("Cannot exchange into the same vault."); setSubmittingLog(false); return; } payload[keyMap[logSourceVault]] = -amt; payload[keyMap[logTargetVault]] = amt; } await axios.post(`${API}/settings/ledger/adjust`, payload, { headers: authHeaders }); toast.success("Transaction logged successfully!"); setShowLogForm(false); setLogAmount(""); setLogReason(""); await loadSettings(); await fetchLedgerHistory(); } catch (error) { toast.error("Ledger update failed."); } finally { setSubmittingLog(false); } };
-  const saveBalances = async () => { try { const payload = { branch_id: globalBranchId, cash_balance: num(manualCash), estimate_bank_balance: num(manualEstBank), invoice_bank_balance: num(manualInvBank) }; await axios.put(`${API}/settings/balances`, payload, { headers: authHeaders }); setSettings(prev => { const updatedBranches = (prev.branches || []).map(b => b.id === globalBranchId ? { ...b, ...payload } : b); return { ...prev, branches: updatedBranches }; }); setEditingBalances(false); toast.success(`Ledger balances for ${activeGlobalBranch.name} manually updated!`); } catch { toast.error("Failed to update balances."); } };
   const saveBill = async () => {
     if (txType === "sale" && !paymentMethod) { toast.error("Please select a payment method."); return; }
     
@@ -1264,7 +876,6 @@ return (
         </div>
         
         <div className="top-actions" style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
-          {/* --- NEW IOT STATUS INDICATOR --- */}
           <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.85rem", color: iotOnline ? "#4ade80" : "#ef4444", marginRight: "10px", padding: "4px 10px", borderRadius: "20px", border: `1px solid ${iotOnline ? "#4ade80" : "#ef4444"}` }}>
              <Cpu size={14} />
              <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: iotOnline ? "#4ade80" : "#ef4444", boxShadow: iotOnline ? "0 0 8px #4ade80" : "none" }} />
@@ -1275,7 +886,6 @@ return (
              <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: cloudStatus.enabled ? "#4ade80" : "#facc15" }} />
              <span>Cloud: {cloudStatus.enabled ? "Online" : "Connecting"}</span>
           </div>
-          <Button variant="outline" onClick={() => setShowInventory(true)} style={{ color: "black", backgroundColor: "white" }}><Package size={16} style={{marginRight:"5px"}}/> Inventory</Button>
           <Button variant="outline" onClick={goToBillTop} style={{ color: "black", backgroundColor: "white" }}>Back</Button>
           <Button variant="outline" onClick={handleLogout} style={{ color: "black", backgroundColor: "white" }}>Logout</Button>
         </div>
@@ -1437,28 +1047,31 @@ return (
             <h3>Item Lines</h3>
             {(items || []).map((item) => (
               <div key={item.id} className="item-row-editor">
-                {/* START INJECT: AUTOCOMPLETE & SPELL CHECK WRAPPER */}
+                {/* START INJECT: INTERNET SPELL CHECK WRAPPER */}
                 <div style={{ position: "relative", flex: "1 1 150px" }}>
                   <Input className="item-desc-input" value={item.description} onFocus={() => setDescFocusId(item.id)} onBlur={() => setTimeout(() => setDescFocusId(null), 200)} onChange={(e) => updateItem(item.id, "description", e.target.value)} placeholder="Description" style={{ paddingRight: "25px" }} />
                   {(() => {
                      if (!item.description) return null;
-                     const typos = { "breclate": "Bracelet", "braclet": "Bracelet", "bracelete": "Bracelet", "necklas": "Necklace", "neckles": "Necklace", "neclace": "Necklace", "anklit": "Anklet", "earings": "Earrings", "pendantt": "Pendant", "ringg": "Ring" };
-                     const words = item.description.toLowerCase().split(/\s+/);
-                     const foundTypo = words.find(w => typos[w]);
-                     const isCorrect = words.some(w => Object.values(typos).map(v=>v.toLowerCase()).includes(w) || (settings.master_items||[]).some(mi => mi.name.toLowerCase().includes(w)));
+                     const isCorrect = item.description.trim().length > 2 && !spellSuggestions[item.id];
+                     const hasTypo = spellSuggestions[item.id];
                      
-                     if (foundTypo) {
+                     if (hasTypo) {
                          return (
                            <div style={{ position: "absolute", right: "8px", top: "10px", zIndex: 10 }}>
                              <div onClick={() => setSpellCheckOpenId(spellCheckOpenId === item.id ? null : item.id)} style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: "#ef4444", cursor: "pointer", boxShadow: "0 0 6px #ef4444" }} title="Typo detected! Click to fix." />
                              {spellCheckOpenId === item.id && (
-                                <div style={{ position: "absolute", top: "20px", left: "0", backgroundColor: "white", border: "1px solid #ef4444", padding: "8px", borderRadius: "6px", boxShadow: "0 4px 10px rgba(0,0,0,0.2)", fontSize: "0.85rem", width: "max-content", zIndex: 60 }}>
-                                   Did you mean: <strong style={{ cursor:"pointer", color: "#2563eb", textDecoration: "underline" }} onClick={() => { updateItem(item.id, "description", item.description.toLowerCase().replace(foundTypo, typos[foundTypo])); setSpellCheckOpenId(null); }}>{typos[foundTypo]}</strong>?
+                                <div style={{ position: "absolute", top: "20px", right: "0", backgroundColor: "white", border: "1px solid #ef4444", padding: "8px", borderRadius: "6px", boxShadow: "0 4px 10px rgba(0,0,0,0.2)", fontSize: "0.85rem", whiteSpace: "nowrap", zIndex: 60 }}>
+                                   Did you mean: <strong style={{ cursor:"pointer", color: "#2563eb", textDecoration: "underline" }} onClick={() => { 
+                                      const words = item.description.split(/\s+/);
+                                      words[words.length - 1] = spellSuggestions[item.id];
+                                      updateItem(item.id, "description", words.join(" ")); 
+                                      setSpellCheckOpenId(null); 
+                                   }}>{spellSuggestions[item.id]}</strong>?
                                 </div>
                              )}
                            </div>
                          );
-                     } else if (item.description.length > 2 && isCorrect) {
+                     } else if (isCorrect) {
                          return <div style={{ position: "absolute", right: "8px", top: "10px", width: "12px", height: "12px", borderRadius: "50%", backgroundColor: "#22c55e", pointerEvents: "none", boxShadow: "0 0 4px #22c55e" }} title="Spelling OK" />;
                      }
                      return null;
@@ -1508,7 +1121,6 @@ return (
 
           <div className="control-card">
             <h3>Payment Options</h3>
-            {/* --- NEW IOT TRIGGER BUTTON --- */}
             {upiAmountToPay > 0 && (
               <Button onClick={() => sendQrToDisplay(upiAmountToPay, upiId)} disabled={isMqttSending} style={{ width: "100%", marginBottom: "15px", backgroundColor: "#0f172a", color: "white", height: "50px", fontSize: "1rem", border: "2px solid #cbd5e1" }}>
                 {isMqttSending ? "Processing..." : "🖥️ Show QR on Shop Display"}
@@ -1612,13 +1224,14 @@ return (
             <Button onClick={shareWhatsApp}>WhatsApp Link</Button>
             <Button onClick={shareEmail}>Email Link</Button>
             <Button onClick={handleNewBillClick} variant="outline">New Bill</Button>
+            <Button onClick={() => setShowInventory(true)} variant="outline"><Package size={16} style={{marginRight:"5px"}}/> Inventory</Button>
             <Button onClick={() => setShowSettings(true)} variant="outline">Settings</Button>
           </div>
 
         </aside>
       </main>
 
-      {/* DAILY SALES & LEDGER */}
+      {/* DAILY SALES & Ledger Drawer */}
       {showLedger && (
         <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "650px", backgroundColor: "white", zIndex: 100, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
           <div className="drawer-header" style={{ backgroundColor: "#f0fdf4", borderBottom: "2px solid #bbf7d0", padding: "20px", position: "sticky", top: 0, zIndex: 10 }}>
@@ -1627,7 +1240,6 @@ return (
           </div>
 
           <div style={{ padding: "20px" }}>
-            {/* --- NEW INJECT: ANALYTICS BUTTON --- */}
             <Button onClick={() => setShowAnalytics(true)} style={{ backgroundColor: "#8b5cf6", color: "white", width: "100%", marginBottom: "20px", padding: "15px", fontSize: "1.1rem" }}><LineChart size={20} style={{ marginRight: "10px" }} /> Analyze Business Growth</Button>
 
             <div style={{ marginBottom: "25px" }}>
@@ -1914,7 +1526,7 @@ return (
         </section>
       )}
 
-      {/* --- INJECT: BUSINESS ANALYTICS DASHBOARD --- */}
+      {/* --- INJECT: BUSINESS ANALYTICS DASHBOARD WITH GRAPH --- */}
       {showAnalytics && (
         <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "650px", backgroundColor: "#f8fafc", zIndex: 102, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
           <div className="drawer-header" style={{ backgroundColor: "white", borderBottom: "1px solid #e2e8f0", padding: "20px", position: "sticky", top: 0, zIndex: 10 }}>
@@ -1966,6 +1578,18 @@ return (
                 const totalInvoices = filteredStats.filter(b => b.mode === "invoice").length;
                 const totalEstimates = filteredStats.filter(b => b.mode === "estimate").length;
 
+                // --- GRAPH DATA LOGIC ---
+                const chartDataMap = {};
+                filteredStats.forEach(b => {
+                   const bDate = b.date;
+                   if(!chartDataMap[bDate]) chartDataMap[bDate] = 0;
+                   chartDataMap[bDate] += num(b.totals?.grand_total);
+                });
+
+                const sortedDates = Object.keys(chartDataMap).sort((a, b) => parseDate(a) - parseDate(b));
+                const chartData = sortedDates.map(date => ({ date, amount: chartDataMap[date] }));
+                const maxAmount = Math.max(...chartData.map(d => d.amount), 1); 
+
                 return (
                    <div>
                       <div style={{ display: "flex", gap: "15px", flexWrap: "wrap", marginBottom: "30px" }}>
@@ -1977,6 +1601,24 @@ return (
                             <p style={{ margin: "0 0 5px 0", fontSize: "0.9rem", color: "#64748b" }}>Total Bills</p>
                             <h2 style={{ margin: 0, fontSize: "1.8rem", color: "#0f172a" }}>{filteredStats.length}</h2>
                          </div>
+                      </div>
+
+                      {/* --- ACTUAL GRAPH UI --- */}
+                      <div style={{ padding: "20px", backgroundColor: "white", border: "1px solid #cbd5e1", borderRadius: "12px", marginBottom: "20px" }}>
+                         <h4 style={{ margin: "0 0 15px 0", color: "#0f172a" }}>Revenue Trend</h4>
+                         {chartData.length === 0 ? (
+                            <p style={{ fontSize: "0.85rem", color: "#64748b", textAlign: "center", padding: "20px 0" }}>No data to graph.</p>
+                         ) : (
+                            <div style={{ height: "220px", display: "flex", alignItems: "flex-end", gap: "10px", borderBottom: "2px solid #e2e8f0", paddingBottom: "5px", overflowX: "auto" }}>
+                               {chartData.map((d, i) => (
+                                  <div key={i} style={{ flex: "1 1 40px", display: "flex", flexDirection: "column", alignItems: "center", minWidth: "40px" }}>
+                                     <span style={{ fontSize: "0.65rem", color: "#64748b", marginBottom: "4px", transform: "rotate(-45deg)", transformOrigin: "left bottom", whiteSpace: "nowrap" }}>₹{Math.round(d.amount)}</span>
+                                     <div style={{ width: "100%", maxWidth: "35px", height: `${(d.amount / maxAmount) * 100}%`, minHeight: "5px", backgroundColor: "#8b5cf6", borderRadius: "4px 4px 0 0", transition: "height 0.3s ease" }} title={`${d.date}: ₹${money(d.amount)}`}></div>
+                                     <span style={{ fontSize: "0.7rem", color: "#475569", marginTop: "8px", fontWeight: "bold" }}>{d.date.slice(0, 5)}</span>
+                                  </div>
+                               ))}
+                            </div>
+                         )}
                       </div>
                       
                       <div style={{ padding: "20px", backgroundColor: "white", border: "1px solid #cbd5e1", borderRadius: "12px", marginBottom: "20px" }}>
