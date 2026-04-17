@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Store, Upload, Download, Keyboard, Cpu, Wifi, CheckCircle2, LineChart, Package, AlertCircle, Lock } from "lucide-react";
+import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Store, Upload, Download, Keyboard, Cpu, Wifi, CheckCircle2, LineChart, Package, AlertCircle, Lock } from "lucide-react"; 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Toaster, toast } from "sonner";
@@ -13,22 +13,54 @@ const API = `${BACKEND_URL ? BACKEND_URL.replace(/\/$/, '') : ""}/api`;
 const STATIC_ABOUT_QR_URL = process.env.REACT_APP_ABOUT_QR_URL;
 
 const createItem = (defaultHsn = "") => ({
-  id: `${Date.now()}-${Math.random()}`, description: "", hsn: defaultHsn, weight: "", quantity: "1", rate_override: "", amount_override: "", mc_override: ""
+  id: `${Date.now()}-${Math.random()}`, 
+  description: "", 
+  hsn: defaultHsn, 
+  weight: "", 
+  quantity: "1", 
+  rate_override: "", 
+  amount_override: "", 
+  mc_override: ""
 });
 
 const defaultSettings = {
-  shop_name: "Jalaram Jewellers", tagline: "The Silver Specialist", phone_numbers: ["+91 9583221115", "+91 9776177296", "+91 7538977527"], email: "jalaramjewellers26@gmail.com",
-  shop_name_color: "#000000", shop_name_size: 26, shop_name_font: "sans-serif", shop_name_align: "center",
-  tagline_color: "#475569", tagline_size: 12, tagline_font: "sans-serif", tagline_align: "center",
-  address_color: "#475569", address_size: 14, address_font: "sans-serif", address_align: "center",
-  phone_color: "#475569", phone_size: 13, phone_font: "sans-serif", phone_align: "center",
-  email_color: "#475569", email_size: 13, email_font: "sans-serif", email_align: "center",
-  silver_rate_per_gram: 240, making_charge_per_gram: 15, flat_mc_below_5g: 150, default_hsn: "7113",
-  loyalty_points_per_gram: 1, loyalty_point_value_rs: 1,
-  formula_note: "Line total = Weight x (Silver rate per gram + Making charge per gram)", logo_data_url: "", about_qr_data_url: STATIC_ABOUT_QR_URL, custom_fonts: [],
+  shop_name: "Jalaram Jewellers", 
+  tagline: "The Silver Specialist", 
+  phone_numbers: ["+91 9583221115", "+91 9776177296", "+91 7538977527"], 
+  email: "jalaramjewellers26@gmail.com",
+  shop_name_color: "#000000", 
+  shop_name_size: 26, 
+  shop_name_font: "sans-serif", 
+  shop_name_align: "center",
+  tagline_color: "#475569", 
+  tagline_size: 12, 
+  tagline_font: "sans-serif", 
+  tagline_align: "center",
+  address_color: "#475569", 
+  address_size: 14, 
+  address_font: "sans-serif", 
+  address_align: "center",
+  phone_color: "#475569", 
+  phone_size: 13, 
+  phone_font: "sans-serif", 
+  phone_align: "center",
+  email_color: "#475569", 
+  email_size: 13, 
+  email_font: "sans-serif", 
+  email_align: "center",
+  silver_rate_per_gram: 240, 
+  making_charge_per_gram: 15, 
+  flat_mc_below_5g: 150, 
+  default_hsn: "7113",
+  loyalty_points_per_gram: 1, 
+  loyalty_point_value_rs: 1,
+  formula_note: "Line total = Weight x (Silver rate per gram + Making charge per gram)", 
+  logo_data_url: "", 
+  about_qr_data_url: STATIC_ABOUT_QR_URL, 
+  custom_fonts: [],
   master_items: [], 
   inventory: [], 
-  inventory_logs: [],
+  inventory_logs: [], 
   shortcuts: [
     { id: "save_bill", action: "Save Bill", keys: "alt + s", isSystem: true },
     { id: "add_item", action: "Add new item row", keys: "alt + a", isSystem: true },
@@ -44,7 +76,7 @@ const defaultSettings = {
     { id: "open_recent", action: "Open Recent Bills", keys: "alt + r", isSystem: true },
     { id: "download_pdf", action: "Download PDF", keys: "alt + f", isSystem: true },
     { id: "print_bill", action: "Print Bill", keys: "alt + b", isSystem: true },
-    { id: "iot_qr", action: "Send QR to ESP32", keys: "alt + q", isSystem: true }
+    { id: "iot_qr", action: "Send QR to ESP32", keys: "alt + q", isSystem: true } 
   ],
   branches: [
     { id: "B1", name: "Branch 1 (Old Town)", address: "Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2", location_url: "", map_url: "", whatsapp_url: "", instagram_url: "", about_url: "", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", gstin: "21AAUFJ1925F1ZH", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 },
@@ -66,15 +98,48 @@ const parseBillDate = (dStr) => {
   return new Date(dStr);
 };
 
-const num = (val) => { if (val === null || val === undefined || val === "") return 0; const parsed = Number.parseFloat(val); return Number.isFinite(parsed) ? parsed : 0; };
+const num = (val) => { 
+    if (val === null || val === undefined || val === "") return 0; 
+    const parsed = Number.parseFloat(val); 
+    return Number.isFinite(parsed) ? parsed : 0; 
+};
+
 const money = (val) => num(val).toFixed(2);
+
 const clampPrintScale = (value) => Math.min(102, Math.max(98, value));
-const getInitialPrintScale = () => { const saved = Number(localStorage.getItem("jj_print_scale") || "100"); return Number.isFinite(saved) ? clampPrintScale(saved) : 100; };
-const splitAmount = (amt) => { const validAmt = Number.isFinite(amt) ? amt : 0; const rupees = Math.floor(validAmt); const paise = Math.round((validAmt - rupees) * 100).toString().padStart(2, "0"); return { rupees, paise }; };
-const registerFont = (name, dataUrl) => { const styleId = `custom-font-${name.replace(/\s+/g, '-').toLowerCase()}`; if (document.getElementById(styleId)) return; const style = document.createElement('style'); style.id = styleId; style.innerHTML = `@font-face { font-family: '${name}'; src: url('${dataUrl}'); }`; document.head.appendChild(style); };
+
+const getInitialPrintScale = () => { 
+    const saved = Number(localStorage.getItem("jj_print_scale") || "100"); 
+    return Number.isFinite(saved) ? clampPrintScale(saved) : 100; 
+};
+
+const splitAmount = (amt) => { 
+    const validAmt = Number.isFinite(amt) ? amt : 0; 
+    const rupees = Math.floor(validAmt); 
+    const paise = Math.round((validAmt - rupees) * 100).toString().padStart(2, "0"); 
+    return { rupees, paise }; 
+};
+
+const registerFont = (name, dataUrl) => { 
+    const styleId = `custom-font-${name.replace(/\s+/g, '-').toLowerCase()}`; 
+    if (document.getElementById(styleId)) return; 
+    const style = document.createElement('style'); 
+    style.id = styleId; 
+    style.innerHTML = `@font-face { font-family: '${name}'; src: url('${dataUrl}'); }`; 
+    document.head.appendChild(style); 
+};
 
 const FontSelectOptions = ({ customFonts }) => (
-  <><option value="sans-serif">Sans-serif</option><option value="Arial, Helvetica, sans-serif">Arial</option><option value="'Times New Roman', Times, serif">Times New Roman</option><option value="'Courier New', Courier, monospace">Courier New</option><option value="Georgia, serif">Georgia</option><option value="'Trebuchet MS', sans-serif">Trebuchet MS</option><option value="'Brush Script MT', cursive">Brush Script MT (Cursive)</option>{customFonts?.map(f => (<option key={f.name} value={`'${f.name}'`}>{f.name} (Custom)</option>))}</>
+  <>
+    <option value="sans-serif">Sans-serif</option>
+    <option value="Arial, Helvetica, sans-serif">Arial</option>
+    <option value="'Times New Roman', Times, serif">Times New Roman</option>
+    <option value="'Courier New', Courier, monospace">Courier New</option>
+    <option value="Georgia, serif">Georgia</option>
+    <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+    <option value="'Brush Script MT', cursive">Brush Script MT (Cursive)</option>
+    {customFonts?.map(f => (<option key={f.name} value={`'${f.name}'`}>{f.name} (Custom)</option>))}
+  </>
 );
 
 const FooterLinksAndQRs = ({ branch, allBranches }) => {
@@ -99,12 +164,35 @@ const FooterLinksAndQRs = ({ branch, allBranches }) => {
       </div>
       
       <div className="print-only" style={{ display: 'flex', justifyContent: 'center', gap: '15px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        {branch.whatsapp_url && (<div style={{ textAlign: 'center' }}><img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.whatsapp_url)}&size=100`} alt="WA QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} /><p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>WhatsApp</p></div>)}
-        {branch.instagram_url && (<div style={{ textAlign: 'center' }}><img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.instagram_url)}&size=100`} alt="Insta QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} /><p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>Instagram</p></div>)}
-        {branch.map_url && (<div style={{ textAlign: 'center' }}><img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.map_url)}&size=100`} alt="Feedback QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} /><p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>Feedback</p></div>)}
-        {branch.about_url && (<div style={{ textAlign: 'center' }}><img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.about_url)}&size=100`} alt="About QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} /><p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>About Us</p></div>)}
+        {branch.whatsapp_url && (
+            <div style={{ textAlign: 'center' }}>
+                <img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.whatsapp_url)}&size=100`} alt="WA QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} />
+                <p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>WhatsApp</p>
+            </div>
+        )}
+        {branch.instagram_url && (
+            <div style={{ textAlign: 'center' }}>
+                <img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.instagram_url)}&size=100`} alt="Insta QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} />
+                <p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>Instagram</p>
+            </div>
+        )}
+        {branch.map_url && (
+            <div style={{ textAlign: 'center' }}>
+                <img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.map_url)}&size=100`} alt="Feedback QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} />
+                <p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>Feedback</p>
+            </div>
+        )}
+        {branch.about_url && (
+            <div style={{ textAlign: 'center' }}>
+                <img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.about_url)}&size=100`} alt="About QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} />
+                <p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>About Us</p>
+            </div>
+        )}
         {(allBranches || []).map(b => b.location_url && (
-            <div key={`qr-${b.id}`} style={{ textAlign: 'center' }}><img src={`https://quickchart.io/qr?text=${encodeURIComponent(b.location_url)}&size=100`} alt={`${b.name} QR`} crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} /><p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>{b.name}</p></div>
+            <div key={`qr-${b.id}`} style={{ textAlign: 'center' }}>
+                <img src={`https://quickchart.io/qr?text=${encodeURIComponent(b.location_url)}&size=100`} alt={`${b.name} QR`} crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} />
+                <p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>{b.name}</p>
+            </div>
         ))}
       </div>
     </div>
@@ -115,18 +203,46 @@ const BillTable = ({ mode, items }) => (
   <table className="bill-table" style={{ width: "100%", tableLayout: "fixed", wordWrap: "break-word" }}>
     <thead>
       {mode === "invoice" ? (
-        <tr><th style={{ width: "8%" }}>Sl. No.</th><th style={{ width: "38%" }}>DESCRIPTION</th><th style={{ width: "10%" }}>HSN</th><th style={{ width: "14%", whiteSpace: "nowrap" }}>WEIGHT (g)</th><th style={{ width: "15%", whiteSpace: "nowrap" }}>RATE Rs.</th><th style={{ width: "15%", whiteSpace: "nowrap" }}>AMOUNT</th></tr>
+        <tr>
+            <th style={{ width: "8%" }}>Sl. No.</th>
+            <th style={{ width: "38%" }}>DESCRIPTION</th>
+            <th style={{ width: "10%" }}>HSN</th>
+            <th style={{ width: "14%", whiteSpace: "nowrap" }}>WEIGHT (g)</th>
+            <th style={{ width: "15%", whiteSpace: "nowrap" }}>RATE Rs.</th>
+            <th style={{ width: "15%", whiteSpace: "nowrap" }}>AMOUNT</th>
+        </tr>
       ) : (
-        <tr><th style={{ width: "8%" }}>Sl. No.</th><th style={{ width: "40%" }}>Particulars</th><th style={{ width: "14%", whiteSpace: "nowrap" }}>Weight</th><th style={{ width: "18%", whiteSpace: "nowrap" }}>Qty x Rate</th><th style={{ width: "12%", whiteSpace: "nowrap" }}>Rs.</th><th style={{ width: "8%", whiteSpace: "nowrap" }}>Ps.</th></tr>
+        <tr>
+            <th style={{ width: "8%" }}>Sl. No.</th>
+            <th style={{ width: "40%" }}>Particulars</th>
+            <th style={{ width: "14%", whiteSpace: "nowrap" }}>Weight</th>
+            <th style={{ width: "18%", whiteSpace: "nowrap" }}>Qty x Rate</th>
+            <th style={{ width: "12%", whiteSpace: "nowrap" }}>Rs.</th>
+            <th style={{ width: "8%", whiteSpace: "nowrap" }}>Ps.</th>
+        </tr>
       )}
     </thead>
     <tbody>
       {items.map((item, idx) => (
         <tr key={idx}>
           {mode === "invoice" ? (
-            <><td>{item.sl_no || item.slNo}</td><td>{item.description || "-"}</td><td>{item.hsn || "-"}</td><td>{money(item.weight)}</td><td>{money(item.rate)}</td><td>{item.rupees}.{item.paise}</td></>
+            <>
+                <td>{item.sl_no || item.slNo}</td>
+                <td>{item.description || "-"}</td>
+                <td>{item.hsn || "-"}</td>
+                <td>{money(item.weight)}</td>
+                <td>{money(item.rate)}</td>
+                <td>{item.rupees}.{item.paise}</td>
+            </>
           ) : (
-            <><td>{item.sl_no || item.slNo}</td><td>{item.description || "-"}</td><td>{money(item.weight)}</td><td>{money(item.quantity)} x {money(item.rate)}</td><td>{item.rupees}</td><td>{item.paise}</td></>
+            <>
+                <td>{item.sl_no || item.slNo}</td>
+                <td>{item.description || "-"}</td>
+                <td>{money(item.weight)}</td>
+                <td>{money(item.quantity)} x {money(item.rate)}</td>
+                <td>{item.rupees}</td>
+                <td>{item.paise}</td>
+            </>
           )}
         </tr>
       ))}
@@ -138,13 +254,48 @@ const DesignSettingRow = ({ title, fieldPrefix, settings, setSettings }) => (
   <div style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", marginBottom: "15px", backgroundColor: "#f8fafc", width: "100%", boxSizing: "border-box" }}>
     <h4 style={{ margin: "0 0 10px 0" }}>{title}</h4>
     {fieldPrefix !== "address" && (
-      <Input value={Array.isArray(settings[fieldPrefix]) ? settings[fieldPrefix].join(", ") : settings[fieldPrefix] || ""} onChange={(e) => setSettings((prev) => ({ ...prev, [fieldPrefix]: fieldPrefix === 'phone_numbers' ? e.target.value.split(",").map(i=>i.trim()).filter(Boolean) : e.target.value }))} placeholder={title} style={{ marginBottom: "10px", width: "100%", boxSizing: "border-box" }} />
+      <Input 
+        value={Array.isArray(settings[fieldPrefix]) ? settings[fieldPrefix].join(", ") : settings[fieldPrefix] || ""} 
+        onChange={(e) => setSettings((prev) => ({ ...prev, [fieldPrefix]: fieldPrefix === 'phone_numbers' ? e.target.value.split(",").map(i=>i.trim()).filter(Boolean) : e.target.value }))} 
+        placeholder={title} 
+        style={{ marginBottom: "10px", width: "100%", boxSizing: "border-box" }} 
+      />
     )}
     <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", width: "100%" }}>
-      <input type="color" value={settings[`${fieldPrefix}_color`] || "#000000"} onChange={(e) => setSettings((prev) => ({ ...prev, [`${fieldPrefix}_color`]: e.target.value }))} style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px", flexShrink: 0 }} title="Color" />
-      <Input type="number" min="8" max="60" value={settings[`${fieldPrefix}_size`] || 14} onChange={(e) => setSettings((prev) => ({ ...prev, [`${fieldPrefix}_size`]: Number(e.target.value) }))} style={{ width: "70px", padding: "0 5px", textAlign: "center", flexShrink: 0 }} title="Font Size (px)" />
-      <select value={settings[`${fieldPrefix}_font`] || "sans-serif"} onChange={(e) => setSettings((prev) => ({ ...prev, [`${fieldPrefix}_font`]: e.target.value }))} style={{ flex: "1 1 120px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "120px" }} title="Font Style"><FontSelectOptions customFonts={settings.custom_fonts || []} /></select>
-      <select value={settings[`${fieldPrefix}_align`] || "center"} onChange={(e) => setSettings((prev) => ({ ...prev, [`${fieldPrefix}_align`]: e.target.value }))} style={{ flex: "1 1 80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "80px" }} title="Alignment"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select>
+      <input 
+        type="color" 
+        value={settings[`${fieldPrefix}_color`] || "#000000"} 
+        onChange={(e) => setSettings((prev) => ({ ...prev, [`${fieldPrefix}_color`]: e.target.value }))} 
+        style={{ width: "40px", height: "35px", cursor: "pointer", padding: "0", border: "1px solid #ccc", borderRadius: "4px", flexShrink: 0 }} 
+        title="Color" 
+      />
+      <Input 
+        type="number" 
+        min="8" 
+        max="60" 
+        value={settings[`${fieldPrefix}_size`] || 14} 
+        onChange={(e) => setSettings((prev) => ({ ...prev, [`${fieldPrefix}_size`]: Number(e.target.value) }))} 
+        style={{ width: "70px", padding: "0 5px", textAlign: "center", flexShrink: 0 }} 
+        title="Font Size (px)" 
+      />
+      <select 
+        value={settings[`${fieldPrefix}_font`] || "sans-serif"} 
+        onChange={(e) => setSettings((prev) => ({ ...prev, [`${fieldPrefix}_font`]: e.target.value }))} 
+        style={{ flex: "1 1 120px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "120px" }} 
+        title="Font Style"
+      >
+        <FontSelectOptions customFonts={settings.custom_fonts || []} />
+      </select>
+      <select 
+        value={settings[`${fieldPrefix}_align`] || "center"} 
+        onChange={(e) => setSettings((prev) => ({ ...prev, [`${fieldPrefix}_align`]: e.target.value }))} 
+        style={{ flex: "1 1 80px", height: "35px", border: "1px solid #ccc", borderRadius: "6px", fontSize: "0.85rem", padding: "0 5px", minWidth: "80px" }} 
+        title="Alignment"
+      >
+        <option value="left">Left</option>
+        <option value="center">Center</option>
+        <option value="right">Right</option>
+      </select>
     </div>
   </div>
 );
@@ -164,10 +315,13 @@ export default function App() {
   useEffect(() => {
       const handleResize = () => setViewportWidth(window.innerWidth);
       window.addEventListener("resize", handleResize); 
+      
       const handleBeforePrint = () => setIsPrinting(true);
       const handleAfterPrint = () => setIsPrinting(false);
+      
       window.addEventListener("beforeprint", handleBeforePrint);
       window.addEventListener("afterprint", handleAfterPrint);
+      
       return () => { 
         window.removeEventListener("resize", handleResize); 
         window.removeEventListener("beforeprint", handleBeforePrint);
@@ -247,7 +401,7 @@ export default function App() {
   
   const [descFocusId, setDescFocusId] = useState(null);
   const [spellCheckOpenId, setSpellCheckOpenId] = useState(null);
-  const [spellSuggestions, setSpellSuggestions] = useState({}); // NEW STATE FOR INTERNET ENGINE
+  const [spellSuggestions, setSpellSuggestions] = useState({});
 
   const [recentBillsList, setRecentBillsList] = useState([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
@@ -290,47 +444,75 @@ export default function App() {
   // --- NEW: HYBRID INTERNET SPELL CHECKER ENGINE ---
   useEffect(() => {
     const timers = {};
-    const jewelryTypos = { "breclate": "Bracelet", "braclet": "Bracelet", "bracelete": "Bracelet", "breslate": "Bracelet", "braslet": "Bracelet", "necklas": "Necklace", "neckles": "Necklace", "neclace": "Necklace", "anklit": "Anklet", "earings": "Earrings", "pendantt": "Pendant", "ringg": "Ring" };
+    const jewelryTypos = { 
+        "breclate": "Bracelet", 
+        "braclet": "Bracelet", 
+        "bracelete": "Bracelet", 
+        "breslate": "Bracelet", 
+        "braslet": "Bracelet", 
+        "necklas": "Necklace", 
+        "neckles": "Necklace", 
+        "neclace": "Necklace", 
+        "anklit": "Anklet", 
+        "earings": "Earrings", 
+        "pendantt": "Pendant", 
+        "ringg": "Ring" 
+    };
 
     items.forEach(item => {
       const desc = (item.description || "").trim();
       if (desc.length < 3) {
-          setSpellSuggestions(prev => { if(prev[item.id]) { const next = {...prev}; delete next[item.id]; return next; } return prev; });
+          setSpellSuggestions(prev => { 
+              if(prev[item.id]) { 
+                  const next = {...prev}; 
+                  delete next[item.id]; 
+                  return next; 
+              } 
+              return prev; 
+          });
           return;
       }
 
-      const words = desc.split(/\s+/);
+      const words = desc.split(/\s+/).filter(Boolean);
+      if (words.length === 0) return;
       const lastWord = words[words.length - 1].toLowerCase();
 
-      // 1. Check Master Items (if exact match, it's correct)
       if ((settings.master_items || []).some(mi => mi.name.toLowerCase().includes(lastWord))) {
-         setSpellSuggestions(prev => { if(prev[item.id]) { const next = {...prev}; delete next[item.id]; return next; } return prev; });
+         setSpellSuggestions(prev => { 
+             if(prev[item.id]) { 
+                 const next = {...prev}; 
+                 delete next[item.id]; 
+                 return next; 
+             } 
+             return prev; 
+         });
          return;
       }
 
-      // 2. Check Local Jewelry Dictionary first (fastest, most accurate for shop)
       if (jewelryTypos[lastWord]) {
          setSpellSuggestions(prev => ({...prev, [item.id]: jewelryTypos[lastWord]}));
          return;
       }
 
-      // 3. Fallback to Internet (Datamuse API)
       timers[item.id] = setTimeout(async () => {
         try {
            if(lastWord.length > 2) {
                const res = await axios.get(`https://api.datamuse.com/sug?s=${lastWord}`);
                if (res.data && res.data.length > 0) {
                    const best = res.data[0].word;
-                   // Only suggest if the best guess is actually a different word
                    if (best.toLowerCase() !== lastWord) {
                        setSpellSuggestions(prev => ({...prev, [item.id]: best.charAt(0).toUpperCase() + best.slice(1)}));
                    } else {
-                       setSpellSuggestions(prev => { const next = {...prev}; delete next[item.id]; return next; });
+                       setSpellSuggestions(prev => { 
+                           const next = {...prev}; 
+                           delete next[item.id]; 
+                           return next; 
+                       });
                    }
                }
            }
         } catch(e) {}
-      }, 600); // Wait 600ms after user stops typing
+      }, 600); 
     });
 
     return () => Object.values(timers).forEach(clearTimeout);
@@ -343,33 +525,1047 @@ export default function App() {
       try {
         const res = await axios.get(`${API}/cloud/mqtt/status`, { headers: authHeaders });
         setIotOnline(res.data.online);
-      } catch (e) { setIotOnline(false); }
+      } catch (e) { 
+        setIotOnline(false); 
+      }
     };
     checkIot();
     const interval = setInterval(checkIot, 10000); 
     return () => clearInterval(interval);
   }, [token, isPublicView, authHeaders]);
-  const saveBill = async () => {
-    if (txType === "sale" && !paymentMethod) { toast.error("Please select a payment method."); return; }
+
+  const sendQrToDisplay = async (amount, upiId) => {
+    if (!iotOnline) { 
+        toast.error("IoT Device is offline!"); 
+        return; 
+    }
+    setIsMqttSending(true);
+    try {
+      await axios.post(`${API}/cloud/mqtt/publish`, {
+        topic: "Jalaram/QR",
+        message: JSON.stringify({ amount: String(Math.round(amount)), upi_id: upiId })
+      }, { headers: authHeaders });
+      toast.success("QR Code sent to shop display!");
+    } catch (e) { 
+        toast.error("Failed to send QR to display."); 
+    } finally { 
+        setIsMqttSending(false); 
+    }
+  };
+
+  const sendSuccessToDisplay = async () => {
+    try {
+      await axios.post(`${API}/cloud/mqtt/publish`, {
+        topic: "Jalaram/QR",
+        message: "SUCCESS"
+      }, { headers: authHeaders });
+    } catch (e) { 
+        console.error("MQTT Success trigger failed"); 
+    }
+  };
+
+  useEffect(() => {
+    if (settings.custom_fonts && settings.custom_fonts.length > 0) { 
+        settings.custom_fonts.forEach(f => registerFont(f.name, f.dataUrl)); 
+    }
+  }, [settings.custom_fonts]);
+
+  const handleFontUpload = async (event) => {
+    const file = event.target.files?.[0]; 
+    if (!file) return;
+    const fontName = file.name.split('.')[0];
+    try {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const dataUrl = e.target.result; 
+        const newFont = { name: fontName, dataUrl };
+        const updatedFonts = [...(settings.custom_fonts || []), newFont];
+        setSettings(prev => ({ ...prev, custom_fonts: updatedFonts }));
+        localStorage.setItem("jj_custom_fonts", JSON.stringify(updatedFonts));
+        registerFont(fontName, dataUrl); 
+        toast.success(`Font "${fontName}" uploaded!`);
+      };
+      reader.readAsDataURL(file);
+    } catch { 
+        toast.error("Font upload failed."); 
+    }
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const viewDoc = params.get("view");
+    const adminParam = params.get("admin");
     
-    // 🐛 FIXED TYPO HERE: Changed tx_type back to txType
+    if (adminParam === "true") {
+      setIsAdminView(true);
+    }
+
+    if (viewDoc) {
+      setIsPublicView(true); 
+      setPublicLoading(true);
+      const fetchPublicBill = async () => {
+        try {
+          const res = await axios.get(`${API}/bills/public/${viewDoc}`);
+          setPublicBill(res.data.bill);
+          const sData = { ...defaultSettings, ...res.data.settings };
+          if (!sData.branches) sData.branches = defaultSettings.branches;
+          if (sData.custom_fonts) sData.custom_fonts.forEach(f => registerFont(f.name, f.dataUrl));
+          setPublicSettings(sData);
+        } catch (err) { 
+            setPublicBill("NOT_FOUND"); 
+        } finally { 
+            setPublicLoading(false); 
+        }
+      };
+      fetchPublicBill();
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleEsc = (event) => {
+      if (event.key !== "Escape") return;
+      setShowSettings(false); 
+      setShowAbout(false); 
+      setShowRecentBills(false); 
+      setShowLedger(false); 
+      setShowFeedbackModal(false);
+      setShowAnalytics(false); 
+      setShowInventory(false); 
+      setSpellCheckOpenId(null);
+    };
+    window.addEventListener("keydown", handleEsc); 
+    return () => window.removeEventListener("keydown", handleEsc);
+  }, [showSettings, showAbout, showRecentBills, showLedger, showFeedbackModal, showAnalytics, showInventory]);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e) => {
+      const activeTag = document.activeElement?.tagName.toLowerCase();
+      const isInput = activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select';
+      if (e.key === "Enter" && isInput && activeTag !== 'textarea') {
+          e.preventDefault();
+          const formElements = Array.from(document.querySelectorAll('input, select, textarea, button:not(:disabled)'));
+          const index = formElements.indexOf(document.activeElement);
+          if (index > -1 && index < formElements.length - 1) { 
+              formElements[index + 1].focus(); 
+          }
+          return;
+      }
+      if (isInput && !e.ctrlKey && !e.metaKey && !e.altKey) return; 
+
+      const scList = settings.shortcuts || defaultSettings.shortcuts;
+      const checkKey = (actionId) => {
+          const sc = scList.find(s => s.id === actionId);
+          if (!sc || !sc.keys) return false;
+          const parts = sc.keys.toLowerCase().split('+').map(p => p.trim());
+          const needsCtrl = parts.includes('ctrl') || parts.includes('cmd');
+          const needsShift = parts.includes('shift');
+          const needsAlt = parts.includes('alt');
+          const keyPart = parts[parts.length - 1]; 
+          const ctrlPressed = e.ctrlKey || e.metaKey;
+          const shiftPressed = e.shiftKey;
+          const altPressed = e.altKey;
+          const keyFromKey = e.key ? e.key.toLowerCase() : "";
+          const keyFromCode = e.code ? e.code.toLowerCase().replace("key", "").replace("digit", "") : "";
+          return (ctrlPressed === needsCtrl) && (shiftPressed === needsShift) && (altPressed === needsAlt) && (keyFromKey === keyPart || keyFromCode === keyPart);
+      };
+
+      if (checkKey('save_bill')) { e.preventDefault(); e.stopPropagation(); saveBill(); return; }
+      if (checkKey('add_item')) { e.preventDefault(); e.stopPropagation(); setItems(prev => [...prev, createItem(settings.default_hsn)]); markDirty(); return; }
+      if (checkKey('new_bill')) { e.preventDefault(); e.stopPropagation(); handleNewBillClick(); return; }
+      if (checkKey('share_wa')) { e.preventDefault(); e.stopPropagation(); shareWhatsApp(); return; }
+      if (checkKey('open_ledger')) { e.preventDefault(); e.stopPropagation(); setShowLedger(true); return; }
+      if (checkKey('open_recent')) { e.preventDefault(); e.stopPropagation(); setShowRecentBills(true); return; }
+      if (checkKey('focus_payment')) { e.preventDefault(); e.stopPropagation(); document.getElementById('paymentMethodSelect')?.focus(); return; }
+      if (checkKey('focus_customer')) { e.preventDefault(); e.stopPropagation(); document.getElementById('customerNameInput')?.focus(); return; }
+      if (checkKey('focus_item')) { e.preventDefault(); e.stopPropagation(); const itemInputs = document.querySelectorAll('.item-desc-input'); if(itemInputs.length > 0) itemInputs[itemInputs.length - 1].focus(); return; }
+      if (checkKey('focus_discount')) { e.preventDefault(); e.stopPropagation(); document.getElementById('discountInput')?.focus(); return; }
+      if (checkKey('focus_redeem')) { e.preventDefault(); e.stopPropagation(); document.getElementById('redeemedPointsInput')?.focus(); return; }
+      if (checkKey('focus_credit')) { e.preventDefault(); e.stopPropagation(); document.getElementById('appliedCreditInput')?.focus(); return; }
+      if (checkKey('download_pdf')) { e.preventDefault(); e.stopPropagation(); downloadPdf("bill-print-root", documentNumber || mode); return; }
+      if (checkKey('print_bill')) { e.preventDefault(); e.stopPropagation(); window.print(); return; }
+      if (checkKey('iot_qr')) { e.preventDefault(); e.stopPropagation(); sendQrToDisplay(computed.grandTotal, mode === 'invoice' ? activeBillBranch.invoice_upi_id : activeBillBranch.estimate_upi_id); return; }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown, true);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
+  }); 
+
+  useEffect(() => { 
+      localStorage.setItem("jj_print_scale", String(clampPrintScale(printScale))); 
+  }, [printScale]);
+  
+  useEffect(() => {
+    if (isPublicView) return; 
+    const verify = async () => {
+      if (!token) { 
+          setCheckingSession(false); 
+          return; 
+      }
+      const slowServerTimeout = setTimeout(() => setIsWakingUp(true), 3000);
+      try { 
+          await axios.get(`${API}/auth/verify`, { headers: authHeaders }); 
+      } catch { 
+          localStorage.removeItem("jj_auth_token"); 
+          setToken(""); 
+      } finally { 
+          clearTimeout(slowServerTimeout); 
+          setCheckingSession(false); 
+          setIsWakingUp(false); 
+      }
+    };
+    verify();
+  }, [token, isPublicView, authHeaders]);
+  useEffect(() => {
+    if (showRecentBills && token && !isPublicView) {
+      const fetchRecent = async () => {
+        setLoadingRecent(true);
+        try {
+          const limit = recentDateFilter === "ALL" ? 50 : 500;
+          const response = await axios.get(`${API}/bills/recent?limit=${limit}&branch_filter=${recentBranchFilter}&search=${encodeURIComponent(billSearchQuery)}`, { headers: authHeaders });
+          setRecentBillsList(response.data);
+        } catch { 
+            toast.error("Failed to load recent bills."); 
+        } finally { 
+            setLoadingRecent(false); 
+        }
+      };
+      const timer = setTimeout(fetchRecent, 300); 
+      return () => clearTimeout(timer);
+    }
+  }, [showRecentBills, token, isPublicView, billSearchQuery, recentBranchFilter, recentDateFilter, authHeaders]); 
+
+  useEffect(() => {
+    if (showAnalytics && token && !isPublicView) {
+      const fetchAllForAnalytics = async () => {
+        try {
+          const response = await axios.get(`${API}/bills/recent?limit=1000&branch_filter=ALL&search=`, { headers: authHeaders });
+          setRecentBillsList(response.data);
+        } catch { 
+            console.error("Failed to load analytics data."); 
+        }
+      };
+      fetchAllForAnalytics();
+    }
+  }, [showAnalytics, token, isPublicView, authHeaders]);
+
+  const filteredRecentBills = useMemo(() => {
+    return (recentBillsList || []).filter(bill => {
+      if (recentModeFilter !== "ALL" && bill.mode !== recentModeFilter) return false;
+      
+      if (recentDateFilter === "THIS_MONTH") {
+        const billDateObj = parseBillDate(bill.date);
+        const now = new Date();
+        if (billDateObj.getMonth() !== now.getMonth() || billDateObj.getFullYear() !== now.getFullYear()) return false;
+      } else if (recentDateFilter === "LAST_MONTH") {
+        const billDateObj = parseBillDate(bill.date);
+        const now = new Date();
+        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        if (billDateObj.getMonth() !== lastMonth.getMonth() || billDateObj.getFullYear() !== lastMonth.getFullYear()) return false;
+      } else if (recentDateFilter === "CUSTOM") {
+        const fixBillDate = (dStr) => {
+            if(!dStr) return "";
+            const p = dStr.split("-");
+            if (p.length === 3 && p[0].length === 2) return `${p[2]}-${p[1]}-${p[0]}`;
+            return dStr;
+        };
+        const bDate = fixBillDate(bill.date);
+        if (customStartDate && bDate < customStartDate) return false;
+        if (customEndDate && bDate > customEndDate) return false;
+      }
+      return true;
+    });
+  }, [recentBillsList, recentModeFilter, recentDateFilter, customStartDate, customEndDate]);
+
+  const handleBulkDownload = async () => {
+    if ((filteredRecentBills || []).length === 0) { 
+        toast.error("No bills to download!"); 
+        return; 
+    }
+    if ((filteredRecentBills || []).length > 20) { 
+        if (!window.confirm(`Generate PDF with ${filteredRecentBills.length} pages? This might take a minute.`)) return; 
+    }
+    
+    setIsBulkDownloading(true); 
+    toast.info(`Generating PDF for ${filteredRecentBills.length} bills...`);
+    await new Promise(resolve => setTimeout(resolve, 800));
+    
+    try {
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      
+      for (let i = 0; i < filteredRecentBills.length; i++) {
+        const bill = filteredRecentBills[i];
+        const node = document.getElementById(`bulk-bill-${bill.document_number}`);
+        if (!node) continue;
+        
+        const canvas = await html2canvas(node, { 
+          scale: 2, 
+          useCORS: true, 
+          allowTaint: true, 
+          backgroundColor: "#ffffff", 
+          windowWidth: 1024,
+          onclone: (clonedDoc) => {
+            const clonedNode = clonedDoc.getElementById(`bulk-bill-${bill.document_number}`);
+            if (clonedNode) {
+              clonedNode.style.display = "block"; 
+              clonedNode.style.transform = "none";
+              clonedNode.style.width = "800px"; 
+              clonedNode.style.minWidth = "800px"; 
+              clonedNode.style.maxWidth = "800px"; 
+              clonedNode.style.height = "max-content";
+              clonedNode.style.padding = "20px"; 
+              clonedNode.style.boxSizing = "border-box";
+              
+              const noPrint = clonedDoc.querySelectorAll('.no-print'); 
+              noPrint.forEach(el => el.style.display = 'none');
+              
+              const printOnly = clonedDoc.querySelectorAll('.print-only'); 
+              printOnly.forEach(el => { 
+                  el.style.position = 'static'; 
+                  el.style.width = '100%'; 
+                  el.style.height = 'auto'; 
+                  el.style.opacity = '1'; 
+                  el.style.visibility = 'visible'; 
+                  el.style.display = 'flex'; 
+              });
+            }
+          }
+        });
+        
+        const imgData = canvas.toDataURL("image/png", 1.0);
+        const pageHeight = (canvas.height * pageWidth) / canvas.width;
+        
+        if (i > 0) pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, 0, pageWidth, pageHeight);
+      }
+      
+      pdf.save(`Jalaram_Bills_Export_${today()}.pdf`); 
+      toast.success("Bulk PDF Downloaded!");
+    } catch (error) { 
+        toast.error("Error generating bulk PDF."); 
+    } finally { 
+        setIsBulkDownloading(false); 
+    }
+  };
+
+  const fetchLedgerHistory = async () => {
+    try { 
+        const res = await axios.get(`${API}/settings/ledger/logs?branch_id=${globalBranchId}`, { headers: authHeaders }); 
+        setLedgerLogs(res.data); 
+    } catch { 
+        toast.error("Failed to load ledger history."); 
+    }
+  };
+
+  useEffect(() => {
+    if (showLedger && token && !isPublicView) {
+      const fetchLedger = async () => {
+        setLedgerLoading(true);
+        try { 
+            await loadSettings(); 
+            const res = await axios.get(`${API}/bills/today?date=${today()}&branch_id=${globalBranchId}`, { headers: authHeaders }); 
+            setTodayBills(res.data); 
+            await fetchLedgerHistory(); 
+        } catch { 
+            toast.error("Failed to load today's ledger."); 
+        } finally { 
+            setLedgerLoading(false); 
+        }
+      };
+      fetchLedger();
+    }
+  }, [showLedger, token, isPublicView, globalBranchId, authHeaders]);
+
+  useEffect(() => {
+    if (showSettings && token && !isPublicView) {
+      const fetchStorageStats = async () => { 
+          try { 
+              const res = await axios.get(`${API}/system/storage`, { headers: authHeaders }); 
+              setStorageStats(res.data); 
+          } catch { 
+              console.error("Failed to load storage stats"); 
+          } 
+      };
+      fetchStorageStats();
+    }
+  }, [showSettings, token, isPublicView, authHeaders]);
+
+  const loadSettings = async () => {
+    const response = await axios.get(`${API}/settings`, { headers: authHeaders });
+    const savedLogo = localStorage.getItem("jj_logo_data_url");
+    let dbData = response.data || {};
+    
+    if (!dbData.branches) dbData.branches = defaultSettings.branches;
+    if (!dbData.master_items) dbData.master_items = [];
+    if (!dbData.inventory) dbData.inventory = [];
+    if (!dbData.inventory_logs) dbData.inventory_logs = [];
+    
+    let localFonts = []; 
+    const localFontsRaw = localStorage.getItem("jj_custom_fonts"); 
+    if (localFontsRaw) { 
+        try { 
+            localFonts = JSON.parse(localFontsRaw); 
+        } catch (e) {} 
+    }
+
+    let mergedShortcuts = defaultSettings.shortcuts;
+    if (dbData.shortcuts && dbData.shortcuts.length > 0) {
+        const customOnly = dbData.shortcuts.filter(sc => !sc.isSystem);
+        const systemUpdated = defaultSettings.shortcuts.map(sys => {
+            const savedSys = dbData.shortcuts.find(s => s.id === sys.id);
+            return savedSys ? savedSys : sys;
+        });
+        mergedShortcuts = [...systemUpdated, ...customOnly];
+    } else { 
+        mergedShortcuts = defaultSettings.shortcuts; 
+    }
+
+    const newSettings = { 
+        ...defaultSettings, 
+        ...dbData, 
+        logo_data_url: savedLogo || dbData.logo_data_url || "", 
+        custom_fonts: dbData.custom_fonts || localFonts, 
+        shortcuts: mergedShortcuts 
+    };
+    
+    setSettings(newSettings);
+    
+    if (!(newSettings.branches || []).find(b => b.id === globalBranchId)) { 
+        setGlobalBranchId((newSettings.branches || [])[0].id); 
+        setBillBranchId((newSettings.branches || [])[0].id); 
+    }
+    
+    setItems((prev) => { 
+        if (prev.length === 1 && !prev[0].description && !prev[0].weight && !prev[0].hsn) {
+            return [{ ...prev[0], hsn: newSettings.default_hsn }]; 
+        }
+        return prev; 
+    });
+    
+    setSettingsLoaded(true);
+  };
+
+  const reserveNumber = async (activeMode, activeBranch) => {
+    setIsNumberLoading(true);
+    try { 
+        const response = await axios.get(`${API}/bills/next-number`, { headers: authHeaders, params: { mode: activeMode, branch_id: activeBranch } }); 
+        setDocumentNumber(response.data.document_number || ""); 
+    } finally { 
+        setIsNumberLoading(false); 
+    }
+  };
+
+  const fetchCloudStatus = async () => {
+    try { 
+        const response = await axios.get(`${API}/cloud/status`, { headers: authHeaders }); 
+        setCloudStatus(response.data); 
+    } catch { 
+        setCloudStatus({ provider: "supabase", enabled: false, mode: "status-unavailable" }); 
+    }
+  };
+
+  useEffect(() => {
+    if (isPublicView) return;
+    const bootstrap = async () => { 
+        if (!token) return; 
+        try { 
+            await loadSettings(); 
+            await fetchCloudStatus(); 
+        } catch { 
+            toast.error("Could not load billing settings."); 
+        } 
+    };
+    bootstrap();
+  }, [token, isPublicView]); 
+
+  useEffect(() => {
+    if (!token || isPublicView) return;
+    const interval = setInterval(() => { fetchCloudStatus(); }, 30000); 
+    return () => clearInterval(interval);
+  }, [token, isPublicView]); 
+
+  useEffect(() => {
+    if (!token || isPublicView) return;
+    const query = customer.phone.trim().length >= 2 ? customer.phone.trim() : customer.name.trim();
+    if (query.length < 2) { 
+        setSuggestions([]); 
+        return; 
+    }
+    const timer = setTimeout(async () => {
+      try { 
+          const response = await axios.get(`${API}/customers/suggest`, { headers: authHeaders, params: { query } }); 
+          setSuggestions(response.data || []); 
+      } catch { 
+          setSuggestions([]); 
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [customer.phone, customer.name, token, isPublicView, authHeaders]);
+
+  const computed = useMemo(() => {
+    const baseSilverRate = num(settings.silver_rate_per_gram);
+    const baseMCPerGram = num(settings.making_charge_per_gram);
+    const flatMCBelow5g = num(settings.flat_mc_below_5g);
+    const ptPerGram = num(settings.loyalty_points_per_gram !== undefined ? settings.loyalty_points_per_gram : 1);
+    const rsPerPt = num(settings.loyalty_point_value_rs !== undefined ? settings.loyalty_point_value_rs : 1);
+
+    let totalWeight = 0;
+
+    const mapped = (items || []).map((item, index) => {
+      const weight = num(item.weight); 
+      totalWeight += weight;
+      
+      const quantity = Math.max(num(item.quantity || 1), 1);
+      const silverRate = item.rate_override !== "" ? num(item.rate_override) : baseSilverRate;
+
+      let mcAmount = 0;
+      if (item.mc_override !== "") { 
+          mcAmount = weight * num(item.mc_override); 
+      } else if (flatMCBelow5g > 0 && weight > 0 && weight < 5) { 
+          mcAmount = flatMCBelow5g; 
+      } else { 
+          mcAmount = weight * baseMCPerGram; 
+      }
+
+      const totalItemCost = (weight * silverRate) + mcAmount;
+      const formulaAmount = mode === "estimate" ? totalItemCost * quantity : totalItemCost;
+      const amount = item.amount_override !== "" ? num(item.amount_override) : formulaAmount;
+      const rateForPrint = weight > 0 ? (amount / (mode === "estimate" ? quantity : 1)) / weight : 0;
+      const { rupees, paise } = splitAmount(amount);
+      
+      return { ...item, slNo: index + 1, rate: rateForPrint, quantity, amount, rupees, paise, weight };
+    });
+
+    const subtotal = mapped.reduce((sum, row) => sum + row.amount, 0); 
+    const taxable = subtotal;
+    
+    const cgst = mode === "invoice" ? taxable * 0.015 : 0; 
+    const sgst = mode === "invoice" ? taxable * 0.015 : 0; 
+    const igst = 0;
+    const gstApplied = mode === "invoice" ? cgst + sgst + igst : 0;
+    const mdr = paymentMethod === "Card" ? (taxable + gstApplied) * 0.02 : 0;
+    
+    const bonusPointsVal = num(bonusPoints);
+    const earnedPoints = Math.floor(totalWeight * ptPerGram) + bonusPointsVal;
+    
+    const appliedRedeemedPoints = num(redeemedPoints);
+    const appliedRedeemedValue = appliedRedeemedPoints * rsPerPt;
+    const appliedCreditVal = num(appliedCredit);
+    const savedCreditVal = num(savedCredit);
+
+    const baseTotal = taxable + gstApplied + mdr - num(discount) - num(exchange) - appliedRedeemedValue - appliedCreditVal + savedCreditVal;
+    const autoRound = Math.round(baseTotal) - baseTotal;
+    const roundOff = manualRoundOff === "" ? autoRound : num(manualRoundOff);
+    const grandTotal = baseTotal + roundOff;
+    
+    return { 
+        items: mapped, 
+        baseSilverRate, 
+        subtotal, 
+        taxable, 
+        cgst, 
+        sgst, 
+        igst, 
+        mdr, 
+        roundOff, 
+        grandTotal, 
+        totalWeight, 
+        earnedPoints, 
+        redeemedPoints: appliedRedeemedPoints, 
+        redeemedValue: appliedRedeemedValue, 
+        appliedCredit: appliedCreditVal, 
+        savedCredit: savedCreditVal, 
+        bonusPoints: bonusPointsVal 
+    };
+  }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff, redeemedPoints, appliedCredit, savedCredit, bonusPoints]);
+
+  const updateItem = (id, key, value) => { 
+      markDirty(); 
+      setItems((prev) => prev.map((item) => (item.id === id ? { ...item, [key]: value } : item))); 
+  };
+
+  const checkIsBlank = () => { 
+      return !customer.name.trim() && 
+             !customer.phone.trim() && 
+             !customer.address.trim() && 
+             !(items || []).some(i => i.description.trim() || i.weight.trim() || i.amount_override.trim()) && 
+             (!discount || discount === "0") && 
+             (!exchange || exchange === "0") && 
+             !paymentMethod && 
+             !advanceMethod && 
+             !advanceAmount && 
+             !splitCash; 
+  };
+  const clearBill = async (nextMode = mode, nextBranch = billBranchId) => {
+    setCurrentBillId(null); 
+    setEditingDocNumber(null); 
+    setItems([createItem(settings.default_hsn)]); 
+    setCustomer({ name: "", phone: "", address: "", email: "", points: 0, credit: 0 });
+    setSuggestions([]); 
+    setDiscount("0"); 
+    setExchange("0"); 
+    setRedeemedPoints(""); 
+    setAppliedCredit(""); 
+    setSavedCredit(""); 
+    setBonusPoints(""); 
+    setManualRoundOff("");
+    setTxType("sale"); 
+    setPaymentMethod(""); 
+    setSplitCash(""); 
+    setIsPaymentDone(false); 
+    setAdvanceAmount(""); 
+    setAdvanceMethod(""); 
+    setAdvanceSplitCash(""); 
+    setIsAdvancePaid(false); 
+    setBalanceMethod(""); 
+    setBalanceSplitCash(""); 
+    setIsBalancePaid(false); 
+    setNotes("");
+    setBillDate(today()); 
+    setIsDirty(false); 
+    await reserveNumber(nextMode, nextBranch); 
+    goToBillTop();
+  };
+
+  const handleNewBillClick = async () => {
+    if (currentBillId && isDirty) { 
+        if (!window.confirm("⚠️ You have unsaved edits to this saved bill! Discard edits and start a new bill?")) return; 
+    } else if (!currentBillId && !checkIsBlank()) { 
+        if (!window.confirm("⚠️ You have entered data! Are you sure you want to discard it and start a blank new bill?")) return; 
+    }
+    await clearBill(mode, billBranchId);
+  };
+
+  const loadBillForEditing = (bill) => {
+    setCurrentBillId(bill.id); 
+    setEditingDocNumber(bill.document_number); 
+    setMode(bill.mode); 
+    setBillBranchId(bill.branch_id || (settings.branches || [])[0].id); 
+    setDocumentNumber(bill.document_number); 
+    setBillDate(bill.date || today());
+    
+    setCustomer({ 
+        name: bill.customer_name || bill.customer?.name || "", 
+        phone: bill.customer_phone || bill.customer?.phone || "", 
+        address: bill.customer_address || bill.customer?.address || "", 
+        email: bill.customer_email || bill.customer?.email || "", 
+        points: bill.customer?.points || 0, 
+        credit: bill.customer?.credit || 0 
+    });
+    
+    setTxType(bill.tx_type || "sale"); 
+    setPaymentMethod(bill.payment_method || ""); 
+    setSplitCash(bill.split_cash !== null && bill.split_cash !== undefined ? String(bill.split_cash) : ""); 
+    setIsPaymentDone(bill.is_payment_done || false); 
+    
+    setAdvanceAmount(bill.advance_amount ? String(bill.advance_amount) : ""); 
+    setAdvanceMethod(bill.advance_method || ""); 
+    setAdvanceSplitCash(bill.advance_split_cash ? String(bill.advance_split_cash) : ""); 
+    setIsAdvancePaid(bill.is_advance_paid || false);
+    
+    setBalanceMethod(bill.balance_method || ""); 
+    setBalanceSplitCash(bill.balance_split_cash ? String(bill.balance_split_cash) : ""); 
+    setIsBalancePaid(bill.is_balance_paid || false);
+    
+    setNotes(bill.notes || ""); 
+    setDiscount(bill.discount ? String(bill.discount) : (bill.totals?.discount ? String(bill.totals.discount) : "0")); 
+    setExchange(bill.exchange ? String(bill.exchange) : (bill.totals?.exchange ? String(bill.totals.exchange) : "0")); 
+    setManualRoundOff(bill.totals?.round_off !== null && bill.totals?.round_off !== undefined ? String(bill.totals.round_off) : "");
+    
+    setRedeemedPoints(bill.redeemed_points ? String(bill.redeemed_points) : ""); 
+    setAppliedCredit(bill.applied_credit ? String(bill.applied_credit) : ""); 
+    setSavedCredit(bill.saved_credit ? String(bill.saved_credit) : ""); 
+    setBonusPoints(bill.bonus_points ? String(bill.bonus_points) : "");
+    
+    const loadedItems = (bill.items || []).map((item) => ({ 
+        id: `${Date.now()}-${Math.random()}`, 
+        description: item.description || "", 
+        hsn: item.hsn || "", 
+        weight: item.weight ? String(item.weight) : "", 
+        quantity: item.quantity ? String(item.quantity) : "1", 
+        mc_override: item.mc_override !== null && item.mc_override !== undefined ? String(item.mc_override) : "", 
+        rate_override: item.rate_override !== null && item.rate_override !== undefined ? String(item.rate_override) : "", 
+        amount_override: item.amount_override !== null && item.amount_override !== undefined ? String(item.amount_override) : "", 
+    }));
+    
+    setItems(loadedItems.length > 0 ? loadedItems : [createItem(settings.default_hsn)]); 
+    setIsDirty(false); 
+    setShowRecentBills(false); 
+    setShowLedger(false); 
+    toast.success(`Loaded ${bill.document_number} for editing`); 
+    goToBillTop();
+  };
+
+  const handleDeleteBill = async (bill) => {
+    if (!window.confirm(`Are you sure you want to permanently delete ${bill.document_number}?`)) return;
+    try { 
+        await axios.delete(`${API}/bills/${bill.document_number}`, { headers: authHeaders }); 
+        setRecentBillsList((prev) => prev.filter((b) => b.document_number !== bill.document_number)); 
+        if (currentBillId === bill.id) await clearBill(mode, billBranchId); 
+        toast.success(`${bill.document_number} deleted successfully.`); 
+        await loadSettings(); 
+    } catch { 
+        toast.error("Failed to delete the bill."); 
+    }
+  };
+
+  const handleQuickPaymentToggle = async (bill) => {
+    if (bill.tx_type === "booking" || bill.tx_type === "service") { 
+        toast.info("Please open the bill and click Edit to manage Booking/Service balances."); 
+        return; 
+    }
+    const newStatus = !bill.is_payment_done;
+    try { 
+      await axios.put(`${API}/bills/${bill.document_number}/toggle-payment`, { is_payment_done: newStatus }, { headers: authHeaders }); 
+      toast.success(`Payment marked as ${newStatus ? 'DONE ✅' : 'PENDING ⏳'}`); 
+      
+      if (newStatus && iotOnline) { sendSuccessToDisplay(); }
+
+      if (currentBillId === bill.id) { setIsPaymentDone(newStatus); } 
+      setRecentBillsList(prev => prev.map(b => b.document_number === bill.document_number ? { ...b, is_payment_done: newStatus } : b)); 
+      await loadSettings(); 
+    } catch { 
+        toast.error("Failed to update payment status."); 
+    }
+  };
+
+  const handleResetCounter = async (resetMode) => {
+    if (!window.confirm(`Are you SURE you want to restart the ${resetMode.toUpperCase()} counter for ${activeGlobalBranch.name} back to 0001?`)) return;
+    try { 
+        await axios.post(`${API}/bills/reset-counter`, { mode: resetMode, branch_id: globalBranchId }, { headers: authHeaders }); 
+        toast.success(`${resetMode.toUpperCase()} counter for ${activeGlobalBranch.name} has been reset.`); 
+        if (mode === resetMode && billBranchId === globalBranchId) { 
+            await reserveNumber(mode, billBranchId); 
+        } 
+    } catch { 
+        toast.error(`Failed to reset the ${resetMode} counter.`); 
+    }
+  };
+
+  const handleBackupBills = async () => {
+    try { 
+        toast.info("Preparing backup file..."); 
+        const res = await axios.get(`${API}/bills/export`, { headers: authHeaders }); 
+        const dataStr = JSON.stringify(res.data, null, 2); 
+        const blob = new Blob([dataStr], { type: "application/json" }); 
+        const url = URL.createObjectURL(blob); 
+        const link = document.createElement("a"); 
+        link.href = url; 
+        link.download = `Jalaram_Bills_Backup_${today()}.json`; 
+        document.body.appendChild(link); 
+        link.click(); 
+        document.body.removeChild(link); 
+        toast.success("Backup downloaded successfully!"); 
+    } catch { 
+        toast.error("Failed to download backup."); 
+    }
+  };
+
+  const handleDeleteAllBills = async () => {
+    if (!window.confirm("🚨 WARNING! This will permanently delete ALL bills. Have you downloaded your backup first?")) return;
+    if (window.prompt("Type 'DELETE' to confirm wiping all bills:") !== "DELETE") { 
+        toast.error("Deletion cancelled."); 
+        return; 
+    }
+    try { 
+        await axios.delete(`${API}/bills/all`, { headers: authHeaders }); 
+        toast.success("All bills wiped. (Ledger balances remain intact)"); 
+        setRecentBillsList([]); 
+        const res = await axios.get(`${API}/system/storage`, { headers: authHeaders }); 
+        setStorageStats(res.data); 
+    } catch { 
+        toast.error("Failed to delete bills."); 
+    }
+  };
+
+  const handleModeChange = async (nextMode) => {
+    if (mode === nextMode) return;
+    if (currentBillId) { 
+        try { 
+            const res = await axios.get(`${API}/bills/next-number?mode=${nextMode}&branch_id=${billBranchId}`, { headers: authHeaders }); 
+            setDocumentNumber(res.data.document_number); 
+            setMode(nextMode); 
+            markDirty(); 
+            toast.info(`Migrating to ${nextMode.toUpperCase()}`); 
+        } catch (err) { 
+            toast.error("Failed to fetch new number for migration."); 
+        } 
+    } else { 
+        if (!checkIsBlank()) { 
+            if (!window.confirm("⚠️ You have unsaved changes! Switching modes will clear the screen. Continue?")) return; 
+        } 
+        setMode(nextMode); 
+        await clearBill(nextMode, billBranchId); 
+    }
+  };
+
+  const handleGlobalBranchChange = async (nextBranchId) => { 
+      setGlobalBranchId(nextBranchId); 
+      if (!currentBillId && checkIsBlank()) { 
+          setBillBranchId(nextBranchId); 
+          await reserveNumber(mode, nextBranchId); 
+      } 
+  };
+
+  const updateBranch = (index, field, value) => { 
+      const updatedBranches = [...(settings.branches || [])]; 
+      updatedBranches[index] = { ...updatedBranches[index], [field]: value }; 
+      setSettings({ ...settings, branches: updatedBranches }); 
+  };
+
+  const addBranch = () => { 
+      const newId = `B${Date.now()}`; 
+      const newBranch = { 
+          id: newId, 
+          name: `New Branch`, 
+          address: "", 
+          location_url: "", 
+          map_url: "", 
+          whatsapp_url: "", 
+          instagram_url: "", 
+          about_url: "", 
+          invoice_upi_id: "", 
+          estimate_upi_id: "", 
+          gstin: "", 
+          cash_balance: 0, 
+          estimate_bank_balance: 0, 
+          invoice_bank_balance: 0 
+      }; 
+      setSettings({ ...settings, branches: [...(settings.branches || []), newBranch] }); 
+  };
+
+  const removeBranch = (index) => { 
+      if ((settings.branches || []).length <= 1) { 
+          toast.error("You must have at least one branch."); 
+          return; 
+      } 
+      if (!window.confirm("Remove this branch from settings?")) return; 
+      const updatedBranches = (settings.branches || []).filter((_, i) => i !== index); 
+      setSettings({ ...settings, branches: updatedBranches }); 
+  };
+
+  const addShortcut = () => { 
+      const newSc = { id: `custom_${Date.now()}`, action: "", keys: "", isSystem: false }; 
+      setSettings(prev => ({ ...prev, shortcuts: [...(prev.shortcuts || defaultSettings.shortcuts), newSc] })); 
+  };
+
+  const updateShortcut = (index, field, value) => { 
+      const list = [...(settings.shortcuts || defaultSettings.shortcuts)]; 
+      list[index] = { ...list[index], [field]: value }; 
+      setSettings(prev => ({ ...prev, shortcuts: list })); 
+  };
+
+  const removeShortcut = (index) => { 
+      const list = [...(settings.shortcuts || defaultSettings.shortcuts)]; 
+      list.splice(index, 1); 
+      setSettings(prev => ({ ...prev, shortcuts: list })); 
+  };
+
+  const handleLogin = async (event) => { 
+      event.preventDefault(); 
+      setLoggingIn(true); 
+      try { 
+          const response = await axios.post(`${API}/auth/login`, { passcode }, { timeout: 15000 }); 
+          localStorage.setItem("jj_auth_token", response.data.access_token); 
+          setToken(response.data.access_token); 
+          setPasscode(""); 
+          toast.success("Logged in successfully"); 
+      } catch (error) { 
+          if (error?.response?.status === 401) { 
+              toast.error("Wrong passcode."); 
+          } else { 
+              toast.error("Server is waking up. Please wait 15-20 seconds and try again."); 
+          } 
+      } finally { 
+          setLoggingIn(false); 
+      } 
+  };
+
+  const handleLogout = () => { 
+      localStorage.removeItem("jj_auth_token"); 
+      setToken(""); 
+      setGatewayPassed(false); 
+      setSettingsLoaded(false); 
+  };
+
+  const optimizeImageDataUrl = async (file) => { 
+      const reader = new FileReader(); 
+      const original = await new Promise((resolve, reject) => { 
+          reader.onload = () => resolve(reader.result); 
+          reader.onerror = reject; 
+          reader.readAsDataURL(file); 
+      }); 
+      const image = new Image(); 
+      await new Promise((resolve, reject) => { 
+          image.onload = resolve; 
+          image.onerror = reject; 
+          image.src = original; 
+      }); 
+      const ratio = Math.min(420 / image.width, 420 / image.height, 1); 
+      const targetWidth = Math.round(image.width * ratio); 
+      const targetHeight = Math.round(image.height * ratio); 
+      const canvas = document.createElement("canvas"); 
+      canvas.width = targetWidth; 
+      canvas.height = targetHeight; 
+      const context = canvas.getContext("2d"); 
+      context.drawImage(image, 0, 0, targetWidth, targetHeight); 
+      return canvas.toDataURL("image/png", 0.92); 
+  };
+
+  const handleLogoUpload = async (event) => { 
+      const file = event.target.files?.[0]; 
+      if (!file) return; 
+      try { 
+          const dataUrl = await optimizeImageDataUrl(file); 
+          localStorage.setItem("jj_logo_data_url", dataUrl); 
+          setSettings((prev) => ({ ...prev, logo_data_url: dataUrl })); 
+          setLogoUploadName(file.name); 
+          toast.success("Logo uploaded successfully."); 
+      } catch { 
+          toast.error("Logo upload failed."); 
+      } 
+  };
+
+  const saveSettings = async () => { 
+      try { 
+          await axios.put(`${API}/settings`, settings, { headers: authHeaders }); 
+          toast.success("Settings saved."); 
+      } catch { 
+          toast.error("Could not save settings."); 
+      } 
+  };
+
+  const submitLedgerLog = async () => { 
+      if (!logAmount || isNaN(logAmount) || num(logAmount) <= 0) { 
+          toast.error("Please enter a valid amount."); 
+          return; 
+      } 
+      if (!logReason.trim()) { 
+          toast.error("Please enter a reason/remark."); 
+          return; 
+      } 
+      setSubmittingLog(true); 
+      try { 
+          const payload = { 
+              branch_id: globalBranchId, 
+              reason: logReason, 
+              cash_change: 0, 
+              estimate_bank_change: 0, 
+              invoice_bank_change: 0 
+          }; 
+          const amt = num(logAmount); 
+          const keyMap = { 
+              "cash": "cash_change", 
+              "estimate_bank": "estimate_bank_change", 
+              "invoice_bank": "invoice_bank_change" 
+          }; 
+          if (logType === "expense") {
+              payload[keyMap[logSourceVault]] = -amt; 
+          } else if (logType === "add") {
+              payload[keyMap[logSourceVault]] = amt; 
+          } else if (logType === "exchange") { 
+              if (logSourceVault === logTargetVault) { 
+                  toast.error("Cannot exchange into the same vault."); 
+                  setSubmittingLog(false); 
+                  return; 
+              } 
+              payload[keyMap[logSourceVault]] = -amt; 
+              payload[keyMap[logTargetVault]] = amt; 
+          } 
+          await axios.post(`${API}/settings/ledger/adjust`, payload, { headers: authHeaders }); 
+          toast.success("Transaction logged successfully!"); 
+          setShowLogForm(false); 
+          setLogAmount(""); 
+          setLogReason(""); 
+          await loadSettings(); 
+          await fetchLedgerHistory(); 
+      } catch (error) { 
+          toast.error("Ledger update failed."); 
+      } finally { 
+          setSubmittingLog(false); 
+      } 
+  };
+
+  const saveBalances = async () => { 
+      try { 
+          const payload = { 
+              branch_id: globalBranchId, 
+              cash_balance: num(manualCash), 
+              estimate_bank_balance: num(manualEstBank), 
+              invoice_bank_balance: num(manualInvBank) 
+          }; 
+          await axios.put(`${API}/settings/balances`, payload, { headers: authHeaders }); 
+          setSettings(prev => { 
+              const updatedBranches = (prev.branches || []).map(b => b.id === globalBranchId ? { ...b, ...payload } : b); 
+              return { ...prev, branches: updatedBranches }; 
+          }); 
+          setEditingBalances(false); 
+          toast.success(`Ledger balances for ${activeGlobalBranch.name} manually updated!`); 
+      } catch { 
+          toast.error("Failed to update balances."); 
+      } 
+  };
+
+  const saveBill = async () => {
+    if (txType === "sale" && !paymentMethod) { 
+        toast.error("Please select a payment method."); 
+        return; 
+    }
+    
     if ((txType === "booking" || txType === "service")) { 
-      if (isAdvancePaid && !advanceMethod) { toast.error("Please select a method for the Advance payment."); return; } 
-      if (isBalancePaid && !balanceMethod) { toast.error("Please select a method for the Balance payment."); return; } 
+      if (isAdvancePaid && !advanceMethod) { 
+          toast.error("Please select a method for the Advance payment."); 
+          return; 
+      } 
+      if (isBalancePaid && !balanceMethod) { 
+          toast.error("Please select a method for the Balance payment."); 
+          return; 
+      } 
     }
 
     setSavingBill(true);
     try {
       const payload = {
-        mode, branch_id: billBranchId, document_number: documentNumber, date: billDate, customer_name: customer.name, customer_phone: customer.phone, customer_address: customer.address, customer_email: customer.email,
-        tx_type: txType, payment_method: paymentMethod, is_payment_done: isPaymentDone, split_cash: num(splitCash), split_upi: Math.max(0, computed.grandTotal - num(splitCash)),
-        advance_amount: num(advanceAmount), advance_method: advanceMethod, advance_split_cash: num(advanceSplitCash), is_advance_paid: isAdvancePaid,
-        balance_method: balanceMethod, balance_split_cash: num(balanceSplitCash), is_balance_paid: isBalancePaid,
-        discount: num(discount), exchange: num(exchange), round_off: manualRoundOff === "" ? null : num(manualRoundOff), notes,
-        
-        redeemed_points: num(redeemedPoints), earned_points: computed.earnedPoints, applied_credit: computed.appliedCredit, saved_credit: computed.savedCredit, bonus_points: computed.bonusPoints,
-
-        items: computed.items.map((item) => ({ description: item.description, hsn: item.hsn, weight: num(item.weight), quantity: num(item.quantity), mc_override: item.mc_override === "" ? null : num(item.mc_override), rate_override: item.rate_override === "" ? null : num(item.rate_override), amount_override: item.amount_override === "" ? null : num(item.amount_override), rate: item.rate, amount: item.amount, sl_no: item.slNo })),
+        mode, 
+        branch_id: billBranchId, 
+        document_number: documentNumber, 
+        date: billDate, 
+        customer_name: customer.name, 
+        customer_phone: customer.phone, 
+        customer_address: customer.address, 
+        customer_email: customer.email,
+        tx_type: txType, 
+        payment_method: paymentMethod, 
+        is_payment_done: isPaymentDone, 
+        split_cash: num(splitCash), 
+        split_upi: Math.max(0, computed.grandTotal - num(splitCash)),
+        advance_amount: num(advanceAmount), 
+        advance_method: advanceMethod, 
+        advance_split_cash: num(advanceSplitCash), 
+        is_advance_paid: isAdvancePaid,
+        balance_method: balanceMethod, 
+        balance_split_cash: num(balanceSplitCash), 
+        is_balance_paid: isBalancePaid,
+        discount: num(discount), 
+        exchange: num(exchange), 
+        round_off: manualRoundOff === "" ? null : num(manualRoundOff), 
+        notes,
+        redeemed_points: num(redeemedPoints), 
+        earned_points: computed.earnedPoints, 
+        applied_credit: computed.appliedCredit, 
+        saved_credit: computed.savedCredit, 
+        bonus_points: computed.bonusPoints,
+        items: computed.items.map((item) => ({ 
+            description: item.description, 
+            hsn: item.hsn, 
+            weight: num(item.weight), 
+            quantity: num(item.quantity), 
+            mc_override: item.mc_override === "" ? null : num(item.mc_override), 
+            rate_override: item.rate_override === "" ? null : num(item.rate_override), 
+            amount_override: item.amount_override === "" ? null : num(item.amount_override), 
+            rate: item.rate, 
+            amount: item.amount, 
+            sl_no: item.slNo 
+        })),
         totals: { grand_total: computed.grandTotal, subtotal: computed.subtotal }
       };
 
@@ -389,28 +1585,30 @@ export default function App() {
         // --- NEW FEATURE: AUTO-DEDUCT INVENTORY ON NEW BILL ---
         let updatedInventory = [...(settings.inventory || [])];
         let inventoryChanged = false;
+        
         computed.items.forEach(item => {
            const desc = (item.description || "").trim().toLowerCase();
            const invIndex = updatedInventory.findIndex(inv => (inv.name || "").trim().toLowerCase() === desc);
+           
            if (invIndex !== -1 && num(item.weight) > 0) {
               const totalItemWeight = num(item.weight) * num(item.quantity || 1);
               updatedInventory[invIndex].weightInGrams = Math.max(0, (updatedInventory[invIndex].weightInGrams || 0) - totalItemWeight);
               inventoryChanged = true;
            }
         });
+        
         if (inventoryChanged) {
            const newSettings = { ...settings, inventory: updatedInventory };
            setSettings(newSettings);
-           axios.put(`${API}/settings`, newSettings, { headers: authHeaders }).catch(() => console.error("Background inventory update failed"));
+           axios.put(`${API}/settings`, newSettings, { headers: authHeaders })
+                .catch(() => console.error("Background inventory update failed"));
         }
         // --------------------------------------------------------
       }
       
-      // --- IOT TRIGGER ---
       if (isPaymentDone && iotOnline) {
         sendSuccessToDisplay();
       }
-      // -----------------------
 
       await loadSettings(); 
       await fetchLedgerHistory();
@@ -420,35 +1618,82 @@ export default function App() {
       setSavingBill(false); 
     }
   };
-     
+
   const downloadPdf = async (elementId, filename) => { 
-    toast.info("Preparing PDF..."); const node = document.getElementById(elementId); if (!node) return; 
+    toast.info("Preparing PDF..."); 
+    const node = document.getElementById(elementId); 
+    if (!node) return; 
     try { 
       const canvas = await html2canvas(node, { 
-        scale: 2, useCORS: true, allowTaint: true, backgroundColor: "#ffffff", windowWidth: 1024, 
+        scale: 2, 
+        useCORS: true, 
+        allowTaint: true, 
+        backgroundColor: "#ffffff", 
+        windowWidth: 1024, 
         onclone: (clonedDoc) => { 
           const clonedNode = clonedDoc.getElementById(elementId); 
           if (clonedNode) { 
-            clonedNode.style.transform = "none"; clonedNode.style.width = "800px"; clonedNode.style.maxWidth = "800px"; clonedNode.style.minWidth = "800px"; 
-            clonedNode.style.position = "relative"; clonedNode.style.top = "auto"; clonedNode.style.left = "auto"; 
-            clonedNode.style.margin = "0"; clonedNode.style.padding = "20px"; clonedNode.style.height = "max-content"; clonedNode.style.boxSizing = "border-box"; 
-            const noPrint = clonedNode.querySelectorAll('.no-print'); noPrint.forEach(el => el.style.display = 'none');
-            const printOnly = clonedNode.querySelectorAll('.print-only'); printOnly.forEach(el => { el.style.position = 'static'; el.style.width = '100%'; el.style.height = 'auto'; el.style.opacity = '1'; el.style.visibility = 'visible'; el.style.display = 'flex'; });
+            clonedNode.style.transform = "none"; 
+            clonedNode.style.width = "800px"; 
+            clonedNode.style.maxWidth = "800px"; 
+            clonedNode.style.minWidth = "800px"; 
+            clonedNode.style.position = "relative"; 
+            clonedNode.style.top = "auto"; 
+            clonedNode.style.left = "auto"; 
+            clonedNode.style.margin = "0"; 
+            clonedNode.style.padding = "20px"; 
+            clonedNode.style.height = "max-content"; 
+            clonedNode.style.boxSizing = "border-box"; 
+            
+            const noPrint = clonedNode.querySelectorAll('.no-print'); 
+            noPrint.forEach(el => el.style.display = 'none');
+            
+            const printOnly = clonedNode.querySelectorAll('.print-only'); 
+            printOnly.forEach(el => { 
+                el.style.position = 'static'; 
+                el.style.width = '100%'; 
+                el.style.height = 'auto'; 
+                el.style.opacity = '1'; 
+                el.style.visibility = 'visible'; 
+                el.style.display = 'flex'; 
+            });
           } 
         } 
       }); 
-      const imageData = canvas.toDataURL("image/png", 1.0); const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" }); const pageWidth = pdf.internal.pageSize.getWidth(); const pageHeight = (canvas.height * pageWidth) / canvas.width; pdf.addImage(imageData, "PNG", 0, 0, pageWidth, pageHeight); pdf.save(`${filename}.pdf`); toast.success("PDF Downloaded Successfully"); 
-    } catch (error) { toast.error("Failed to download PDF."); } 
+      
+      const imageData = canvas.toDataURL("image/png", 1.0); 
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" }); 
+      const pageWidth = pdf.internal.pageSize.getWidth(); 
+      const pageHeight = (canvas.height * pageWidth) / canvas.width; 
+      
+      pdf.addImage(imageData, "PNG", 0, 0, pageWidth, pageHeight); 
+      pdf.save(`${filename}.pdf`); 
+      toast.success("PDF Downloaded Successfully"); 
+    } catch (error) { 
+        toast.error("Failed to download PDF."); 
+    } 
   };
   
   const shareWhatsApp = () => { 
     const link = `${window.location.origin}/?view=${documentNumber}`; 
     const text = `*Hello* ${customer.name || "Customer"},\n Thank you for visiting Jalaram Jewellers\n\n Official ${mode === "invoice" ? "Invoice" : "Estimate"} Bill\n Here Is Your Bill No. ${documentNumber}\n Amount: ₹${money(computed.grandTotal)}.\n\n Here You can view and download it securely\n Link: ${link}\n\n *Stay Connected With us*\n WhatsApp Group\n Link (https://bit.ly/Jalaram-Group-WP)\n Instagram\n Link (https://bit.ly/Jalaram-IG)\n\n*We value Your Feedback*\n Dear ${customer.name || "Customer"}, Please Give us a minute to Rate our Behaviour and Service. Give us your Valuable Feedback so we can make your experience even better:\n ${activeBillBranch.map_url}\n\n   Thank you,\n${settings.shop_name} : The Silver Specialist\n\n  `; 
-    let cleanedPhone = customer.phone.replace(/\D/g, ""); if (cleanedPhone.length === 10) cleanedPhone = `91${cleanedPhone}`; window.open(`https://wa.me/${cleanedPhone}?text=${encodeURIComponent(text)}`, "_blank"); 
+    
+    let cleanedPhone = customer.phone.replace(/\D/g, ""); 
+    if (cleanedPhone.length === 10) cleanedPhone = `91${cleanedPhone}`; 
+    
+    window.open(`https://wa.me/${cleanedPhone}?text=${encodeURIComponent(text)}`, "_blank"); 
   };
   
-  const shareEmail = () => { const link = `${window.location.origin}/?view=${documentNumber}`; const subject = `${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber}`; const body = `Dear ${customer.name || "Customer"},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`; window.location.href = `mailto:${customer.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; };
-  const goToBillTop = () => { document.getElementById("bill-print-root")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
+  const shareEmail = () => { 
+      const link = `${window.location.origin}/?view=${documentNumber}`; 
+      const subject = `${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber}`; 
+      const body = `Dear ${customer.name || "Customer"},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`; 
+      window.location.href = `mailto:${customer.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; 
+  };
+  
+  const goToBillTop = () => { 
+      document.getElementById("bill-print-root")?.scrollIntoView({ behavior: "smooth", block: "start" }); 
+  };
 
   const todaysTotalCash = (todayBills || []).filter(b => b.is_payment_done).reduce((sum, b) => sum + (b.payment_method === 'Cash' ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_cash) : 0), 0);
   const todaysTotalEstBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'estimate').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
@@ -456,20 +1701,28 @@ export default function App() {
 
   const publicComputed = useMemo(() => {
     if (!publicBill || !publicSettings) return { items: [], taxable: 0, cgst: 0, sgst: 0, igst: 0, mdr: 0, roundOff: 0, grandTotal: 0, discount: 0, exchange: 0 };
-    const baseSilverRate = num(publicSettings.silver_rate_per_gram); const baseMCPerGram = num(publicSettings.making_charge_per_gram); const flatMCBelow5g = num(publicSettings.flat_mc_below_5g);
+    const baseSilverRate = num(publicSettings.silver_rate_per_gram); 
+    const baseMCPerGram = num(publicSettings.making_charge_per_gram); 
+    const flatMCBelow5g = num(publicSettings.flat_mc_below_5g);
     const ptPerGram = num(publicSettings.loyalty_points_per_gram !== undefined ? publicSettings.loyalty_points_per_gram : 1);
     const rsPerPt = num(publicSettings.loyalty_point_value_rs !== undefined ? publicSettings.loyalty_point_value_rs : 1);
 
     let totalWeight = 0;
 
     const mapped = (publicBill.items || []).map((item, index) => {
-      const weight = num(item.weight); totalWeight += weight;
+      const weight = num(item.weight); 
+      totalWeight += weight;
       const quantity = Math.max(num(item.quantity || 1), 1);
       const silverRate = (item.rate_override !== undefined && item.rate_override !== null && item.rate_override !== "") ? num(item.rate_override) : baseSilverRate;
+      
       let mcAmount = 0;
-      if (item.mc_override !== undefined && item.mc_override !== null && item.mc_override !== "") { mcAmount = weight * num(item.mc_override); } 
-      else if (flatMCBelow5g > 0 && weight > 0 && weight < 5) { mcAmount = flatMCBelow5g; } 
-      else { mcAmount = weight * baseMCPerGram; }
+      if (item.mc_override !== undefined && item.mc_override !== null && item.mc_override !== "") { 
+          mcAmount = weight * num(item.mc_override); 
+      } else if (flatMCBelow5g > 0 && weight > 0 && weight < 5) { 
+          mcAmount = flatMCBelow5g; 
+      } else { 
+          mcAmount = weight * baseMCPerGram; 
+      }
 
       const totalItemCost = (weight * silverRate) + mcAmount;
       const formulaAmount = publicBill.mode === "estimate" ? totalItemCost * quantity : totalItemCost;
@@ -480,10 +1733,16 @@ export default function App() {
       return { ...item, sl_no: item.sl_no || (index + 1), rate: rateForPrint, amount, rupees, paise, weight, quantity };
     });
 
-    const subtotal = mapped.reduce((sum, row) => sum + row.amount, 0); const taxable = subtotal;
-    const cgst = publicBill.mode === "invoice" ? taxable * 0.015 : 0; const sgst = publicBill.mode === "invoice" ? taxable * 0.015 : 0; const igst = 0;
+    const subtotal = mapped.reduce((sum, row) => sum + row.amount, 0); 
+    const taxable = subtotal;
+    
+    const cgst = publicBill.mode === "invoice" ? taxable * 0.015 : 0; 
+    const sgst = publicBill.mode === "invoice" ? taxable * 0.015 : 0; 
+    const igst = 0;
     const gstApplied = publicBill.mode === "invoice" ? cgst + sgst + igst : 0;
-    const discount = num(publicBill.discount || publicBill.totals?.discount || 0); const exchange = num(publicBill.exchange || publicBill.totals?.exchange || 0);
+    
+    const discount = num(publicBill.discount || publicBill.totals?.discount || 0); 
+    const exchange = num(publicBill.exchange || publicBill.totals?.exchange || 0);
     const mdr = publicBill.payment_method === "Card" ? (taxable + gstApplied) * 0.02 : 0;
     
     const bonusPointsVal = num(publicBill.bonus_points || 0);
@@ -498,7 +1757,23 @@ export default function App() {
     const roundOff = publicBill.round_off !== undefined && publicBill.round_off !== null ? num(publicBill.round_off) : (publicBill.totals?.round_off !== undefined && publicBill.totals?.round_off !== null ? num(publicBill.totals?.round_off) : autoRound);
     const grandTotal = publicBill.totals?.grand_total !== undefined && publicBill.totals?.grand_total !== null ? num(publicBill.totals.grand_total) : (baseTotal + roundOff);
 
-    return { items: mapped, taxable: publicBill.totals?.taxable_amount || publicBill.totals?.subtotal || taxable, cgst: publicBill.totals?.cgst ?? cgst, sgst: publicBill.totals?.sgst ?? sgst, igst: publicBill.totals?.igst ?? igst, mdr: publicBill.totals?.mdr ?? mdr, roundOff, grandTotal, discount, exchange, earnedPoints, redeemedPoints, redeemedValue, appliedCredit: appliedCreditVal, savedCredit: savedCreditVal };
+    return { 
+        items: mapped, 
+        taxable: publicBill.totals?.taxable_amount || publicBill.totals?.subtotal || taxable, 
+        cgst: publicBill.totals?.cgst ?? cgst, 
+        sgst: publicBill.totals?.sgst ?? sgst, 
+        igst: publicBill.totals?.igst ?? igst, 
+        mdr: publicBill.totals?.mdr ?? mdr, 
+        roundOff, 
+        grandTotal, 
+        discount, 
+        exchange, 
+        earnedPoints, 
+        redeemedPoints, 
+        redeemedValue, 
+        appliedCredit: appliedCreditVal, 
+        savedCredit: savedCreditVal 
+    };
   }, [publicBill, publicSettings]);
 
   const getUpiAmount = () => {
@@ -523,7 +1798,9 @@ export default function App() {
       }
       return 0;
   };
-  const upiAmountToPay = getUpiAmount(); const showDashboardUpi = upiAmountToPay > 0;
+  
+  const upiAmountToPay = getUpiAmount(); 
+  const showDashboardUpi = upiAmountToPay > 0;
   const upiId = mode === "invoice" ? activeBillBranch.invoice_upi_id : activeBillBranch.estimate_upi_id;
   const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
   const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
@@ -552,6 +1829,7 @@ export default function App() {
          }
       }
     }
+    
     const publicUpiId = publicBill.mode === "invoice" ? pbBranch.invoice_upi_id : pbBranch.estimate_upi_id;
     const publicUpiUri = `upi://pay?pa=${publicUpiId}&pn=${encodeURIComponent(publicSettings?.shop_name || "Shop")}&am=${money(publicUpiAmountToPay)}&cu=INR&tn=Bill_${publicBill.document_number}`;
     const publicDynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(publicUpiUri)}&size=220`;
@@ -560,6 +1838,7 @@ export default function App() {
       <div className="billing-app" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px', minHeight: '100dvh', height: 'max-content', backgroundColor: '#f1f5f9', overflowX: 'hidden', paddingBottom: '40px' }}>
         <Toaster position="bottom-right" />
         <style>{GLOBAL_PRINT_CSS}</style>
+        
         {showFeedbackModal && (
           <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
             <div style={{ backgroundColor: "white", padding: "30px", borderRadius: "16px", width: "100%", maxWidth: "380px", textAlign: "center", boxShadow: "0 10px 25px rgba(0,0,0,0.2)" }}>
@@ -572,6 +1851,7 @@ export default function App() {
             </div>
           </div>
         )}
+        
         <div className="no-print" style={{ marginBottom: '20px', display: 'flex', gap: '15px' }}>
           <Button onClick={() => downloadPdf("public-bill-root", publicBill.document_number)}>Download PDF</Button>
           <Button variant="outline" onClick={() => window.print()}>Print Bill</Button>
@@ -625,10 +1905,15 @@ export default function App() {
               <div className="totals-row"><span>{publicBill.mode === "invoice" ? "Taxable Amt." : "TOTAL"}</span><strong>₹{money(publicComputed.taxable)}</strong></div>
               {publicBill.mode === "invoice" ? (
                 <>
-                  <div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(publicComputed.cgst)}</strong></div><div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(publicComputed.sgst)}</strong></div><div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(publicComputed.igst)}</strong></div>
+                  <div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(publicComputed.cgst)}</strong></div>
+                  <div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(publicComputed.sgst)}</strong></div>
+                  <div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(publicComputed.igst)}</strong></div>
                 </>
               ) : (
-                <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(publicComputed.discount)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(publicComputed.exchange)}</strong></div></>
+                <>
+                  <div className="totals-row"><span>DISCOUNT</span><strong>₹{money(publicComputed.discount)}</strong></div>
+                  <div className="totals-row"><span>EXCHANGE</span><strong>₹{money(publicComputed.exchange)}</strong></div>
+                </>
               )}
               {num(publicComputed.redeemedPoints) > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED ({publicComputed.redeemedPoints} pts)</span><strong style={{color:"#16a34a"}}>- ₹{money(publicComputed.redeemedValue)}</strong></div>}
               {num(publicComputed.appliedCredit) > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>STORE CREDIT APPLIED</span><strong style={{color:"#16a34a"}}>- ₹{money(publicComputed.appliedCredit)}</strong></div>}
@@ -672,10 +1957,23 @@ export default function App() {
 
             <div className="declaration">
               {publicBill.mode === "invoice" ? (
-                <><p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p>
-              <p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></>
+                <>
+                  <p className="section-title">DECLARATION</p>
+                  <p>We declare that this bill shows the actual price of items and all details are correct.</p>
+                  <p className="section-title">POLICIES, T&C</p>
+                  <ul className="policies-list">
+                    <li>6 Months of repair and polishing warranty only on silver ornaments.</li>
+                    <li>You can replace purchased items within 7 days for manufacturing defects.</li>
+                  </ul>
+                </>
               ) : (
-                <><p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></>
+                <>
+                  <p className="section-title">POLICIES, T&C</p>
+                  <ul className="policies-list">
+                    <li>6 Months of repair and polishing warranty only on silver ornaments.</li>
+                    <li>You can replace purchased items within 7 days for manufacturing defects.</li>
+                  </ul>
+                </>
               )}
             </div>
             
@@ -713,7 +2011,6 @@ export default function App() {
         </div>
       );
     }
-// If they USED the secret parameter (/?admin=true), show the actual login form
     return (
       <div className="login-shell">
         <Toaster position="bottom-right" />
@@ -726,7 +2023,6 @@ export default function App() {
       </div>
     );
   }
-  // --------------------------------
 
   if (token && settingsLoaded && !isPublicView && !gatewayPassed) {
      return (
@@ -746,12 +2042,12 @@ export default function App() {
         </div>
      );
   }
-return (
+
+  return (
     <div className="billing-app" style={isPrinting ? { height: "auto", overflow: "visible" } : { display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", backgroundColor: "#f1f5f9" }}>
       <Toaster position="bottom-right" />
       <style>{GLOBAL_PRINT_CSS}</style>
-
-      <div style={{ position: "absolute", zIndex: -9999, opacity: 0, pointerEvents: "none", top: 0, left: 0, height: 0, overflow: "hidden" }}>
+<div style={{ position: "absolute", zIndex: -9999, opacity: 0, pointerEvents: "none", top: 0, left: 0, height: 0, overflow: "hidden" }}>
         {(filteredRecentBills || []).map(b => {
            const billBranch = (settings.branches || []).find(br => br.id === b.branch_id) || (settings.branches || [])[0] || defaultSettings.branches[0];
            const rsPerPt = num(settings.loyalty_point_value_rs !== undefined ? settings.loyalty_point_value_rs : 1);
@@ -807,10 +2103,15 @@ return (
                     <div className="totals-row"><span>{b.mode === "invoice" ? "Taxable Amt." : "TOTAL"}</span><strong>₹{money(b.totals?.taxable_amount || b.totals?.subtotal || 0)}</strong></div>
                     {b.mode === "invoice" ? (
                       <>
-                        <div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(b.totals?.cgst || 0)}</strong></div><div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(b.totals?.sgst || 0)}</strong></div><div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(b.totals?.igst || 0)}</strong></div>
+                        <div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(b.totals?.cgst || 0)}</strong></div>
+                        <div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(b.totals?.sgst || 0)}</strong></div>
+                        <div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(b.totals?.igst || 0)}</strong></div>
                       </>
                     ) : (
-                      <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(b.totals?.discount || 0)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(b.totals?.exchange || 0)}</strong></div></>
+                      <>
+                        <div className="totals-row"><span>DISCOUNT</span><strong>₹{money(b.totals?.discount || 0)}</strong></div>
+                        <div className="totals-row"><span>EXCHANGE</span><strong>₹{money(b.totals?.exchange || 0)}</strong></div>
+                      </>
                     )}
                     {num(b.redeemed_points) > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED ({b.redeemed_points} pts)</span><strong style={{color:"#16a34a"}}>- ₹{money(num(b.redeemed_points) * rsPerPt)}</strong></div>}
                     {num(b.applied_credit) > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>STORE CREDIT APPLIED</span><strong style={{color:"#16a34a"}}>- ₹{money(b.applied_credit)}</strong></div>}
@@ -845,10 +2146,23 @@ return (
                   
                   <div className="declaration">
                     {b.mode === "invoice" ? (
-                       <><p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p>
-              <p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></>
+                       <>
+                          <p className="section-title">DECLARATION</p>
+                          <p>We declare that this bill shows the actual price of items and all details are correct.</p>
+                          <p className="section-title">POLICIES, T&C</p>
+                          <ul className="policies-list">
+                             <li>6 Months of repair and polishing warranty only on silver ornaments.</li>
+                             <li>You can replace purchased items within 7 days for manufacturing defects.</li>
+                          </ul>
+                       </>
                     ) : (
-                      <><p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></>
+                      <>
+                         <p className="section-title">POLICIES, T&C</p>
+                         <ul className="policies-list">
+                            <li>6 Months of repair and polishing warranty only on silver ornaments.</li>
+                            <li>You can replace purchased items within 7 days for manufacturing defects.</li>
+                         </ul>
+                      </>
                     )}
                   </div>
                   <FooterLinksAndQRs branch={billBranch} allBranches={settings.branches} />
@@ -946,7 +2260,10 @@ return (
                     <div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(computed.igst)}</strong></div>
                   </>
                 ) : (
-                  <><div className="totals-row"><span>DISCOUNT</span><strong>₹{money(discount)}</strong></div><div className="totals-row"><span>EXCHANGE</span><strong>₹{money(exchange)}</strong></div></>
+                  <>
+                    <div className="totals-row"><span>DISCOUNT</span><strong>₹{money(discount)}</strong></div>
+                    <div className="totals-row"><span>EXCHANGE</span><strong>₹{money(exchange)}</strong></div>
+                  </>
                 )}
                 {computed.redeemedPoints > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED ({computed.redeemedPoints} pts)</span><strong style={{color:"#16a34a"}}>- ₹{money(computed.redeemedValue)}</strong></div>}
                 {computed.appliedCredit > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>STORE CREDIT APPLIED</span><strong style={{color:"#16a34a"}}>- ₹{money(computed.appliedCredit)}</strong></div>}
@@ -990,10 +2307,23 @@ return (
 
               <div className="declaration">
                 {mode === "invoice" ? (
-                   <><p className="section-title">DECLARATION</p><p>We declare that this bill shows the actual price of items and all details are correct.</p>
-              <p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></>
+                   <>
+                      <p className="section-title">DECLARATION</p>
+                      <p>We declare that this bill shows the actual price of items and all details are correct.</p>
+                      <p className="section-title">POLICIES, T&C</p>
+                      <ul className="policies-list">
+                         <li>6 Months of repair and polishing warranty only on silver ornaments.</li>
+                         <li>You can replace purchased items within 7 days for manufacturing defects.</li>
+                      </ul>
+                   </>
                 ) : (
-                  <><p className="section-title">POLICIES, T&C</p><ul className="policies-list"><li>6 Months of repair and polishing warranty only on silver ornaments.</li><li>You can replace purchased items within 7 days for manufacturing defects.</li></ul></>
+                  <>
+                     <p className="section-title">POLICIES, T&C</p>
+                     <ul className="policies-list">
+                        <li>6 Months of repair and polishing warranty only on silver ornaments.</li>
+                        <li>You can replace purchased items within 7 days for manufacturing defects.</li>
+                     </ul>
+                  </>
                 )}
               </div>
               
@@ -1011,7 +2341,17 @@ return (
                 <h3 style={{ margin: 0 }}>Bill Details</h3>
                 <select value={billBranchId} onChange={async (e) => { 
                     const nextBranch = e.target.value; setBillBranchId(nextBranch); markDirty(); 
-                    if (currentBillId) { try { const res = await axios.get(`${API}/bills/next-number?mode=${mode}&branch_id=${nextBranch}`, { headers: authHeaders }); setDocumentNumber(res.data.document_number); toast.info(`Migrating to Branch: ${nextBranch}`); } catch (err) { toast.error("Failed to fetch new number for migration."); } } else { await reserveNumber(mode, nextBranch); }
+                    if (currentBillId) { 
+                        try { 
+                            const res = await axios.get(`${API}/bills/next-number?mode=${mode}&branch_id=${nextBranch}`, { headers: authHeaders }); 
+                            setDocumentNumber(res.data.document_number); 
+                            toast.info(`Migrating to Branch: ${nextBranch}`); 
+                        } catch (err) { 
+                            toast.error("Failed to fetch new number for migration."); 
+                        } 
+                    } else { 
+                        await reserveNumber(mode, nextBranch); 
+                    }
                 }} style={{ padding: "4px 8px", borderRadius: "6px", border: "1px solid #cbd5e1", fontSize: "0.85rem", outline: "none", cursor: "pointer" }}>
                     {(settings.branches || []).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                 </select>
@@ -1047,9 +2387,16 @@ return (
             <h3>Item Lines</h3>
             {(items || []).map((item) => (
               <div key={item.id} className="item-row-editor">
-                {/* START INJECT: INTERNET SPELL CHECK WRAPPER */}
                 <div style={{ position: "relative", flex: "1 1 150px" }}>
-                  <Input className="item-desc-input" value={item.description} onFocus={() => setDescFocusId(item.id)} onBlur={() => setTimeout(() => setDescFocusId(null), 200)} onChange={(e) => updateItem(item.id, "description", e.target.value)} placeholder="Description" style={{ paddingRight: "25px" }} />
+                  <Input 
+                    className="item-desc-input" 
+                    value={item.description} 
+                    onFocus={() => setDescFocusId(item.id)} 
+                    onBlur={() => setTimeout(() => setDescFocusId(null), 200)} 
+                    onChange={(e) => updateItem(item.id, "description", e.target.value)} 
+                    placeholder="Description" 
+                    style={{ paddingRight: "25px" }} 
+                  />
                   {(() => {
                      if (!item.description) return null;
                      const isCorrect = item.description.trim().length > 2 && !spellSuggestions[item.id];
@@ -1095,7 +2442,6 @@ return (
                      </div>
                   )}
                 </div>
-                {/* END INJECT */}
 
                 <Input value={item.hsn} onChange={(e) => updateItem(item.id, "hsn", e.target.value)} placeholder="HSN" style={{ flex: "1 1 60px" }} />
                 <Input value={item.weight} onChange={(e) => updateItem(item.id, "weight", e.target.value)} placeholder="Weight" style={{ flex: "1 1 70px" }} />
@@ -1138,7 +2484,9 @@ return (
               <div style={{ backgroundColor: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #cbd5e1' }}>
                 <label className="select-label">Payment Method</label>
                 <select id="paymentMethodSelect" value={paymentMethod} onChange={(e) => { setPaymentMethod(e.target.value); markDirty(); }} className="native-select">
-                  <option value="" disabled>Select Method</option><option value="Cash">Cash</option><option value="UPI">UPI</option>
+                  <option value="" disabled>Select Method</option>
+                  <option value="Cash">Cash</option>
+                  <option value="UPI">UPI</option>
                   {mode === "invoice" && <option value="Card">Card</option>}
                   <option value="Split">Split (Cash + UPI)</option>
                 </select>
@@ -1149,11 +2497,15 @@ return (
                   </div>
                 )}
                 <div style={{ marginTop: "15px", padding: "12px", backgroundColor: isPaymentDone ? "#dcfce7" : "#fef3c7", border: `1.5px solid ${isPaymentDone ? "#22c55e" : "#f59e0b"}`, borderRadius: "8px", display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} onClick={() => { 
-                   const next = !isPaymentDone; setIsPaymentDone(next); markDirty(); 
+                   const next = !isPaymentDone; 
+                   setIsPaymentDone(next); 
+                   markDirty(); 
                    if (next && iotOnline) sendSuccessToDisplay();
                 }}>
                   <input type="checkbox" checked={isPaymentDone} onChange={(e) => { 
-                    const next = e.target.checked; setIsPaymentDone(next); markDirty(); 
+                    const next = e.target.checked; 
+                    setIsPaymentDone(next); 
+                    markDirty(); 
                     if (next && iotOnline) sendSuccessToDisplay();
                   }} onClick={(e) => e.stopPropagation()} style={{ width: "20px", height: "20px", cursor: "pointer" }} />
                   <strong style={{ color: isPaymentDone ? "#166534" : "#b45309", fontSize: "1.1rem" }}>{isPaymentDone ? "✅ PAYMENT DONE" : "⏳ PAYMENT PENDING"}</strong>
@@ -1166,7 +2518,9 @@ return (
                 <h4 style={{ margin: '0 0 10px 0', color: '#16a34a' }}>Advance Payment</h4>
                 <Input placeholder="Advance Received ₹" value={advanceAmount} onChange={e => {setAdvanceAmount(e.target.value); markDirty();}} style={{ marginBottom: '10px' }} />
                 <select value={advanceMethod} onChange={(e) => { setAdvanceMethod(e.target.value); markDirty(); }} className="native-select">
-                  <option value="" disabled>Select Advance Method</option><option value="Cash">Cash</option><option value="UPI">UPI</option>
+                  <option value="" disabled>Select Advance Method</option>
+                  <option value="Cash">Cash</option>
+                  <option value="UPI">UPI</option>
                   {mode === "invoice" && <option value="Card">Card</option>}
                   <option value="Split">Split (Cash + UPI)</option>
                 </select>
@@ -1177,11 +2531,15 @@ return (
                   </div>
                 )}
                 <div style={{ marginTop: "15px", padding: "10px", backgroundColor: isAdvancePaid ? "#dcfce7" : "#fef3c7", border: `1px solid ${isAdvancePaid ? "#22c55e" : "#f59e0b"}`, borderRadius: "8px", display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} onClick={() => { 
-                   const next = !isAdvancePaid; setIsAdvancePaid(next); markDirty(); 
+                   const next = !isAdvancePaid; 
+                   setIsAdvancePaid(next); 
+                   markDirty(); 
                    if (next && iotOnline) sendSuccessToDisplay();
                 }}>
                   <input type="checkbox" checked={isAdvancePaid} onChange={(e) => { 
-                    const next = e.target.checked; setIsAdvancePaid(next); markDirty(); 
+                    const next = e.target.checked; 
+                    setIsAdvancePaid(next); 
+                    markDirty(); 
                     if (next && iotOnline) sendSuccessToDisplay();
                   }} onClick={(e) => e.stopPropagation()} style={{ width: "16px", height: "16px" }} />
                   <strong style={{ color: isAdvancePaid ? "#166534" : "#b45309" }}>{isAdvancePaid ? "✅ ADVANCE COLLECTED" : "⏳ ADVANCE PENDING"}</strong>
@@ -1190,7 +2548,9 @@ return (
                 <div style={{ borderTop: '2px dashed #cbd5e1', margin: '20px 0' }}></div>
                 <h4 style={{ margin: '0 0 10px 0', color: '#dc2626', display: 'flex', justifyContent: 'space-between' }}>Balance Payment<span>Due: ₹{money(Math.max(0, computed.grandTotal - num(advanceAmount)))}</span></h4>
                 <select value={balanceMethod} onChange={(e) => { setBalanceMethod(e.target.value); markDirty(); }} className="native-select">
-                  <option value="" disabled>Select Balance Method</option><option value="Cash">Cash</option><option value="UPI">UPI</option>
+                  <option value="" disabled>Select Balance Method</option>
+                  <option value="Cash">Cash</option>
+                  <option value="UPI">UPI</option>
                   {mode === "invoice" && <option value="Card">Card</option>}
                   <option value="Split">Split (Cash + UPI)</option>
                 </select>
@@ -1201,11 +2561,15 @@ return (
                   </div>
                 )}
                 <div style={{ marginTop: "15px", padding: "10px", backgroundColor: isBalancePaid ? "#dcfce7" : "#fef3c7", border: `1px solid ${isBalancePaid ? "#22c55e" : "#f59e0b"}`, borderRadius: "8px", display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }} onClick={() => { 
-                   const next = !isBalancePaid; setIsBalancePaid(next); markDirty(); 
+                   const next = !isBalancePaid; 
+                   setIsBalancePaid(next); 
+                   markDirty(); 
                    if (next && iotOnline) sendSuccessToDisplay();
                 }}>
                   <input type="checkbox" checked={isBalancePaid} onChange={(e) => { 
-                    const next = e.target.checked; setIsBalancePaid(next); markDirty(); 
+                    const next = e.target.checked; 
+                    setIsBalancePaid(next); 
+                    markDirty(); 
                     if (next && iotOnline) sendSuccessToDisplay();
                   }} onClick={(e) => e.stopPropagation()} style={{ width: "16px", height: "16px" }} />
                   <strong style={{ color: isBalancePaid ? "#166534" : "#b45309" }}>{isBalancePaid ? "✅ BALANCE COLLECTED" : "⏳ BALANCE PENDING"}</strong>
@@ -1227,11 +2591,10 @@ return (
             <Button onClick={() => setShowInventory(true)} variant="outline"><Package size={16} style={{marginRight:"5px"}}/> Inventory</Button>
             <Button onClick={() => setShowSettings(true)} variant="outline">Settings</Button>
           </div>
-
         </aside>
       </main>
 
-      {/* DAILY SALES & Ledger Drawer */}
+      {/* DAILY SALES & LEDGER DRAWER */}
       {showLedger && (
         <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "650px", backgroundColor: "white", zIndex: 100, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
           <div className="drawer-header" style={{ backgroundColor: "#f0fdf4", borderBottom: "2px solid #bbf7d0", padding: "20px", position: "sticky", top: 0, zIndex: 10 }}>
@@ -1248,24 +2611,39 @@ return (
                 <div style={{ flex: "1 1 140px", backgroundColor: "#fffbeb", border: "1px solid #fde68a", padding: "15px", borderRadius: "10px", textAlign: "center" }}>
                   <Banknote size={24} color="#d97706" style={{ margin: "0 auto 8px auto" }} />
                   <p style={{ margin: "0 0 5px 0", fontSize: "0.85rem", color: "#92400e", fontWeight: "bold" }}>Cash Drawer</p>
-                  {editingBalances ? (<Input type="number" value={manualCash} onChange={(e) => setManualCash(e.target.value)} style={{ textAlign: "center", marginTop: "5px" }} />) : (<h3 style={{ margin: 0, color: "#b45309", fontSize: "1.3rem" }}>₹{money(activeGlobalBranch.cash_balance)}</h3>)}
+                  {editingBalances ? (
+                      <Input type="number" value={manualCash} onChange={(e) => setManualCash(e.target.value)} style={{ textAlign: "center", marginTop: "5px" }} />
+                  ) : (
+                      <h3 style={{ margin: 0, color: "#b45309", fontSize: "1.3rem" }}>₹{money(activeGlobalBranch.cash_balance)}</h3>
+                  )}
                 </div>
                 <div style={{ flex: "1 1 140px", backgroundColor: "#eff6ff", border: "1px solid #bfdbfe", padding: "15px", borderRadius: "10px", textAlign: "center" }}>
                   <Wallet size={24} color="#2563eb" style={{ margin: "0 auto 8px auto" }} />
                   <p style={{ margin: "0 0 5px 0", fontSize: "0.85rem", color: "#1e40af", fontWeight: "bold" }}>Estimate Bank</p>
-                  {editingBalances ? (<Input type="number" value={manualEstBank} onChange={(e) => setManualEstBank(e.target.value)} style={{ textAlign: "center", marginTop: "5px" }} />) : (<h3 style={{ margin: 0, color: "#1d4ed8", fontSize: "1.3rem" }}>₹{money(activeGlobalBranch.estimate_bank_balance)}</h3>)}
+                  {editingBalances ? (
+                      <Input type="number" value={manualEstBank} onChange={(e) => setManualEstBank(e.target.value)} style={{ textAlign: "center", marginTop: "5px" }} />
+                  ) : (
+                      <h3 style={{ margin: 0, color: "#1d4ed8", fontSize: "1.3rem" }}>₹{money(activeGlobalBranch.estimate_bank_balance)}</h3>
+                  )}
                 </div>
                 <div style={{ flex: "1 1 140px", backgroundColor: "#fef2f2", border: "1px solid #fecaca", padding: "15px", borderRadius: "10px", textAlign: "center" }}>
                   <Building2 size={24} color="#dc2626" style={{ margin: "0 auto 8px auto" }} />
                   <p style={{ margin: "0 0 5px 0", fontSize: "0.85rem", color: "#991b1b", fontWeight: "bold" }}>GST Bank</p>
-                  {editingBalances ? (<Input type="number" value={manualInvBank} onChange={(e) => setManualInvBank(e.target.value)} style={{ textAlign: "center", marginTop: "5px" }} />) : (<h3 style={{ margin: 0, color: "#b91c1c", fontSize: "1.3rem" }}>₹{money(activeGlobalBranch.invoice_bank_balance)}</h3>)}
+                  {editingBalances ? (
+                      <Input type="number" value={manualInvBank} onChange={(e) => setManualInvBank(e.target.value)} style={{ textAlign: "center", marginTop: "5px" }} />
+                  ) : (
+                      <h3 style={{ margin: 0, color: "#b91c1c", fontSize: "1.3rem" }}>₹{money(activeGlobalBranch.invoice_bank_balance)}</h3>
+                  )}
                 </div>
               </div>
               <div style={{ textAlign: "right", marginTop: "10px" }}>
                  {!editingBalances ? (
                    <Button size="sm" variant="outline" onClick={() => { setManualCash(activeGlobalBranch.cash_balance || 0); setManualEstBank(activeGlobalBranch.estimate_bank_balance || 0); setManualInvBank(activeGlobalBranch.invoice_bank_balance || 0); setEditingBalances(true); }}>Manually Edit Balances</Button>
                  ) : (
-                   <div style={{ display: "inline-flex", gap: "10px" }}><Button size="sm" variant="outline" onClick={() => setEditingBalances(false)}>Cancel</Button><Button size="sm" style={{ backgroundColor: "#16a34a" }} onClick={saveBalances}>Save Balances</Button></div>
+                   <div style={{ display: "inline-flex", gap: "10px" }}>
+                       <Button size="sm" variant="outline" onClick={() => setEditingBalances(false)}>Cancel</Button>
+                       <Button size="sm" style={{ backgroundColor: "#16a34a" }} onClick={saveBalances}>Save Balances</Button>
+                   </div>
                  )}
               </div>
             </div>
@@ -1278,15 +2656,45 @@ return (
               {showLogForm && (
                 <div style={{ marginTop: "15px", paddingTop: "15px", borderTop: "1px dashed #cbd5e1" }}>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "10px" }}>
-                    <div style={{ flex: "1 1 150px" }}><label className="select-label">Transaction Type</label><select value={logType} onChange={(e) => setLogType(e.target.value)} className="native-select"><option value="expense">Expense (Deduct Money)</option><option value="add">Add Funds (Add Money)</option><option value="exchange">Exchange (Move Vault to Vault)</option></select></div>
-                    <div style={{ flex: "1 1 150px" }}><label className="select-label">Amount (₹)</label><Input type="number" placeholder="e.g. 500" value={logAmount} onChange={(e) => setLogAmount(e.target.value)} /></div>
+                    <div style={{ flex: "1 1 150px" }}>
+                        <label className="select-label">Transaction Type</label>
+                        <select value={logType} onChange={(e) => setLogType(e.target.value)} className="native-select">
+                            <option value="expense">Expense (Deduct Money)</option>
+                            <option value="add">Add Funds (Add Money)</option>
+                            <option value="exchange">Exchange (Move Vault to Vault)</option>
+                        </select>
+                    </div>
+                    <div style={{ flex: "1 1 150px" }}>
+                        <label className="select-label">Amount (₹)</label>
+                        <Input type="number" placeholder="e.g. 500" value={logAmount} onChange={(e) => setLogAmount(e.target.value)} />
+                    </div>
                   </div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginBottom: "10px" }}>
-                    <div style={{ flex: "1 1 150px" }}><label className="select-label">{logType === "add" ? "To Vault" : "From Vault"}</label><select value={logSourceVault} onChange={(e) => setLogSourceVault(e.target.value)} className="native-select"><option value="cash">Cash Drawer</option><option value="estimate_bank">Estimate Bank</option><option value="invoice_bank">GST Bank</option></select></div>
-                    {logType === "exchange" && (<div style={{ flex: "1 1 150px" }}><label className="select-label">To Vault</label><select value={logTargetVault} onChange={(e) => setLogTargetVault(e.target.value)} className="native-select"><option value="cash">Cash Drawer</option><option value="estimate_bank">Estimate Bank</option><option value="invoice_bank">GST Bank</option></select></div>)}
+                    <div style={{ flex: "1 1 150px" }}>
+                        <label className="select-label">{logType === "add" ? "To Vault" : "From Vault"}</label>
+                        <select value={logSourceVault} onChange={(e) => setLogSourceVault(e.target.value)} className="native-select">
+                            <option value="cash">Cash Drawer</option>
+                            <option value="estimate_bank">Estimate Bank</option>
+                            <option value="invoice_bank">GST Bank</option>
+                        </select>
+                    </div>
+                    {logType === "exchange" && (
+                        <div style={{ flex: "1 1 150px" }}>
+                            <label className="select-label">To Vault</label>
+                            <select value={logTargetVault} onChange={(e) => setLogTargetVault(e.target.value)} className="native-select">
+                                <option value="cash">Cash Drawer</option>
+                                <option value="estimate_bank">Estimate Bank</option>
+                                <option value="invoice_bank">GST Bank</option>
+                            </select>
+                        </div>
+                    )}
                   </div>
-                  <label className="select-label">Reason / Remark</label><Input placeholder="e.g. Paid for Lunch, Transfer to Bank..." value={logReason} onChange={(e) => setLogReason(e.target.value)} style={{ marginBottom: "15px" }} />
-                  <div style={{ display: "flex", gap: "10px" }}><Button variant="outline" onClick={() => setShowLogForm(false)} style={{ flex: 1 }}>Cancel</Button><Button onClick={submitLedgerLog} disabled={submittingLog} style={{ flex: 2, backgroundColor: "#16a34a" }}>{submittingLog ? "Saving..." : "Save Transaction"}</Button></div>
+                  <label className="select-label">Reason / Remark</label>
+                  <Input placeholder="e.g. Paid for Lunch, Transfer to Bank..." value={logReason} onChange={(e) => setLogReason(e.target.value)} style={{ marginBottom: "15px" }} />
+                  <div style={{ display: "flex", gap: "10px" }}>
+                      <Button variant="outline" onClick={() => setShowLogForm(false)} style={{ flex: 1 }}>Cancel</Button>
+                      <Button onClick={submitLedgerLog} disabled={submittingLog} style={{ flex: 2, backgroundColor: "#16a34a" }}>{submittingLog ? "Saving..." : "Save Transaction"}</Button>
+                  </div>
                 </div>
               )}
             </div>
@@ -1295,21 +2703,36 @@ return (
               <h4 style={{ margin: "0 0 15px 0", fontSize: "1.1rem", color: "#1e293b" }}>Today's Bill Collections ({today()})</h4>
               {ledgerLoading ? (<p>Calculating today's sales...</p>) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "10px", backgroundColor: "#f8fafc", padding: "15px", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", borderBottom: "1px solid #e2e8f0", paddingBottom: "8px" }}><span style={{ color: "#475569" }}>Physical Cash Collected:</span><strong style={{ color: "#d97706" }}>+ ₹{money(todaysTotalCash)}</strong></div>
-                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", borderBottom: "1px solid #e2e8f0", paddingBottom: "8px" }}><span style={{ color: "#475569" }}>Estimate Bank Collected:</span><strong style={{ color: "#2563eb" }}>+ ₹{money(todaysTotalEstBank)}</strong></div>
-                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap" }}><span style={{ color: "#475569" }}>GST Bank Collected:</span><strong style={{ color: "#dc2626" }}>+ ₹{money(todaysTotalInvBank)}</strong></div>
-                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", marginTop: "10px", paddingTop: "10px", borderTop: "2px solid #cbd5e1" }}><span style={{ fontWeight: "bold", fontSize: "1.1rem" }}>Total Day Sales:</span><strong style={{ fontSize: "1.1rem" }}>₹{money(todaysTotalCash + todaysTotalEstBank + todaysTotalInvBank)}</strong></div>
+                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", borderBottom: "1px solid #e2e8f0", paddingBottom: "8px" }}>
+                      <span style={{ color: "#475569" }}>Physical Cash Collected:</span>
+                      <strong style={{ color: "#d97706" }}>+ ₹{money(todaysTotalCash)}</strong>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", borderBottom: "1px solid #e2e8f0", paddingBottom: "8px" }}>
+                      <span style={{ color: "#475569" }}>Estimate Bank Collected:</span>
+                      <strong style={{ color: "#2563eb" }}>+ ₹{money(todaysTotalEstBank)}</strong>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap" }}>
+                      <span style={{ color: "#475569" }}>GST Bank Collected:</span>
+                      <strong style={{ color: "#dc2626" }}>+ ₹{money(todaysTotalInvBank)}</strong>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", marginTop: "10px", paddingTop: "10px", borderTop: "2px solid #cbd5e1" }}>
+                      <span style={{ fontWeight: "bold", fontSize: "1.1rem" }}>Total Day Sales:</span>
+                      <strong style={{ fontSize: "1.1rem" }}>₹{money(todaysTotalCash + todaysTotalEstBank + todaysTotalInvBank)}</strong>
+                  </div>
                 </div>
               )}
             </div>
 
-            <div style={{ marginBottom: "30px" }}>
+            <divstyle={{ marginBottom: "30px" }}>
               <h4 style={{ margin: "0 0 15px 0", fontSize: "1.1rem", color: "#1e293b", display: "flex", alignItems: "center", gap: "8px" }}><History size={18} /> Ledger History (Expenses & Exchanges)</h4>
               {(ledgerLogs || []).length === 0 ? (<p style={{ color: "#666", fontStyle: "italic" }}>No manual transactions logged yet.</p>) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                   {(ledgerLogs || []).map(log => (
                     <div key={log.id} style={{ padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", backgroundColor: "white" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}><strong style={{ color: "#0f172a" }}>{log.reason}</strong><span style={{ fontSize: "0.75rem", color: "#94a3b8" }}>{new Date(log.date).toLocaleDateString()}</span></div>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                          <strong style={{ color: "#0f172a" }}>{log.reason}</strong>
+                          <span style={{ fontSize: "0.75rem", color: "#94a3b8" }}>{new Date(log.date).toLocaleDateString()}</span>
+                      </div>
                       <div style={{ fontSize: "0.85rem", display: "flex", flexDirection: "column", gap: "2px" }}>
                         {log.cash_change !== 0 && (<span style={{ color: log.cash_change > 0 ? "#16a34a" : "#dc2626" }}>Cash: {log.cash_change > 0 ? "+" : ""}₹{money(log.cash_change)}</span>)}
                         {log.estimate_bank_change !== 0 && (<span style={{ color: log.estimate_bank_change > 0 ? "#16a34a" : "#dc2626" }}>Est Bank: {log.estimate_bank_change > 0 ? "+" : ""}₹{money(log.estimate_bank_change)}</span>)}
@@ -1347,7 +2770,8 @@ return (
           </div>
         </section>
       )}
-{/* RECENT BILLS */}
+
+      {/* RECENT BILLS DRAWER */}
       {showRecentBills && (
         <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "550px", backgroundColor: "white", zIndex: 100, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
           <div className="drawer-header" style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10, paddingBottom: "15px", borderBottom: "1px solid #e2e8f0" }}>
@@ -1415,7 +2839,7 @@ return (
         </section>
       )}
 
-      {/* --- INJECT: LIVE INVENTORY MANAGER --- */}
+      {/* INVENTORY MANAGER DRAWER */}
       {showInventory && (
         <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "550px", backgroundColor: "white", zIndex: 105, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
           <div className="drawer-header" style={{ backgroundColor: "#f8fafc", borderBottom: "1px solid #e2e8f0", padding: "20px", position: "sticky", top: 0, zIndex: 10 }}>
@@ -1431,8 +2855,8 @@ return (
                </div>
             </div>
           </div>
+          
           <div style={{ padding: "20px" }}>
-            
             {showInvLogs && (
               <div style={{ marginBottom: "25px", padding: "15px", backgroundColor: "#f1f5f9", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
@@ -1485,17 +2909,23 @@ return (
                  let currentLogs = [...(settings.inventory_logs || [])];
 
                  const existingIndex = currentInv.findIndex(i => i.name.toLowerCase() === invItemName.toLowerCase().trim());
-                 if (existingIndex !== -1) { currentInv[existingIndex].weightInGrams += weightGrams; } 
-                 else { currentInv.push({ id: Date.now().toString(), name: invItemName.trim(), weightInGrams: weightGrams }); }
+                 if (existingIndex !== -1) { 
+                     currentInv[existingIndex].weightInGrams += weightGrams; 
+                 } else { 
+                     currentInv.push({ id: Date.now().toString(), name: invItemName.trim(), weightInGrams: weightGrams }); 
+                 }
 
-                 // ADD LOG ENTRY
                  const newLog = { id: Date.now().toString(), date: today(), name: invItemName.trim(), weight: invWeight, unit: invUnit };
-                 currentLogs.unshift(newLog); // Put newest logs at the top
+                 currentLogs.unshift(newLog); 
 
                  const newSettings = { ...settings, inventory: currentInv, inventory_logs: currentLogs };
                  setSettings(newSettings);
-                 setInvItemName(""); setInvWeight("");
-                 axios.put(`${API}/settings`, newSettings, { headers: authHeaders }).then(() => toast.success("Stock added and logged!")).catch(() => toast.error("Failed to save stock"));
+                 setInvItemName(""); 
+                 setInvWeight("");
+                 
+                 axios.put(`${API}/settings`, newSettings, { headers: authHeaders })
+                      .then(() => toast.success("Stock added and logged!"))
+                      .catch(() => toast.error("Failed to save stock"));
               }}>+ Add to Inventory</Button>
             </div>
 
@@ -1511,7 +2941,8 @@ return (
                           </span>
                           <Button size="sm" variant="outline" onClick={() => {
                              if(!window.confirm(`Remove ${inv.name} from inventory?`)) return;
-                             const newInv = [...settings.inventory]; newInv.splice(idx, 1);
+                             const newInv = [...settings.inventory]; 
+                             newInv.splice(idx, 1);
                              const newSettings = { ...settings, inventory: newInv };
                              setSettings(newSettings);
                              axios.put(`${API}/settings`, newSettings, { headers: authHeaders });
@@ -1526,7 +2957,7 @@ return (
         </section>
       )}
 
-      {/* --- INJECT: BUSINESS ANALYTICS DASHBOARD WITH GRAPH --- */}
+      {/* ANALYTICS DASHBOARD DRAWER */}
       {showAnalytics && (
         <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "650px", backgroundColor: "#f8fafc", zIndex: 102, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
           <div className="drawer-header" style={{ backgroundColor: "white", borderBottom: "1px solid #e2e8f0", padding: "20px", position: "sticky", top: 0, zIndex: 10 }}>
@@ -1578,7 +3009,6 @@ return (
                 const totalInvoices = filteredStats.filter(b => b.mode === "invoice").length;
                 const totalEstimates = filteredStats.filter(b => b.mode === "estimate").length;
 
-                // --- GRAPH DATA LOGIC ---
                 const chartDataMap = {};
                 filteredStats.forEach(b => {
                    const bDate = b.date;
@@ -1603,7 +3033,6 @@ return (
                          </div>
                       </div>
 
-                      {/* --- ACTUAL GRAPH UI --- */}
                       <div style={{ padding: "20px", backgroundColor: "white", border: "1px solid #cbd5e1", borderRadius: "12px", marginBottom: "20px" }}>
                          <h4 style={{ margin: "0 0 15px 0", color: "#0f172a" }}>Revenue Trend</h4>
                          {chartData.length === 0 ? (
@@ -1795,7 +3224,8 @@ return (
                             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                                <span style={{ fontSize: "0.85rem", color: "#16a34a" }}>{mi.mc ? `₹${mi.mc}/g` : "Default MC"}</span>
                                <Button size="sm" variant="ghost" onClick={() => {
-                                  const newList = [...settings.master_items]; newList.splice(idx, 1);
+                                  const newList = [...settings.master_items]; 
+                                  newList.splice(idx, 1);
                                   setSettings({ ...settings, master_items: newList });
                                }} style={{ color: "#ef4444", padding: "0 5px", height: "auto" }}>X</Button>
                             </div>
@@ -1803,7 +3233,6 @@ return (
                      ))}
                   </div>
                 </div>
-                {/* -------------------------------------- */}
 
                 {/* --- IOT DISPLAY SETTINGS --- */}
                 <div style={{ padding: "15px", backgroundColor: "#f0f9ff", borderRadius: "8px", border: "1px solid #bae6fd" }}>
@@ -1826,7 +3255,6 @@ return (
                     This device is synchronized with your cloud billing app to automate customer payments.
                   </p>
                 </div>
-                {/* --------------------------------- */}
 
                 <div style={{ padding: "15px", backgroundColor: "#fef2f2", borderRadius: "8px", border: "1px solid #fecaca" }}>
                   <h4 style={{ color: "#991b1b", margin: "0 0 10px 0" }}>Danger Zone</h4>
