@@ -214,7 +214,6 @@ export default function App() {
     return local ? JSON.parse(local) : defaultItemDictionary;
   });
   const [focusedDescId, setFocusedDescId] = useState(null);
-  // -------------------------------
 
   const [items, setItems] = useState([createItem()]);
   
@@ -277,6 +276,12 @@ export default function App() {
 
   const [iotOnline, setIotOnline] = useState(false);
   const [isMqttSending, setIsMqttSending] = useState(false);
+
+  // --- NEW ANALYTICS & GRAPH STATES ---
+  const [showGraph, setShowGraph] = useState(false);
+  const [graphFilter, setGraphFilter] = useState("1_day");
+  const [graphData, setGraphData] = useState({ barData: [], pieData: [], totalWeight: 0 });
+  const [isGraphLoading, setIsGraphLoading] = useState(false);
   
   const authHeaders = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
   const activeGlobalBranch = (settings.branches || []).find(b => b.id === globalBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
@@ -527,6 +532,85 @@ export default function App() {
     }
   }, [showLedger, token, isPublicView, globalBranchId, authHeaders]);
 
+  // --- ANALYTICS GRAPH FETCH EFFECT ---
+  useEffect(() => {
+    if (showLedger && showGraph) {
+      const fetchGraph = async () => {
+        setIsGraphLoading(true);
+        try {
+          let billsToProcess = todayBills;
+          if (graphFilter !== "1_day") {
+             const res = await axios.get(`${API}/bills/recent?limit=5000&branch_filter=${globalBranchId}`, { headers: authHeaders });
+             billsToProcess = res.data;
+          }
+          
+          const now = new Date();
+          const pastDate = new Date();
+          let formatKey = (d) => {
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            return `${day}/${month}`;
+          };
+
+          if (graphFilter === '1_day') { pastDate.setHours(0,0,0,0); formatKey = (d) => `${d.getHours()}:00`; }
+          else if (graphFilter === '1_week') { pastDate.setDate(now.getDate() - 7); }
+          else if (graphFilter === '15_days') { pastDate.setDate(now.getDate() - 15); }
+          else if (graphFilter === '1_month') { pastDate.setMonth(now.getMonth() - 1); }
+          else if (graphFilter === '3_months') { pastDate.setMonth(now.getMonth() - 3); formatKey = (d) => `${d.toLocaleString('default', { month: 'short' })} '${String(d.getFullYear()).slice(-2)}`; }
+          else if (graphFilter === '6_months') { pastDate.setMonth(now.getMonth() - 6); formatKey = (d) => `${d.toLocaleString('default', { month: 'short' })} '${String(d.getFullYear()).slice(-2)}`; }
+          else if (graphFilter === '1_year') { pastDate.setFullYear(now.getFullYear() - 1); formatKey = (d) => `${d.toLocaleString('default', { month: 'short' })} '${String(d.getFullYear()).slice(-2)}`; }
+          else if (graphFilter === 'all_time') { pastDate.setFullYear(2000); formatKey = (d) => `${d.getFullYear()}`; }
+
+          let barMap = {};
+          if (graphFilter === '1_day') { for(let i=9; i<=21; i++) barMap[`${i}:00`] = 0; }
+          
+          const payMap = { Cash: 0, UPI: 0, Card: 0 };
+          let totalW = 0;
+
+          const reversedBills = [...(billsToProcess || [])].reverse();
+
+          reversedBills.forEach(b => {
+             let bDate = new Date();
+             if (b.created_at) bDate = new Date(b.created_at);
+             else if (b.date) {
+                 const p = b.date.split("-");
+                 if (p.length === 3) bDate = new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]));
+             }
+
+             if (bDate >= pastDate) {
+                const key = formatKey(bDate);
+                if (barMap[key] === undefined) barMap[key] = 0;
+                barMap[key] += num(b.totals?.grand_total);
+
+                if (b.payment_method === 'Split') {
+                   payMap.Cash += num(b.split_cash);
+                   payMap.UPI += num(b.split_upi);
+                } else if (payMap[b.payment_method] !== undefined) {
+                   payMap[b.payment_method] += num(b.totals?.grand_total);
+                }
+
+                (b.items || []).forEach(item => { totalW += num(item.weight); });
+             }
+          });
+
+          const barData = [];
+          for(let k in barMap) { barData.push({ label: k, amount: barMap[k] }); }
+          const pieData = Object.keys(payMap).map(k => ({ name: k, value: payMap[k] })).filter(d => d.value > 0);
+
+          setGraphData({ barData, pieData, totalWeight: totalW });
+        } catch (e) {
+          toast.error("Failed to load analytics");
+        } finally {
+          setIsGraphLoading(false);
+        }
+      };
+      fetchGraph();
+    }
+  }, [showLedger, showGraph, graphFilter, globalBranchId, todayBills, authHeaders]);
+
+  const COLORS = ['#d97706', '#2563eb', '#dc2626']; 
+  // ----------------------------------------
+
   useEffect(() => {
     if (showSettings && token && !isPublicView) {
       const fetchStorageStats = async () => { try { const res = await axios.get(`${API}/system/storage`, { headers: authHeaders }); setStorageStats(res.data); } catch { console.error("Failed to load storage stats"); } };
@@ -633,9 +717,7 @@ export default function App() {
     const grandTotal = baseTotal + roundOff;
     
     return { items: mapped, baseSilverRate, subtotal, taxable, cgst, sgst, igst, mdr, roundOff, grandTotal, totalWeight, earnedPoints, redeemedPoints: appliedRedeemedPoints, redeemedValue: appliedRedeemedValue, appliedCredit: appliedCreditVal, savedCredit: savedCreditVal, bonusPoints: bonusPointsVal };
-  }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff, redeemedPoints, appliedCredit, savedCredit, bonusPoints]);
-
-  const updateItem = (id, key, value) => { markDirty(); setItems((prev) => prev.map((item) => (item.id === id ? { ...item, [key]: value } : item))); };
+  }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff, redeemedPoints, appliedCredit, savedCredit,   const updateItem = (id, key, value) => { markDirty(); setItems((prev) => prev.map((item) => (item.id === id ? { ...item, [key]: value } : item))); };
   const checkIsBlank = () => { return !customer.name.trim() && !customer.phone.trim() && !customer.address.trim() && !(items || []).some(i => i.description.trim() || i.weight.trim() || i.amount_override.trim()) && (!discount || discount === "0") && (!exchange || exchange === "0") && !paymentMethod && !advanceMethod && !advanceAmount && !splitCash; };
   const clearBill = async (nextMode = mode, nextBranch = billBranchId) => {
     setCurrentBillId(null); setEditingDocNumber(null); setItems([createItem(settings.default_hsn)]); setCustomer({ name: "", phone: "", address: "", email: "", points: 0, credit: 0 });
@@ -885,37 +967,6 @@ export default function App() {
   const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
   const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
 
-  // --- LEDGER CHART DATA (LOCKED AT THE TOP!) ---
-  const ledgerChartData = useMemo(() => {
-    const hourlyMap = {};
-    for (let i = 9; i <= 21; i++) { hourlyMap[`${i}:00`] = 0; } 
-
-    (todayBills || []).forEach(bill => {
-      const hour = new Date(bill.created_at || new Date()).getHours();
-      const label = `${hour}:00`;
-      if (hourlyMap[label] !== undefined) {
-        hourlyMap[label] += num(bill.totals?.grand_total);
-      }
-    });
-
-    const barData = Object.keys(hourlyMap).map(key => ({ hour: key, amount: hourlyMap[key] }));
-
-    const payMap = { Cash: 0, UPI: 0, Card: 0 };
-    (todayBills || []).forEach(bill => {
-      if (bill.payment_method === 'Split') {
-        payMap.Cash += num(bill.split_cash);
-        payMap.UPI += num(bill.split_upi);
-      } else if (payMap[bill.payment_method] !== undefined) {
-        payMap[bill.payment_method] += num(bill.totals?.grand_total);
-      }
-    });
-
-    const pieData = Object.keys(payMap).map(key => ({ name: key, value: payMap[key] })).filter(d => d.value > 0);
-
-    return { barData, pieData };
-  }, [todayBills]);
-
-  const COLORS = ['#d97706', '#2563eb', '#dc2626']; 
   if (isPublicView) {
     if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
     if (publicBill === "NOT_FOUND" || !publicBill) return <div className="loading-screen">Bill not found or has been deleted.</div>;
@@ -1452,14 +1503,18 @@ export default function App() {
                       {savedDescriptions
                         .filter(d => {
                           if (!item.description) return false;
-                          const searchChars = item.description.toLowerCase().replace(/\s+/g, '').split('');
-                          let targetLower = d.toLowerCase();
-                          let matchIndex = 0;
-                          for (let char of targetLower) {
-                            if (char === searchChars[matchIndex]) matchIndex++;
-                            if (matchIndex === searchChars.length) break;
+                          const typed = item.description.toLowerCase().trim();
+                          const target = d.toLowerCase();
+                          
+                          if (target.includes(typed)) return target !== typed;
+                          
+                          const typoMap = { "breclate": "bracelet", "braclet": "bracelet", "neckles": "necklace", "neclace": "necklace", "pyal": "payal", "bichiya": "bichhiya", "silvr": "silver", "chian": "chain", "pendent": "pendant", "ringg": "ring" };
+                          
+                          for (const [badSpell, goodSpell] of Object.entries(typoMap)) {
+                            if (typed.includes(badSpell) && target.includes(goodSpell)) return true;
                           }
-                          return matchIndex === searchChars.length && d.toLowerCase() !== item.description.toLowerCase();
+                          
+                          return false;
                         })
                         .slice(0, 8)
                         .map((desc, idx) => (
@@ -1616,7 +1671,7 @@ export default function App() {
         </aside>
       </main>
 
-      {/* DAILY SALES & LEDGER */}
+      {/* DAILY SALES & LEDGER WITH HIDDEN GRAPH AND FILTERS */}
       {showLedger && (
         <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "650px", backgroundColor: "white", zIndex: 100, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
           <div className="drawer-header" style={{ backgroundColor: "#f0fdf4", borderBottom: "2px solid #bbf7d0", padding: "20px", position: "sticky", top: 0, zIndex: 10 }}>
@@ -1626,48 +1681,70 @@ export default function App() {
 
           <div style={{ padding: "20px" }}>
             
-            <div style={{ marginBottom: "30px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
-                <h4 style={{ margin: "0", fontSize: "1.1rem", color: "#1e293b" }}>Today's Sales Performance</h4>
-                <div style={{ backgroundColor: "#0f172a", color: "white", padding: "4px 10px", borderRadius: "12px", fontSize: "0.85rem", fontWeight: "bold" }}>
-                  Total Weight Sold: {todayBills?.reduce((total, bill) => total + (bill.items?.reduce((sum, item) => sum + num(item.weight), 0) || 0), 0).toFixed(3)} g
-                </div>
-              </div>
-              
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "15px" }}>
-                <div style={{ flex: "2 1 300px", backgroundColor: "white", border: "1px solid #e2e8f0", padding: "15px", borderRadius: "12px", height: "250px" }}>
-                  <p style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "10px", fontWeight: "bold" }}>HOURLY REVENUE TREND</p>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={ledgerChartData.barData}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                      <XAxis dataKey="hour" fontSize={10} />
-                      <YAxis hide />
-                      <RechartsTooltip formatter={(value) => `₹${money(value)}`} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                      <Bar dataKey="amount" fill="#16a34a" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+               <h4 style={{ margin: "0", fontSize: "1.1rem", color: "#1e293b" }}>Sales Analytics</h4>
+               <Button variant={showGraph ? "default" : "outline"} onClick={() => setShowGraph(!showGraph)} style={{ backgroundColor: showGraph ? "#0f172a" : "white", color: showGraph ? "white" : "black" }}>
+                 📊 {showGraph ? "Hide Graph" : "Show Analytics Graph"}
+               </Button>
+            </div>
 
-                <div style={{ flex: "1 1 200px", backgroundColor: "white", border: "1px solid #e2e8f0", padding: "15px", borderRadius: "12px", height: "250px", textAlign: "center" }}>
-                  <p style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "10px", fontWeight: "bold" }}>PAYMENT MODES</p>
-                  <ResponsiveContainer width="100%" height="80%">
-                    <PieChart>
-                      <Pie data={ledgerChartData.pieData} innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
-                        {ledgerChartData.pieData.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <RechartsTooltip formatter={(value) => `₹${money(value)}`} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '5px' }}>
-                     {ledgerChartData.pieData.map((entry, i) => (
-                       <span key={i} style={{ fontSize: '0.65rem', fontWeight: 'bold', color: COLORS[i] }}>● {entry.name}</span>
-                     ))}
+            {showGraph && (
+              <div style={{ marginBottom: "30px", padding: "15px", backgroundColor: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "10px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px", flexWrap: "wrap", gap: "10px" }}>
+                  <select value={graphFilter} onChange={(e) => setGraphFilter(e.target.value)} className="native-select" style={{ maxWidth: "200px" }}>
+                    <option value="1_day">Today (Hourly)</option>
+                    <option value="1_week">Last 7 Days</option>
+                    <option value="15_days">Last 15 Days</option>
+                    <option value="1_month">Last 1 Month</option>
+                    <option value="3_months">Last 3 Months</option>
+                    <option value="6_months">Last 6 Months</option>
+                    <option value="1_year">Last 1 Year</option>
+                    <option value="all_time">Till Opening (All Time)</option>
+                  </select>
+                  <div style={{ backgroundColor: "#0f172a", color: "white", padding: "4px 10px", borderRadius: "12px", fontSize: "0.85rem", fontWeight: "bold" }}>
+                     Weight Sold: {graphData.totalWeight.toFixed(3)} g
                   </div>
                 </div>
+
+                {isGraphLoading ? (
+                  <p style={{ textAlign: "center", padding: "20px", color: "#64748b" }}>Loading chart data from server...</p>
+                ) : (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "15px" }}>
+                    <div style={{ flex: "2 1 300px", backgroundColor: "white", border: "1px solid #e2e8f0", padding: "15px", borderRadius: "12px", height: "250px" }}>
+                      <p style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "10px", fontWeight: "bold" }}>REVENUE TREND</p>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={graphData.barData}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                          <XAxis dataKey="label" fontSize={10} />
+                          <YAxis hide />
+                          <RechartsTooltip formatter={(value) => `₹${money(value)}`} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                          <Bar dataKey="amount" fill="#16a34a" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    <div style={{ flex: "1 1 200px", backgroundColor: "white", border: "1px solid #e2e8f0", padding: "15px", borderRadius: "12px", height: "250px", textAlign: "center" }}>
+                      <p style={{ fontSize: "0.8rem", color: "#64748b", marginBottom: "10px", fontWeight: "bold" }}>PAYMENT MODES</p>
+                      <ResponsiveContainer width="100%" height="80%">
+                        <PieChart>
+                          <Pie data={graphData.pieData} innerRadius={40} outerRadius={60} paddingAngle={5} dataKey="value">
+                            {graphData.pieData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <RechartsTooltip formatter={(value) => `₹${money(value)}`} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '5px' }}>
+                         {graphData.pieData.map((entry, i) => (
+                           <span key={i} style={{ fontSize: '0.65rem', fontWeight: 'bold', color: COLORS[i] }}>● {entry.name}</span>
+                         ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
+            )}
 
             <div style={{ marginBottom: "25px" }}>
               <h4 style={{ margin: "0 0 15px 0", fontSize: "1.1rem", color: "#1e293b" }}>Live Vault Balances</h4>
@@ -1969,6 +2046,7 @@ export default function App() {
 
             {settingsTab === "advanced" && (
               <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+                {/* --- NEW IOT DISPLAY SETTINGS --- */}
                 <div style={{ padding: "15px", backgroundColor: "#f0f9ff", borderRadius: "8px", border: "1px solid #bae6fd" }}>
                   <h4 style={{ color: "#0369a1", margin: "0 0 10px 0", display: "flex", alignItems: "center", gap: "8px" }}>
                     <Cpu size={18} /> Counter Display Terminal
@@ -1989,6 +2067,7 @@ export default function App() {
                     This device is synchronized with your cloud billing app to automate customer payments.
                   </p>
                 </div>
+                {/* --------------------------------- */}
 
                 <div style={{ padding: "15px", backgroundColor: "#fef2f2", borderRadius: "8px", border: "1px solid #fecaca" }}>
                   <h4 style={{ color: "#991b1b", margin: "0 0 10px 0" }}>Danger Zone</h4>
