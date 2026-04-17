@@ -214,6 +214,7 @@ export default function App() {
     return local ? JSON.parse(local) : defaultItemDictionary;
   });
   const [focusedDescId, setFocusedDescId] = useState(null);
+  // -------------------------------
 
   const [items, setItems] = useState([createItem()]);
   
@@ -884,32 +885,7 @@ export default function App() {
   const upiUri = `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.shop_name)}&am=${money(upiAmountToPay)}&cu=INR&tn=Bill_${documentNumber || "Draft"}`;
   const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
 
-  // --- AUTO-CORRECT ENGINE ---
-  const TYPO_MAP = {
-    "breclate": "Bracelet",
-    "braclet": "Bracelet",
-    "neckles": "Necklace",
-    "neclace": "Necklace",
-    "pyal": "Payal",
-    "bichiya": "Bichhiya",
-    "bichia": "Bichhiya",
-    "silvr": "Silver",
-    "chian": "Chain",
-    "pendent": "Pendant",
-    "panden": "Pendant",
-    "ringg": "Ring"
-  };
-
-  const autoCorrectText = (text) => {
-    if (!text) return text;
-    return text.split(' ').map(word => {
-      const lowerWord = word.toLowerCase();
-      return TYPO_MAP[lowerWord] ? TYPO_MAP[lowerWord] : word;
-    }).join(' ');
-  };
-  // ---------------------------
-
-  // --- LEDGER CHART DATA (MUST BE ABOVE EARLY RETURNS!) ---
+  // --- LEDGER CHART DATA (LOCKED AT THE TOP!) ---
   const ledgerChartData = useMemo(() => {
     const hourlyMap = {};
     for (let i = 9; i <= 21; i++) { hourlyMap[`${i}:00`] = 0; } 
@@ -1459,24 +1435,32 @@ export default function App() {
             {(items || []).map((item) => (
               <div key={item.id} className="item-row-editor" style={{ overflow: "visible" }}>
                 
-                {/* --- SMART DESCRIPTION INPUT WITH AUTO-CORRECT --- */}
+                {/* --- SMART DESCRIPTION INPUT WITH FUZZY SEARCH & SPELLCHECK --- */}
                 <div style={{ position: "relative" }}>
                   <Input 
                     className="item-desc-input" 
+                    spellCheck={true}
                     value={item.description} 
                     onChange={(e) => updateItem(item.id, "description", e.target.value)} 
                     onFocus={() => setFocusedDescId(item.id)}
-                    onBlur={() => {
-                      setTimeout(() => setFocusedDescId(null), 200);
-                      updateItem(item.id, "description", autoCorrectText(item.description));
-                    }}
+                    onBlur={() => setTimeout(() => setFocusedDescId(null), 200)}
                     placeholder="Description" 
                     style={{ width: "100%" }}
                   />
                   {focusedDescId === item.id && item.description.length >= 1 && (
                     <div style={{ position: "absolute", top: "100%", left: 0, right: 0, zIndex: 50, marginTop: "4px", maxHeight: "180px", overflowY: "auto", backgroundColor: "white", border: "1px solid #cbd5e1", borderRadius: "6px", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)" }}>
                       {savedDescriptions
-                        .filter(d => d.toLowerCase().includes(item.description.toLowerCase()) && d.toLowerCase() !== item.description.toLowerCase())
+                        .filter(d => {
+                          if (!item.description) return false;
+                          const searchChars = item.description.toLowerCase().replace(/\s+/g, '').split('');
+                          let targetLower = d.toLowerCase();
+                          let matchIndex = 0;
+                          for (let char of targetLower) {
+                            if (char === searchChars[matchIndex]) matchIndex++;
+                            if (matchIndex === searchChars.length) break;
+                          }
+                          return matchIndex === searchChars.length && d.toLowerCase() !== item.description.toLowerCase();
+                        })
                         .slice(0, 8)
                         .map((desc, idx) => (
                           <button
@@ -1985,7 +1969,6 @@ export default function App() {
 
             {settingsTab === "advanced" && (
               <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-                {/* --- NEW IOT DISPLAY SETTINGS --- */}
                 <div style={{ padding: "15px", backgroundColor: "#f0f9ff", borderRadius: "8px", border: "1px solid #bae6fd" }}>
                   <h4 style={{ color: "#0369a1", margin: "0 0 10px 0", display: "flex", alignItems: "center", gap: "8px" }}>
                     <Cpu size={18} /> Counter Display Terminal
@@ -2006,7 +1989,6 @@ export default function App() {
                     This device is synchronized with your cloud billing app to automate customer payments.
                   </p>
                 </div>
-                {/* --------------------------------- */}
 
                 <div style={{ padding: "15px", backgroundColor: "#fef2f2", borderRadius: "8px", border: "1px solid #fecaca" }}>
                   <h4 style={{ color: "#991b1b", margin: "0 0 10px 0" }}>Danger Zone</h4>
