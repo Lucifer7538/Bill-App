@@ -1124,6 +1124,16 @@ export default function App() {
     setBillDate(today()); 
     setIsDirty(false); 
     await reserveNumber(nextMode, nextBranch); 
+    // --- NEW LOGIC: USE THE RECYCLED NUMBER IF ONE EXISTS ---
+    const recycleKey = `recycled_${nextMode}_${nextBranch}`;
+    if (settings[recycleKey]) {
+        setDocumentNumber(settings[recycleKey]);
+        const newSettings = { ...settings };
+        delete newSettings[recycleKey];
+        setSettings(newSettings);
+        axios.put(`${API}/settings`, newSettings, { headers: authHeaders }).catch(console.error);
+    }
+    // --------------------------------------------------------
     goToBillTop();
   };
 
@@ -1201,6 +1211,19 @@ export default function App() {
     try { 
         await axios.delete(`${API}/bills/${bill.document_number}`, { headers: authHeaders }); 
         setRecentBillsList((prev) => prev.filter((b) => b.document_number !== bill.document_number)); 
+      // --- NEW LOGIC: ONLY CATCH THE HIGHEST NUMBER ---
+        const sameModeBills = recentBillsList.filter(b => b.mode === bill.mode && b.branch_id === bill.branch_id);
+        const getNum = (docStr) => parseInt((docStr || "").replace(/\D/g, '')) || 0;
+        const deletedNum = getNum(bill.document_number);
+        const isHighest = sameModeBills.every(b => getNum(b.document_number) <= deletedNum);
+
+        if (isHighest) {
+            const recycleKey = `recycled_${bill.mode}_${bill.branch_id}`;
+            const newSettings = { ...settings, [recycleKey]: bill.document_number };
+            setSettings(newSettings);
+            axios.put(`${API}/settings`, newSettings, { headers: authHeaders }).catch(console.error);
+        }
+        // ------------------------------------------------
         if (currentBillId === bill.id) await clearBill(mode, billBranchId); 
         toast.success(`${bill.document_number} deleted successfully.`); 
         await loadSettings(); 
