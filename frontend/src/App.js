@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Store, Upload, Download, Keyboard, Cpu, Wifi, CheckCircle2 } from "lucide-react"; // Added IoT Icons
+import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Store, Upload, Download, Keyboard, Cpu, Wifi, CheckCircle2, LineChart, Package, AlertCircle, Lock } from "lucide-react"; // Added Lock icon
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Toaster, toast } from "sonner";
@@ -26,6 +26,9 @@ const defaultSettings = {
   silver_rate_per_gram: 240, making_charge_per_gram: 15, flat_mc_below_5g: 150, default_hsn: "7113",
   loyalty_points_per_gram: 1, loyalty_point_value_rs: 1,
   formula_note: "Line total = Weight x (Silver rate per gram + Making charge per gram)", logo_data_url: "", about_qr_data_url: STATIC_ABOUT_QR_URL, custom_fonts: [],
+  master_items: [], 
+  inventory: [], 
+  inventory_logs: [], // NEW: Stores history of stock additions
   shortcuts: [
     { id: "save_bill", action: "Save Bill", keys: "alt + s", isSystem: true },
     { id: "add_item", action: "Add new item row", keys: "alt + a", isSystem: true },
@@ -41,7 +44,7 @@ const defaultSettings = {
     { id: "open_recent", action: "Open Recent Bills", keys: "alt + r", isSystem: true },
     { id: "download_pdf", action: "Download PDF", keys: "alt + f", isSystem: true },
     { id: "print_bill", action: "Print Bill", keys: "alt + b", isSystem: true },
-    { id: "iot_qr", action: "Send QR to ESP32", keys: "alt + q", isSystem: true } // Added Shortcut
+    { id: "iot_qr", action: "Send QR to ESP32", keys: "alt + q", isSystem: true }
   ],
   branches: [
     { id: "B1", name: "Branch 1 (Old Town)", address: "Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2", location_url: "", map_url: "", whatsapp_url: "", instagram_url: "", about_url: "", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", gstin: "21AAUFJ1925F1ZH", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 },
@@ -233,6 +236,17 @@ export default function App() {
   const [settingsTab, setSettingsTab] = useState("design"); 
   const [showAbout, setShowAbout] = useState(false);
   const [showRecentBills, setShowRecentBills] = useState(false);
+  
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [analyticsFilter, setAnalyticsFilter] = useState("THIS_MONTH");
+  const [showInventory, setShowInventory] = useState(false);
+  const [showInvLogs, setShowInvLogs] = useState(false); // NEW: Toggles the stock history view
+  const [invItemName, setInvItemName] = useState("");
+  const [invWeight, setInvWeight] = useState("");
+  const [invUnit, setInvUnit] = useState("g");
+  const [descFocusId, setDescFocusId] = useState(null);
+  const [spellCheckOpenId, setSpellCheckOpenId] = useState(null);
+
   const [recentBillsList, setRecentBillsList] = useState([]);
   const [loadingRecent, setLoadingRecent] = useState(false);
   const [billSearchQuery, setBillSearchQuery] = useState("");
@@ -264,7 +278,6 @@ export default function App() {
   const [aboutUploadName, setAboutUploadName] = useState("");
   const [cloudStatus, setCloudStatus] = useState({ provider: "supabase", enabled: false, mode: "loading" });
 
-  // --- NEW IOT & MQTT STATE ---
   const [iotOnline, setIotOnline] = useState(false);
   const [isMqttSending, setIsMqttSending] = useState(false);
   
@@ -272,7 +285,6 @@ export default function App() {
   const activeGlobalBranch = (settings.branches || []).find(b => b.id === globalBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
   const activeBillBranch = (settings.branches || []).find(b => b.id === billBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
 
-  // --- NEW IOT HEARTBEAT MONITOR ---
   useEffect(() => {
     if (!token || isPublicView) return;
     const checkIot = async () => {
@@ -282,11 +294,10 @@ export default function App() {
       } catch (e) { setIotOnline(false); }
     };
     checkIot();
-    const interval = setInterval(checkIot, 10000); // Check every 10 seconds
+    const interval = setInterval(checkIot, 10000); 
     return () => clearInterval(interval);
   }, [token, isPublicView, authHeaders]);
 
-  // --- NEW IOT COMMUNICATION FUNCTIONS ---
   const sendQrToDisplay = async (amount, upiId) => {
     if (!iotOnline) { toast.error("IoT Device is offline!"); return; }
     setIsMqttSending(true);
@@ -334,9 +345,7 @@ export default function App() {
     const viewDoc = params.get("view");
     const adminParam = params.get("admin");
     
-    if (adminParam === "true") {
-      setIsAdminView(true);
-    }
+    if (adminParam === "true") { setIsAdminView(true); }
 
     if (viewDoc) {
       setIsPublicView(true); setPublicLoading(true);
@@ -358,9 +367,10 @@ export default function App() {
     const handleEsc = (event) => {
       if (event.key !== "Escape") return;
       setShowSettings(false); setShowAbout(false); setShowRecentBills(false); setShowLedger(false); setShowFeedbackModal(false);
+      setShowAnalytics(false); setShowInventory(false); setSpellCheckOpenId(null);
     };
     window.addEventListener("keydown", handleEsc); return () => window.removeEventListener("keydown", handleEsc);
-  }, [showSettings, showAbout, showRecentBills, showLedger, showFeedbackModal]);
+  }, [showSettings, showAbout, showRecentBills, showLedger, showFeedbackModal, showAnalytics, showInventory]);
 
   useEffect(() => {
     const handleGlobalKeyDown = (e) => {
@@ -413,6 +423,7 @@ export default function App() {
   }); 
 
   useEffect(() => { localStorage.setItem("jj_print_scale", String(clampPrintScale(printScale))); }, [printScale]);
+  
   useEffect(() => {
     if (isPublicView) return; 
     const verify = async () => {
@@ -439,6 +450,18 @@ export default function App() {
       const timer = setTimeout(fetchRecent, 300); return () => clearTimeout(timer);
     }
   }, [showRecentBills, token, isPublicView, billSearchQuery, recentBranchFilter, recentDateFilter, authHeaders]); 
+
+  useEffect(() => {
+    if (showAnalytics && token && !isPublicView) {
+      const fetchAllForAnalytics = async () => {
+        try {
+          const response = await axios.get(`${API}/bills/recent?limit=1000&branch_filter=ALL&search=`, { headers: authHeaders });
+          setRecentBillsList(response.data);
+        } catch { console.error("Failed to load analytics data."); }
+      };
+      fetchAllForAnalytics();
+    }
+  }, [showAnalytics, token, isPublicView, authHeaders]);
 
   const filteredRecentBills = useMemo(() => {
     return (recentBillsList || []).filter(bill => {
@@ -531,6 +554,10 @@ export default function App() {
     const savedLogo = localStorage.getItem("jj_logo_data_url");
     let dbData = response.data || {};
     if (!dbData.branches) dbData.branches = defaultSettings.branches;
+    if (!dbData.master_items) dbData.master_items = [];
+    if (!dbData.inventory) dbData.inventory = [];
+    if (!dbData.inventory_logs) dbData.inventory_logs = []; // Initialize logs array
+
     let localFonts = []; const localFontsRaw = localStorage.getItem("jj_custom_fonts"); if (localFontsRaw) { try { localFonts = JSON.parse(localFontsRaw); } catch (e) {} }
 
     let mergedShortcuts = defaultSettings.shortcuts;
@@ -666,11 +693,7 @@ export default function App() {
       await axios.put(`${API}/bills/${bill.document_number}/toggle-payment`, { is_payment_done: newStatus }, { headers: authHeaders }); 
       toast.success(`Payment marked as ${newStatus ? 'DONE ✅' : 'PENDING ⏳'}`); 
       
-      // --- NEW IOT TRIGGER ---
-      if (newStatus && iotOnline) {
-        sendSuccessToDisplay();
-      }
-      // -----------------------
+      if (newStatus && iotOnline) { sendSuccessToDisplay(); }
 
       if (currentBillId === bill.id) { setIsPaymentDone(newStatus); } 
       setRecentBillsList(prev => prev.map(b => b.document_number === bill.document_number ? { ...b, is_payment_done: newStatus } : b)); 
@@ -714,8 +737,7 @@ export default function App() {
   const saveSettings = async () => { try { await axios.put(`${API}/settings`, settings, { headers: authHeaders }); toast.success("Settings saved."); } catch { toast.error("Could not save settings."); } };
   const submitLedgerLog = async () => { if (!logAmount || isNaN(logAmount) || num(logAmount) <= 0) { toast.error("Please enter a valid amount."); return; } if (!logReason.trim()) { toast.error("Please enter a reason/remark."); return; } setSubmittingLog(true); try { const payload = { branch_id: globalBranchId, reason: logReason, cash_change: 0, estimate_bank_change: 0, invoice_bank_change: 0 }; const amt = num(logAmount); const keyMap = { "cash": "cash_change", "estimate_bank": "estimate_bank_change", "invoice_bank": "invoice_bank_change" }; if (logType === "expense") payload[keyMap[logSourceVault]] = -amt; else if (logType === "add") payload[keyMap[logSourceVault]] = amt; else if (logType === "exchange") { if (logSourceVault === logTargetVault) { toast.error("Cannot exchange into the same vault."); setSubmittingLog(false); return; } payload[keyMap[logSourceVault]] = -amt; payload[keyMap[logTargetVault]] = amt; } await axios.post(`${API}/settings/ledger/adjust`, payload, { headers: authHeaders }); toast.success("Transaction logged successfully!"); setShowLogForm(false); setLogAmount(""); setLogReason(""); await loadSettings(); await fetchLedgerHistory(); } catch (error) { toast.error("Ledger update failed."); } finally { setSubmittingLog(false); } };
   const saveBalances = async () => { try { const payload = { branch_id: globalBranchId, cash_balance: num(manualCash), estimate_bank_balance: num(manualEstBank), invoice_bank_balance: num(manualInvBank) }; await axios.put(`${API}/settings/balances`, payload, { headers: authHeaders }); setSettings(prev => { const updatedBranches = (prev.branches || []).map(b => b.id === globalBranchId ? { ...b, ...payload } : b); return { ...prev, branches: updatedBranches }; }); setEditingBalances(false); toast.success(`Ledger balances for ${activeGlobalBranch.name} manually updated!`); } catch { toast.error("Failed to update balances."); } };
-
- const saveBill = async () => {
+  const saveBill = async () => {
     if (txType === "sale" && !paymentMethod) { toast.error("Please select a payment method."); return; }
     
     // 🐛 FIXED TYPO HERE: Changed tx_type back to txType
@@ -751,6 +773,25 @@ export default function App() {
         setCurrentBillId(res.data.id); 
         setEditingDocNumber(res.data.document_number); 
         setDocumentNumber(res.data.document_number); 
+
+        // --- NEW FEATURE: AUTO-DEDUCT INVENTORY ON NEW BILL ---
+        let updatedInventory = [...(settings.inventory || [])];
+        let inventoryChanged = false;
+        computed.items.forEach(item => {
+           const desc = (item.description || "").trim().toLowerCase();
+           const invIndex = updatedInventory.findIndex(inv => (inv.name || "").trim().toLowerCase() === desc);
+           if (invIndex !== -1 && num(item.weight) > 0) {
+              const totalItemWeight = num(item.weight) * num(item.quantity || 1);
+              updatedInventory[invIndex].weightInGrams = Math.max(0, (updatedInventory[invIndex].weightInGrams || 0) - totalItemWeight);
+              inventoryChanged = true;
+           }
+        });
+        if (inventoryChanged) {
+           const newSettings = { ...settings, inventory: updatedInventory };
+           setSettings(newSettings);
+           axios.put(`${API}/settings`, newSettings, { headers: authHeaders }).catch(() => console.error("Background inventory update failed"));
+        }
+        // --------------------------------------------------------
       }
       
       // --- IOT TRIGGER ---
@@ -1093,8 +1134,7 @@ export default function App() {
         </div>
      );
   }
-
-  return (
+return (
     <div className="billing-app" style={isPrinting ? { height: "auto", overflow: "visible" } : { display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", backgroundColor: "#f1f5f9" }}>
       <Toaster position="bottom-right" />
       <style>{GLOBAL_PRINT_CSS}</style>
@@ -1235,6 +1275,7 @@ export default function App() {
              <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: cloudStatus.enabled ? "#4ade80" : "#facc15" }} />
              <span>Cloud: {cloudStatus.enabled ? "Online" : "Connecting"}</span>
           </div>
+          <Button variant="outline" onClick={() => setShowInventory(true)} style={{ color: "black", backgroundColor: "white" }}><Package size={16} style={{marginRight:"5px"}}/> Inventory</Button>
           <Button variant="outline" onClick={goToBillTop} style={{ color: "black", backgroundColor: "white" }}>Back</Button>
           <Button variant="outline" onClick={handleLogout} style={{ color: "black", backgroundColor: "white" }}>Logout</Button>
         </div>
@@ -1396,13 +1437,59 @@ export default function App() {
             <h3>Item Lines</h3>
             {(items || []).map((item) => (
               <div key={item.id} className="item-row-editor">
-                <Input className="item-desc-input" value={item.description} onChange={(e) => updateItem(item.id, "description", e.target.value)} placeholder="Description" />
-                <Input value={item.hsn} onChange={(e) => updateItem(item.id, "hsn", e.target.value)} placeholder="HSN" />
-                <Input value={item.weight} onChange={(e) => updateItem(item.id, "weight", e.target.value)} placeholder="Weight" />
-                <Input value={item.quantity} onChange={(e) => updateItem(item.id, "quantity", e.target.value)} placeholder="Qty" />
-                <Input value={item.mc_override} onChange={(e) => updateItem(item.id, "mc_override", e.target.value)} placeholder="Custom MC ₹/g" />
-                <Input value={item.rate_override} onChange={(e) => updateItem(item.id, "rate_override", e.target.value)} placeholder="Custom Silver Rate" />
-                <Input value={item.amount_override} onChange={(e) => updateItem(item.id, "amount_override", e.target.value)} placeholder="Fixed Amount ₹" />
+                {/* START INJECT: AUTOCOMPLETE & SPELL CHECK WRAPPER */}
+                <div style={{ position: "relative", flex: "1 1 150px" }}>
+                  <Input className="item-desc-input" value={item.description} onFocus={() => setDescFocusId(item.id)} onBlur={() => setTimeout(() => setDescFocusId(null), 200)} onChange={(e) => updateItem(item.id, "description", e.target.value)} placeholder="Description" style={{ paddingRight: "25px" }} />
+                  {(() => {
+                     if (!item.description) return null;
+                     const typos = { "breclate": "Bracelet", "braclet": "Bracelet", "bracelete": "Bracelet", "necklas": "Necklace", "neckles": "Necklace", "neclace": "Necklace", "anklit": "Anklet", "earings": "Earrings", "pendantt": "Pendant", "ringg": "Ring" };
+                     const words = item.description.toLowerCase().split(/\s+/);
+                     const foundTypo = words.find(w => typos[w]);
+                     const isCorrect = words.some(w => Object.values(typos).map(v=>v.toLowerCase()).includes(w) || (settings.master_items||[]).some(mi => mi.name.toLowerCase().includes(w)));
+                     
+                     if (foundTypo) {
+                         return (
+                           <div style={{ position: "absolute", right: "8px", top: "10px", zIndex: 10 }}>
+                             <div onClick={() => setSpellCheckOpenId(spellCheckOpenId === item.id ? null : item.id)} style={{ width: "12px", height: "12px", borderRadius: "50%", backgroundColor: "#ef4444", cursor: "pointer", boxShadow: "0 0 6px #ef4444" }} title="Typo detected! Click to fix." />
+                             {spellCheckOpenId === item.id && (
+                                <div style={{ position: "absolute", top: "20px", left: "0", backgroundColor: "white", border: "1px solid #ef4444", padding: "8px", borderRadius: "6px", boxShadow: "0 4px 10px rgba(0,0,0,0.2)", fontSize: "0.85rem", width: "max-content", zIndex: 60 }}>
+                                   Did you mean: <strong style={{ cursor:"pointer", color: "#2563eb", textDecoration: "underline" }} onClick={() => { updateItem(item.id, "description", item.description.toLowerCase().replace(foundTypo, typos[foundTypo])); setSpellCheckOpenId(null); }}>{typos[foundTypo]}</strong>?
+                                </div>
+                             )}
+                           </div>
+                         );
+                     } else if (item.description.length > 2 && isCorrect) {
+                         return <div style={{ position: "absolute", right: "8px", top: "10px", width: "12px", height: "12px", borderRadius: "50%", backgroundColor: "#22c55e", pointerEvents: "none", boxShadow: "0 0 4px #22c55e" }} title="Spelling OK" />;
+                     }
+                     return null;
+                  })()}
+                  {descFocusId === item.id && item.description.length >= 1 && (
+                     <div style={{ position: "absolute", top: "100%", left: 0, width: "100%", backgroundColor: "white", border: "1px solid #cbd5e1", borderRadius: "6px", zIndex: 50, maxHeight: "200px", overflowY: "auto", boxShadow: "0 10px 15px rgba(0,0,0,0.1)" }}>
+                        {(settings.master_items || []).filter(mi => mi.name.toLowerCase().includes(item.description.toLowerCase())).length > 0 ? (
+                            (settings.master_items || []).filter(mi => mi.name.toLowerCase().includes(item.description.toLowerCase())).map(match => (
+                                <div key={match.id} onMouseDown={(e) => {
+                                    e.preventDefault(); 
+                                    updateItem(item.id, "description", match.name);
+                                    if (match.mc) updateItem(item.id, "mc_override", String(match.mc));
+                                    setDescFocusId(null);
+                                }} style={{ padding: "10px", borderBottom: "1px solid #f1f5f9", cursor: "pointer", fontSize: "0.9rem" }}>
+                                   <strong style={{ color: "#0f172a" }}>{match.name}</strong> {match.mc ? <span style={{ color: "#16a34a", fontSize: "0.8rem", marginLeft: "5px" }}>(Auto-MC: ₹{match.mc}/g)</span> : ""}
+                                </div>
+                            ))
+                        ) : (
+                            <div style={{ padding: "10px", fontSize: "0.85rem", color: "#64748b", fontStyle: "italic" }}>No master items match...</div>
+                        )}
+                     </div>
+                  )}
+                </div>
+                {/* END INJECT */}
+
+                <Input value={item.hsn} onChange={(e) => updateItem(item.id, "hsn", e.target.value)} placeholder="HSN" style={{ flex: "1 1 60px" }} />
+                <Input value={item.weight} onChange={(e) => updateItem(item.id, "weight", e.target.value)} placeholder="Weight" style={{ flex: "1 1 70px" }} />
+                <Input value={item.quantity} onChange={(e) => updateItem(item.id, "quantity", e.target.value)} placeholder="Qty" style={{ flex: "1 1 50px" }} />
+                <Input value={item.mc_override} onChange={(e) => updateItem(item.id, "mc_override", e.target.value)} placeholder="Custom MC ₹/g" style={{ flex: "1 1 100px" }} />
+                <Input value={item.rate_override} onChange={(e) => updateItem(item.id, "rate_override", e.target.value)} placeholder="Custom Silver Rate" style={{ flex: "1 1 100px" }} />
+                <Input value={item.amount_override} onChange={(e) => updateItem(item.id, "amount_override", e.target.value)} placeholder="Fixed Amount ₹" style={{ flex: "1 1 100px" }} />
                 <Button type="button" variant="outline" onClick={() => { setItems((prev) => prev.filter((row) => row.id !== item.id)); markDirty(); }} disabled={(items || []).length === 1}>Remove</Button>
               </div>
             ))}
@@ -1540,6 +1627,9 @@ export default function App() {
           </div>
 
           <div style={{ padding: "20px" }}>
+            {/* --- NEW INJECT: ANALYTICS BUTTON --- */}
+            <Button onClick={() => setShowAnalytics(true)} style={{ backgroundColor: "#8b5cf6", color: "white", width: "100%", marginBottom: "20px", padding: "15px", fontSize: "1.1rem" }}><LineChart size={20} style={{ marginRight: "10px" }} /> Analyze Business Growth</Button>
+
             <div style={{ marginBottom: "25px" }}>
               <h4 style={{ margin: "0 0 15px 0", fontSize: "1.1rem", color: "#1e293b" }}>Live Vault Balances</h4>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
@@ -1713,6 +1803,206 @@ export default function App() {
         </section>
       )}
 
+      {/* --- INJECT: LIVE INVENTORY MANAGER --- */}
+      {showInventory && (
+        <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "550px", backgroundColor: "white", zIndex: 105, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
+          <div className="drawer-header" style={{ backgroundColor: "#f8fafc", borderBottom: "1px solid #e2e8f0", padding: "20px", position: "sticky", top: 0, zIndex: 10 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap" }}>
+               <h3 style={{ display: "flex", alignItems: "center", gap: "10px", margin: 0 }}><Package /> Stock & Inventory</h3>
+               <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+                 <Button onClick={() => setShowInvLogs(!showInvLogs)} variant={showInvLogs ? "default" : "outline"} style={{ backgroundColor: showInvLogs ? "#0f172a" : "white", color: showInvLogs ? "white" : "#0f172a" }}>
+                    <Lock size={16} style={{ marginRight: "5px" }}/> {showInvLogs ? "Hide History" : "Stock History"}
+                 </Button>
+                 <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowInventory(false)}>
+                    <ArrowLeft className="drawer-back-icon" style={{ marginRight: "5px" }} /><span>Back</span>
+                 </Button>
+               </div>
+            </div>
+          </div>
+          <div style={{ padding: "20px" }}>
+            
+            {showInvLogs && (
+              <div style={{ marginBottom: "25px", padding: "15px", backgroundColor: "#f1f5f9", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+                  <h4 style={{ margin: 0, color: "#0f172a" }}>Stock Addition History</h4>
+                  <Button size="sm" onClick={() => downloadPdf("inventory-log-root", `Inventory_Log_${today()}`)} style={{ backgroundColor: "#16a34a", color: "white" }}><Download size={14} style={{ marginRight: "5px" }} /> Save PDF</Button>
+                </div>
+                <div id="inventory-log-root" style={{ backgroundColor: "white", padding: "15px", borderRadius: "6px", border: "1px dashed #cbd5e1", maxHeight: "400px", overflowY: "auto" }}>
+                  <h2 className="print-only" style={{ textAlign: "center", marginBottom: "20px" }}>{settings.shop_name} - Stock Addition Log</h2>
+                  {(settings.inventory_logs || []).length === 0 ? <p style={{ color: "#64748b", fontSize: "0.9rem" }}>No stock added yet.</p> : (
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
+                      <thead>
+                        <tr style={{ borderBottom: "2px solid #cbd5e1", textAlign: "left" }}>
+                          <th style={{ padding: "8px" }}>Date</th>
+                          <th style={{ padding: "8px" }}>Item Name</th>
+                          <th style={{ padding: "8px" }}>Weight Added</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(settings.inventory_logs || []).map(log => (
+                          <tr key={log.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                            <td style={{ padding: "8px" }}>{log.date}</td>
+                            <td style={{ padding: "8px", fontWeight: "bold" }}>{log.name}</td>
+                            <td style={{ padding: "8px", color: "#16a34a" }}>+{log.weight} {log.unit}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div style={{ padding: "15px", backgroundColor: "#f0f9ff", borderRadius: "8px", border: "1px solid #bae6fd", marginBottom: "20px" }}>
+              <h4 style={{ margin: "0 0 10px 0", color: "#0369a1" }}>Add Incoming Stock</h4>
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <Input placeholder="Item Name (e.g. CB Payal)" value={invItemName} onChange={(e) => setInvItemName(e.target.value)} style={{ flex: "1 1 200px" }} />
+                <div style={{ display: "flex", gap: "5px", flex: "1 1 150px" }}>
+                   <Input type="number" placeholder="Weight" value={invWeight} onChange={(e) => setInvWeight(e.target.value)} style={{ flex: 2 }} />
+                   <select value={invUnit} onChange={(e) => setInvUnit(e.target.value)} className="native-select" style={{ flex: 1, minWidth: "60px" }}>
+                      <option value="g">Grams</option>
+                      <option value="kg">KGs</option>
+                   </select>
+                </div>
+              </div>
+              <Button style={{ width: "100%", marginTop: "10px", backgroundColor: "#0284c7" }} onClick={() => {
+                 if(!invItemName || !invWeight) return toast.error("Enter item name and weight.");
+                 const weightGrams = num(invWeight) * (invUnit === "kg" ? 1000 : 1);
+                 
+                 let currentInv = [...(settings.inventory || [])];
+                 let currentLogs = [...(settings.inventory_logs || [])];
+
+                 const existingIndex = currentInv.findIndex(i => i.name.toLowerCase() === invItemName.toLowerCase().trim());
+                 if (existingIndex !== -1) { currentInv[existingIndex].weightInGrams += weightGrams; } 
+                 else { currentInv.push({ id: Date.now().toString(), name: invItemName.trim(), weightInGrams: weightGrams }); }
+
+                 // ADD LOG ENTRY
+                 const newLog = { id: Date.now().toString(), date: today(), name: invItemName.trim(), weight: invWeight, unit: invUnit };
+                 currentLogs.unshift(newLog); // Put newest logs at the top
+
+                 const newSettings = { ...settings, inventory: currentInv, inventory_logs: currentLogs };
+                 setSettings(newSettings);
+                 setInvItemName(""); setInvWeight("");
+                 axios.put(`${API}/settings`, newSettings, { headers: authHeaders }).then(() => toast.success("Stock added and logged!")).catch(() => toast.error("Failed to save stock"));
+              }}>+ Add to Inventory</Button>
+            </div>
+
+            <h4 style={{ margin: "0 0 15px 0" }}>Current Stock Levels</h4>
+            {(settings.inventory || []).length === 0 ? <p style={{ color: "#64748b" }}>No inventory items added yet.</p> : (
+               <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                 {(settings.inventory || []).map((inv, idx) => (
+                    <div key={inv.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px", border: "1px solid #cbd5e1", borderRadius: "8px", backgroundColor: "white" }}>
+                       <strong style={{ fontSize: "1.1rem" }}>{inv.name}</strong>
+                       <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
+                          <span style={{ fontSize: "1.1rem", color: inv.weightInGrams > 500 ? "#16a34a" : "#b45309", fontWeight: "bold" }}>
+                             {inv.weightInGrams >= 1000 ? `${(inv.weightInGrams / 1000).toFixed(3)} KG` : `${inv.weightInGrams.toFixed(2)} g`}
+                          </span>
+                          <Button size="sm" variant="outline" onClick={() => {
+                             if(!window.confirm(`Remove ${inv.name} from inventory?`)) return;
+                             const newInv = [...settings.inventory]; newInv.splice(idx, 1);
+                             const newSettings = { ...settings, inventory: newInv };
+                             setSettings(newSettings);
+                             axios.put(`${API}/settings`, newSettings, { headers: authHeaders });
+                          }} style={{ borderColor: "#ef4444", color: "#ef4444", padding: "0 8px" }}>X</Button>
+                       </div>
+                    </div>
+                 ))}
+               </div>
+            )}
+            <p style={{ fontSize: "0.8rem", color: "#64748b", marginTop: "15px" }}>*Stock is automatically deducted in grams when bills are successfully saved for these exact item names.</p>
+          </div>
+        </section>
+      )}
+
+      {/* --- INJECT: BUSINESS ANALYTICS DASHBOARD --- */}
+      {showAnalytics && (
+        <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "650px", backgroundColor: "#f8fafc", zIndex: 102, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
+          <div className="drawer-header" style={{ backgroundColor: "white", borderBottom: "1px solid #e2e8f0", padding: "20px", position: "sticky", top: 0, zIndex: 10 }}>
+            <h3 style={{ display: "flex", alignItems: "center", gap: "10px", margin: 0 }}><LineChart /> Business Analytics</h3>
+            <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowAnalytics(false)} style={{ marginTop: "10px" }}><ArrowLeft className="drawer-back-icon" style={{ marginRight: "5px" }} /><span>Close Menu</span></Button>
+          </div>
+          
+          <div style={{ padding: "20px" }}>
+             <select value={analyticsFilter} onChange={(e) => setAnalyticsFilter(e.target.value)} className="native-select" style={{ width: "100%", marginBottom: "20px", fontSize: "1.1rem", padding: "10px" }}>
+                <option value="TODAY">Current Day</option>
+                <option value="THIS_WEEK">Current Week</option>
+                <option value="THIS_HALF_MONTH">Current Half Month (15 Days)</option>
+                <option value="THIS_MONTH">Current Month</option>
+                <option value="LAST_MONTH">Previous Month</option>
+                <option value="LAST_3_MONTHS">Previous 3 Months</option>
+                <option value="LAST_6_MONTHS">Previous 6 Months</option>
+                <option value="THIS_YEAR">Previous Year (365 Days)</option>
+                <option value="ALL_TIME">Since Opening</option>
+             </select>
+
+             {(() => {
+                const now = new Date();
+                const parseDate = (dStr) => {
+                    if (!dStr) return new Date();
+                    const p = dStr.split("-");
+                    if (p.length === 3 && p[0].length === 2) return new Date(parseInt(p[2]), parseInt(p[1]) - 1, parseInt(p[0]));
+                    return new Date(dStr);
+                };
+
+                const filteredStats = (recentBillsList || []).filter(bill => {
+                   const bDate = parseDate(bill.date);
+                   const diffDays = (now - bDate) / (1000 * 60 * 60 * 24);
+                   
+                   switch(analyticsFilter) {
+                      case "TODAY": return diffDays < 1 && bDate.getDate() === now.getDate();
+                      case "THIS_WEEK": return diffDays <= 7;
+                      case "THIS_HALF_MONTH": return diffDays <= 15;
+                      case "THIS_MONTH": return bDate.getMonth() === now.getMonth() && bDate.getFullYear() === now.getFullYear();
+                      case "LAST_MONTH": return bDate.getMonth() === (now.getMonth() === 0 ? 11 : now.getMonth() - 1) && bDate.getFullYear() === (now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear());
+                      case "LAST_3_MONTHS": return diffDays <= 90;
+                      case "LAST_6_MONTHS": return diffDays <= 180;
+                      case "THIS_YEAR": return diffDays <= 365;
+                      case "ALL_TIME": return true;
+                      default: return true;
+                   }
+                });
+
+                const totalRevenue = filteredStats.reduce((sum, b) => sum + num(b.totals?.grand_total), 0);
+                const totalInvoices = filteredStats.filter(b => b.mode === "invoice").length;
+                const totalEstimates = filteredStats.filter(b => b.mode === "estimate").length;
+
+                return (
+                   <div>
+                      <div style={{ display: "flex", gap: "15px", flexWrap: "wrap", marginBottom: "30px" }}>
+                         <div style={{ flex: "1 1 200px", padding: "20px", backgroundColor: "#8b5cf6", color: "white", borderRadius: "12px", boxShadow: "0 4px 6px rgba(0,0,0,0.1)" }}>
+                            <p style={{ margin: "0 0 5px 0", fontSize: "0.9rem", opacity: 0.9 }}>Total Revenue</p>
+                            <h2 style={{ margin: 0, fontSize: "2rem" }}>₹{money(totalRevenue)}</h2>
+                         </div>
+                         <div style={{ flex: "1 1 120px", padding: "20px", backgroundColor: "white", border: "1px solid #cbd5e1", borderRadius: "12px" }}>
+                            <p style={{ margin: "0 0 5px 0", fontSize: "0.9rem", color: "#64748b" }}>Total Bills</p>
+                            <h2 style={{ margin: 0, fontSize: "1.8rem", color: "#0f172a" }}>{filteredStats.length}</h2>
+                         </div>
+                      </div>
+                      
+                      <div style={{ padding: "20px", backgroundColor: "white", border: "1px solid #cbd5e1", borderRadius: "12px", marginBottom: "20px" }}>
+                         <h4 style={{ margin: "0 0 15px 0", color: "#0f172a" }}>Bill Type Breakdown</h4>
+                         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
+                            <div style={{ width: "20px", height: "20px", backgroundColor: "#dc2626", borderRadius: "4px" }}></div>
+                            <span style={{ flex: 1 }}>Tax Invoices ({totalInvoices})</span>
+                         </div>
+                         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                            <div style={{ width: "20px", height: "20px", backgroundColor: "#2563eb", borderRadius: "4px" }}></div>
+                            <span style={{ flex: 1 }}>Estimates ({totalEstimates})</span>
+                         </div>
+                         <div style={{ width: "100%", height: "12px", display: "flex", borderRadius: "6px", overflow: "hidden", marginTop: "15px" }}>
+                            <div style={{ width: `${(totalInvoices / (filteredStats.length || 1)) * 100}%`, backgroundColor: "#dc2626" }}></div>
+                            <div style={{ width: `${(totalEstimates / (filteredStats.length || 1)) * 100}%`, backgroundColor: "#2563eb" }}></div>
+                         </div>
+                      </div>
+                      
+                      {filteredStats.length === 0 && <p style={{ textAlign: "center", color: "#64748b", marginTop: "40px" }}>No data found for this time period.</p>}
+                   </div>
+                );
+             })()}
+          </div>
+        </section>
+      )}
+
       {/* SETTINGS DRAWER */}
       {showSettings && (
         <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "600px", backgroundColor: "white", zIndex: 100, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
@@ -1839,7 +2129,41 @@ export default function App() {
 
             {settingsTab === "advanced" && (
               <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-                {/* --- NEW IOT DISPLAY SETTINGS --- */}
+                
+                {/* --- MASTER ITEMS MANAGER --- */}
+                <div style={{ padding: "15px", backgroundColor: "#fefce8", borderRadius: "8px", border: "1px solid #fef08a" }}>
+                  <h4 style={{ color: "#a16207", margin: "0 0 10px 0" }}>Master Item Settings (Auto-fill & MC)</h4>
+                  <p style={{ fontSize: "0.85rem", color: "#854d0e", marginBottom: "15px" }}>Add your inventory names here. This builds your suggestion box and auto-fills Making Charges.</p>
+                  
+                  <div style={{ display: "flex", gap: "10px", marginBottom: "15px" }}>
+                     <Button size="sm" style={{ backgroundColor: "#ca8a04", color: "white" }} onClick={() => {
+                        const name = prompt("Enter Item Name (e.g. CB Payal):");
+                        if (!name) return;
+                        const mc = prompt("Enter default Making Charge per gram (e.g. 30):");
+                        const newSettings = { ...settings, master_items: [...(settings.master_items || []), { id: Date.now().toString(), name, mc: mc ? Number(mc) : null }] };
+                        setSettings(newSettings);
+                     }}>+ Add Master Item</Button>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "200px", overflowY: "auto" }}>
+                     {(settings.master_items || []).length === 0 ? <p style={{ fontSize: "0.85rem", color: "#a16207" }}>No master items added.</p> : 
+                       (settings.master_items || []).map((mi, idx) => (
+                         <div key={mi.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px", backgroundColor: "white", border: "1px solid #fde047", borderRadius: "6px" }}>
+                            <strong style={{ fontSize: "0.9rem" }}>{mi.name}</strong>
+                            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                               <span style={{ fontSize: "0.85rem", color: "#16a34a" }}>{mi.mc ? `₹${mi.mc}/g` : "Default MC"}</span>
+                               <Button size="sm" variant="ghost" onClick={() => {
+                                  const newList = [...settings.master_items]; newList.splice(idx, 1);
+                                  setSettings({ ...settings, master_items: newList });
+                               }} style={{ color: "#ef4444", padding: "0 5px", height: "auto" }}>X</Button>
+                            </div>
+                         </div>
+                     ))}
+                  </div>
+                </div>
+                {/* -------------------------------------- */}
+
+                {/* --- IOT DISPLAY SETTINGS --- */}
                 <div style={{ padding: "15px", backgroundColor: "#f0f9ff", borderRadius: "8px", border: "1px solid #bae6fd" }}>
                   <h4 style={{ color: "#0369a1", margin: "0 0 10px 0", display: "flex", alignItems: "center", gap: "8px" }}>
                     <Cpu size={18} /> Counter Display Terminal
