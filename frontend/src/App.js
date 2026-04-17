@@ -2957,7 +2957,7 @@ export default function App() {
         </section>
       )}
 
-      {/* ANALYTICS DASHBOARD DRAWER */}
+     {/* ANALYTICS DASHBOARD DRAWER */}
       {showAnalytics && (
         <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "650px", backgroundColor: "#f8fafc", zIndex: 102, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
           <div className="drawer-header" style={{ backgroundColor: "white", borderBottom: "1px solid #e2e8f0", padding: "20px", position: "sticky", top: 0, zIndex: 10 }}>
@@ -3038,14 +3038,16 @@ export default function App() {
                          {chartData.length === 0 ? (
                             <p style={{ fontSize: "0.85rem", color: "#64748b", textAlign: "center", padding: "20px 0" }}>No data to graph.</p>
                          ) : (
-                            <div style={{ height: "220px", display: "flex", alignItems: "flex-end", gap: "10px", borderBottom: "2px solid #e2e8f0", paddingBottom: "5px", overflowX: "auto" }}>
-                               {chartData.map((d, i) => (
-                                  <div key={i} style={{ flex: "1 1 40px", display: "flex", flexDirection: "column", alignItems: "center", minWidth: "40px" }}>
-                                     <span style={{ fontSize: "0.65rem", color: "#64748b", marginBottom: "4px", transform: "rotate(-45deg)", transformOrigin: "left bottom", whiteSpace: "nowrap" }}>₹{Math.round(d.amount)}</span>
-                                     <div style={{ width: "100%", maxWidth: "35px", height: `${(d.amount / maxAmount) * 100}%`, minHeight: "5px", backgroundColor: "#8b5cf6", borderRadius: "4px 4px 0 0", transition: "height 0.3s ease" }} title={`${d.date}: ₹${money(d.amount)}`}></div>
-                                     <span style={{ fontSize: "0.7rem", color: "#475569", marginTop: "8px", fontWeight: "bold" }}>{d.date.slice(0, 5)}</span>
-                                  </div>
-                               ))}
+                            <div style={{ width: "100%", overflowX: "auto" }}>
+                               <div style={{ height: "260px", display: "flex", alignItems: "flex-end", gap: "20px", borderBottom: "2px solid #e2e8f0", paddingBottom: "5px", minWidth: "max-content", paddingTop: "40px", paddingLeft: "10px", paddingRight: "10px" }}>
+                                  {chartData.map((d, i) => (
+                                     <div key={i} style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center", width: "45px", height: "100%" }}>
+                                        <span style={{ fontSize: "0.65rem", color: "#64748b", marginBottom: "12px", transform: "rotate(-45deg)", transformOrigin: "left bottom", whiteSpace: "nowrap" }}>₹{Math.round(d.amount)}</span>
+                                        <div style={{ width: "100%", maxWidth: "35px", height: `${Math.max((d.amount / maxAmount) * 100, 2)}%`, minHeight: "5px", backgroundColor: "#8b5cf6", borderRadius: "4px 4px 0 0", transition: "height 0.3s ease" }} title={`${d.date}: ₹${money(d.amount)}`}></div>
+                                        <span style={{ fontSize: "0.7rem", color: "#475569", marginTop: "8px", fontWeight: "bold", whiteSpace: "nowrap" }}>{d.date.slice(0, 5)}</span>
+                                     </div>
+                                  ))}
+                               </div>
                             </div>
                          )}
                       </div>
@@ -3073,7 +3075,6 @@ export default function App() {
           </div>
         </section>
       )}
-
       {/* SETTINGS DRAWER */}
       {showSettings && (
         <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "600px", backgroundColor: "white", zIndex: 100, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
