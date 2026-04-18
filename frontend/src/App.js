@@ -112,7 +112,6 @@ const getInitialPrintScale = () => {
     const saved = Number(localStorage.getItem("jj_print_scale") || "100"); 
     return Number.isFinite(saved) ? clampPrintScale(saved) : 100; 
 };
-
 // --- NUMBER TO WORDS CONVERTER (INDIAN FORMAT) ---
 const numberToWords = (num) => {
     if (num === 0 || isNaN(num) || !num) return "Rupees Zero Only";
@@ -139,6 +138,7 @@ const numberToWords = (num) => {
     return res + " Only";
 };
 // -------------------------------------------------
+
 const splitAmount = (amt) => { 
     const validAmt = Number.isFinite(amt) ? amt : 0; 
     const rupees = Math.floor(validAmt); 
@@ -3339,9 +3339,9 @@ export default function App() {
             )}
 
             {settingsTab === "advanced" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "15px" 
+              <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
 
-              {/* --- PRINTER / PAPER SIZE SETTINGS --- */}
+               {/* --- PRINTER / PAPER SIZE SETTINGS --- */}
                 <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1", marginBottom: "15px" }}>
                   <h4 style={{ margin: "0 0 10px 0", color: "#0f172a", display: "flex", alignItems: "center", gap: "8px" }}>
                     Printer Page Format
