@@ -2052,7 +2052,7 @@ export default function App() {
             {/* --- AMOUNT IN WORDS (PUBLIC VIEW) --- */}
             <div style={{ marginTop: "10px", padding: "8px 0", borderTop: "1px dashed #cbd5e1", borderBottom: "1px dashed #cbd5e1", textAlign: "left", fontSize: "0.9rem", color: "#334155", fontStyle: "italic", fontWeight: "500", textTransform: "capitalize" }}>
               <span style={{ color: "#64748b", fontStyle: "normal", marginRight: "5px" }}>Amount in Words:</span> 
-              {numberToWords(b.totals?.grand_total || 0)}
+              {numberToWords(publicComputed?.grandTotal || 0)}
             </div>
             <div className="declaration">
               {publicBill.mode === "invoice" ? (
@@ -2446,7 +2446,7 @@ export default function App() {
                 {/* --- AMOUNT IN WORDS (PUBLIC VIEW) --- */}
             <div style={{ marginTop: "10px", padding: "8px 0", borderTop: "1px dashed #cbd5e1", borderBottom: "1px dashed #cbd5e1", textAlign: "left", fontSize: "0.9rem", color: "#334155", fontStyle: "italic", fontWeight: "500", textTransform: "capitalize" }}>
               <span style={{ color: "#64748b", fontStyle: "normal", marginRight: "5px" }}>Amount in Words:</span> 
-              {numberToWords(b.totals?.grand_total || 0)}
+              {numberToWords(computed?.grandTotal || 0)}
             </div>
 
               <div className="declaration">
