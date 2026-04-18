@@ -113,8 +113,7 @@ const getInitialPrintScale = () => {
     return Number.isFinite(saved) ? clampPrintScale(saved) : 100; 
 };
 
-const splitAmount = (amt) => { 
-  // --- NUMBER TO WORDS CONVERTER (INDIAN FORMAT) ---
+// --- NUMBER TO WORDS CONVERTER (INDIAN FORMAT) ---
 const numberToWords = (num) => {
     if (num === 0 || isNaN(num) || !num) return "Rupees Zero Only";
     const a = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
@@ -140,6 +139,7 @@ const numberToWords = (num) => {
     return res + " Only";
 };
 // -------------------------------------------------
+const splitAmount = (amt) => { 
     const validAmt = Number.isFinite(amt) ? amt : 0; 
     const rupees = Math.floor(validAmt); 
     const paise = Math.round((validAmt - rupees) * 100).toString().padStart(2, "0"); 
@@ -2044,13 +2044,7 @@ export default function App() {
               )}
             </div>
 
-            
-              {/* --- AMOUNT IN WORDS (PUBLIC VIEW) --- */}
-            <div style={{ marginTop: "10px", padding: "8px 0", borderTop: "1px dashed #cbd5e1", borderBottom: "1px dashed #cbd5e1", textAlign: "left", fontSize: "0.9rem", color: "#334155", fontStyle: "italic", fontWeight: "500", textTransform: "capitalize" }}>
-              <span style={{ color: "#64748b", fontStyle: "normal", marginRight: "5px" }}>Amount in Words:</span> 
-              {numberToWords(publicComputed?.grandTotal || 0)}
-            </div>
-              {publicComputed.earnedPoints > 0 && (
+            {publicComputed.earnedPoints > 0 && (
               <div style={{ textAlign: "center", marginTop: "15px", padding: "10px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px dashed #22c55e", color: "#166534", fontWeight: "bold", fontSize: "0.9rem" }}>
                 🎉 You earned {publicComputed.earnedPoints} Loyalty Points on this bill!
               </div>
@@ -2275,13 +2269,7 @@ export default function App() {
                       </>
                     )}
                   </div>
-                 
-                    {/* --- AMOUNT IN WORDS (BULK/HIDDEN VIEW) --- */}
-                  <div style={{ marginTop: "10px", padding: "8px 0", borderTop: "1px dashed #cbd5e1", borderBottom: "1px dashed #cbd5e1", textAlign: "left", fontSize: "0.9rem", color: "#334155", fontStyle: "italic", fontWeight: "500", textTransform: "capitalize" }}>
-                    <span style={{ color: "#64748b", fontStyle: "normal", marginRight: "5px" }}>Amount in Words:</span> 
-                    {numberToWords(b.totals?.grand_total || 0)}
-                  </div>
-                     {b.earned_points > 0 && (
+                  {b.earned_points > 0 && (
                     <div style={{ textAlign: "center", marginTop: "15px", padding: "10px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px dashed #22c55e", color: "#166534", fontWeight: "bold", fontSize: "0.9rem" }}>
                       🎉 You earned {b.earned_points} Loyalty Points on this bill!
                     </div>
@@ -2442,13 +2430,7 @@ export default function App() {
                 )}
               </div>
 
-             
-                {/* --- AMOUNT IN WORDS (MAIN ADMIN/PRINT VIEW) --- */}
-              <div style={{ marginTop: "10px", padding: "8px 0", borderTop: "1px dashed #cbd5e1", borderBottom: "1px dashed #cbd5e1", textAlign: "left", fontSize: "0.9rem", color: "#334155", fontStyle: "italic", fontWeight: "500", textTransform: "capitalize" }}>
-                <span style={{ color: "#64748b", fontStyle: "normal", marginRight: "5px" }}>Amount in Words:</span> 
-                {numberToWords(computed?.grandTotal || 0)}
-              </div>
-                 {computed.earnedPoints > 0 && (
+              {computed.earnedPoints > 0 && (
                 <div style={{ textAlign: "center", marginTop: "15px", padding: "10px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px dashed #22c55e", color: "#166534", fontWeight: "bold", fontSize: "0.9rem" }}>
                   🎉 You earned {computed.earnedPoints} Loyalty Points on this bill!
                 </div>
@@ -3357,10 +3339,9 @@ export default function App() {
             )}
 
             {settingsTab === "advanced" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-                
-                {/* --- MASTER ITEMS MANAGER --- */}
-{/* --- PRINTER / PAPER SIZE SETTINGS --- */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "15px" 
+
+              {/* --- PRINTER / PAPER SIZE SETTINGS --- */}
                 <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1", marginBottom: "15px" }}>
                   <h4 style={{ margin: "0 0 10px 0", color: "#0f172a", display: "flex", alignItems: "center", gap: "8px" }}>
                     Printer Page Format
@@ -3381,6 +3362,8 @@ export default function App() {
                      <option value="58mm">Thermal Receipt (58mm / 2-inch)</option>
                   </select>
                 </div>
+                
+                {/* --- MASTER ITEMS MANAGER --- */}
                 <div style={{ padding: "15px", backgroundColor: "#fefce8", borderRadius: "8px", border: "1px solid #fef08a" }}>
                   <h4 style={{ color: "#a16207", margin: "0 0 10px 0" }}>Master Item Settings (Auto-fill & MC)</h4>
                   <p style={{ fontSize: "0.85rem", color: "#854d0e", marginBottom: "15px" }}>Add your inventory names here. This builds your suggestion box and auto-fills Making Charges.</p>
