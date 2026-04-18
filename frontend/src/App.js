@@ -107,32 +107,6 @@ const num = (val) => {
 const money = (val) => num(val).toFixed(2);
 
 const clampPrintScale = (value) => Math.min(102, Math.max(98, value));
-// --- NUMBER TO WORDS CONVERTER (INDIAN FORMAT) ---
-const numberToWords = (num) => {
-    if (num === 0 || isNaN(num) || !num) return "Rupees Zero Only";
-    const a = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
-    const b = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
-
-    const convertWhole = (n) => {
-        if (n < 20) return a[n];
-        if (n < 100) return b[Math.floor(n / 10)] + (n % 10 !== 0 ? " " + a[n % 10] : "");
-        if (n < 1000) return a[Math.floor(n / 100)] + " Hundred" + (n % 100 !== 0 ? " and " + convertWhole(n % 100) : "");
-        if (n < 100000) return convertWhole(Math.floor(n / 1000)) + " Thousand" + (n % 1000 !== 0 ? " " + convertWhole(n % 1000) : "");
-        if (n < 10000000) return convertWhole(Math.floor(n / 100000)) + " Lakh" + (n % 100000 !== 0 ? " " + convertWhole(n % 100000) : "");
-        return convertWhole(Math.floor(n / 10000000)) + " Crore" + (n % 10000000 !== 0 ? " " + convertWhole(n % 10000000) : "");
-    };
-
-    const parts = String(Number(num).toFixed(2)).split(".");
-    const rupees = parseInt(parts[0], 10);
-    const paise = parseInt(parts[1], 10);
-
-    let res = "Rupees " + convertWhole(rupees);
-    if (paise > 0) {
-        res += " and Paise " + convertWhole(paise);
-    }
-    return res + " Only";
-};
-// -------------------------------------------------
 
 const getInitialPrintScale = () => { 
     const saved = Number(localStorage.getItem("jj_print_scale") || "100"); 
@@ -1897,42 +1871,6 @@ export default function App() {
       <div className="billing-app" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px', minHeight: '100dvh', height: 'max-content', backgroundColor: '#f1f5f9', overflowX: 'hidden', paddingBottom: '40px' }}>
         <Toaster position="bottom-right" />
         <style>{GLOBAL_PRINT_CSS}</style>
-  {/* --- DYNAMIC PRINTER SIZE CSS --- */}
-        <style>
-          {`
-            @media print {
-              @page {
-                size: ${
-                  settings?.paper_size === "80mm" ? "80mm auto" : 
-                  settings?.paper_size === "58mm" ? "58mm auto" : 
-                  settings?.paper_size || "A4"
-                };
-                margin: ${settings?.paper_size === "80mm" || settings?.paper_size === "58mm" ? "2mm" : "5mm"};
-              }
-              
-              /* Force the bill to squeeze into the selected paper size */
-              ${(settings?.paper_size === "80mm" || settings?.paper_size === "58mm") ? `
-                body, .billing-app, .bill-container, .bill-paper, #printable-bill {
-                   width: ${settings.paper_size} !important;
-                   max-width: ${settings.paper_size} !important;
-                   min-width: ${settings.paper_size} !important;
-                   margin: 0 auto !important;
-                   padding: 2px !important;
-                   box-shadow: none !important;
-                }
-                /* Hide things that shouldn't be on small thermal receipts */
-                .no-thermal { display: none !important; }
-              ` : `
-                .bill-container, .bill-paper, #printable-bill {
-                   width: 100% !important;
-                   max-width: 100% !important;
-                   box-shadow: none !important;
-                   margin: 0 auto !important;
-                }
-              `}
-            }
-          `}
-        </style>
         
         {showFeedbackModal && (
           <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.6)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px" }}>
@@ -2049,11 +1987,7 @@ export default function App() {
                 🎉 You earned {publicComputed.earnedPoints} Loyalty Points on this bill!
               </div>
             )}
-            {/* --- AMOUNT IN WORDS (PUBLIC VIEW) --- */}
-            <div style={{ marginTop: "10px", padding: "8px 0", borderTop: "1px dashed #cbd5e1", borderBottom: "1px dashed #cbd5e1", textAlign: "left", fontSize: "0.9rem", color: "#334155", fontStyle: "italic", fontWeight: "500", textTransform: "capitalize" }}>
-              <span style={{ color: "#64748b", fontStyle: "normal", marginRight: "5px" }}>Amount in Words:</span> 
-              {numberToWords(publicComputed?.grandTotal || 0)}
-            </div>
+
             <div className="declaration">
               {publicBill.mode === "invoice" ? (
                 <>
@@ -2146,42 +2080,6 @@ export default function App() {
     <div className="billing-app" style={isPrinting ? { height: "auto", overflow: "visible" } : { display: "flex", flexDirection: "column", height: "100dvh", overflow: "hidden", backgroundColor: "#f1f5f9" }}>
       <Toaster position="bottom-right" />
       <style>{GLOBAL_PRINT_CSS}</style>
-    {/* --- DYNAMIC PRINTER SIZE CSS --- */}
-        <style>
-          {`
-            @media print {
-              @page {
-                size: ${
-                  settings?.paper_size === "80mm" ? "80mm auto" : 
-                  settings?.paper_size === "58mm" ? "58mm auto" : 
-                  settings?.paper_size || "A4"
-                };
-                margin: ${settings?.paper_size === "80mm" || settings?.paper_size === "58mm" ? "2mm" : "5mm"};
-              }
-              
-              /* Force the bill to squeeze into the selected paper size */
-              ${(settings?.paper_size === "80mm" || settings?.paper_size === "58mm") ? `
-                body, .billing-app, .bill-container, .bill-paper, #printable-bill {
-                   width: ${settings.paper_size} !important;
-                   max-width: ${settings.paper_size} !important;
-                   min-width: ${settings.paper_size} !important;
-                   margin: 0 auto !important;
-                   padding: 2px !important;
-                   box-shadow: none !important;
-                }
-                /* Hide things that shouldn't be on small thermal receipts */
-                .no-thermal { display: none !important; }
-              ` : `
-                .bill-container, .bill-paper, #printable-bill {
-                   width: 100% !important;
-                   max-width: 100% !important;
-                   box-shadow: none !important;
-                   margin: 0 auto !important;
-                }
-              `}
-            }
-          `}
-        </style>
       <div style={{ position: "absolute", zIndex: -9999, opacity: 0, pointerEvents: "none", top: 0, left: 0, height: 0, overflow: "hidden" }}>
         {(filteredRecentBills || []).map(b => {
            const billBranch = (settings.branches || []).find(br => br.id === b.branch_id) || (settings.branches || [])[0] || defaultSettings.branches[0];
@@ -2278,11 +2176,7 @@ export default function App() {
                       🎉 You earned {b.earned_points} Loyalty Points on this bill!
                     </div>
                   )}
-                  {/* --- AMOUNT IN WORDS (PUBLIC VIEW) --- */}
-            <div style={{ marginTop: "10px", padding: "8px 0", borderTop: "1px dashed #cbd5e1", borderBottom: "1px dashed #cbd5e1", textAlign: "left", fontSize: "0.9rem", color: "#334155", fontStyle: "italic", fontWeight: "500", textTransform: "capitalize" }}>
-              <span style={{ color: "#64748b", fontStyle: "normal", marginRight: "5px" }}>Amount in Words:</span> 
-              {numberToWords(b.totals?.grand_total || 0)}
-            </div>
+                  
                   <div className="declaration">
                     {b.mode === "invoice" ? (
                        <>
@@ -2443,11 +2337,6 @@ export default function App() {
                   🎉 You earned {computed.earnedPoints} Loyalty Points on this bill!
                 </div>
               )}
-                {/* --- AMOUNT IN WORDS (PUBLIC VIEW) --- */}
-            <div style={{ marginTop: "10px", padding: "8px 0", borderTop: "1px dashed #cbd5e1", borderBottom: "1px dashed #cbd5e1", textAlign: "left", fontSize: "0.9rem", color: "#334155", fontStyle: "italic", fontWeight: "500", textTransform: "capitalize" }}>
-              <span style={{ color: "#64748b", fontStyle: "normal", marginRight: "5px" }}>Amount in Words:</span> 
-              {numberToWords(computed?.grandTotal || 0)}
-            </div>
 
               <div className="declaration">
                 {mode === "invoice" ? (
@@ -3352,29 +3241,6 @@ export default function App() {
             )}
 
             {settingsTab === "advanced" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-                
-                {/* --- PRINTER / PAPER SIZE SETTINGS --- */}
-                <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
-                  <h4 style={{ margin: "0 0 10px 0", color: "#0f172a", display: "flex", alignItems: "center", gap: "8px" }}>
-                    Printer Page Format
-                  </h4>
-                  <p style={{ fontSize: "0.85rem", color: "#64748b", marginBottom: "10px" }}>Select the paper size for your printer. The print window will automatically adjust to this size.</p>
-                  <select
-                     value={settings.paper_size || "A4"}
-                     onChange={(e) => setSettings({ ...settings, paper_size: e.target.value })}
-                     className="native-select"
-                     style={{ width: "100%", padding: "10px", fontSize: "1rem", borderRadius: "6px", border: "1px solid #cbd5e1" }}
-                  >
-                     <option value="A4">A4 (Standard Document)</option>
-                     <option value="A5">A5 (Half Size)</option>
-                     <option value="A6">A6 (Quarter Size)</option>
-                     <option value="letter">Letter (8.5" x 11")</option>
-                     <option value="legal">Legal (8.5" x 14")</option>
-                     <option value="80mm">Thermal Receipt (80mm / 3-inch)</option>
-                     <option value="58mm">Thermal Receipt (58mm / 2-inch)</option>
-                  </select>
-                </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
                 
                 {/* --- MASTER ITEMS MANAGER --- */}
