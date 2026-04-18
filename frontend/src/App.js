@@ -2044,6 +2044,12 @@ export default function App() {
               )}
             </div>
 
+             {/* --- AMOUNT IN WORDS (PUBLIC VIEW) --- */}
+            <div style={{ marginTop: "10px", padding: "8px 0", borderTop: "1px dashed #cbd5e1", borderBottom: "1px dashed #cbd5e1", textAlign: "left", fontSize: "0.9rem", color: "#334155", fontStyle: "italic", fontWeight: "500", textTransform: "capitalize" }}>
+              <span style={{ color: "#64748b", fontStyle: "normal", marginRight: "5px" }}>Amount in Words:</span> 
+              {numberToWords(publicComputed?.grandTotal || 0)}
+            </div>
+
             {publicComputed.earnedPoints > 0 && (
               <div style={{ textAlign: "center", marginTop: "15px", padding: "10px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px dashed #22c55e", color: "#166534", fontWeight: "bold", fontSize: "0.9rem" }}>
                 🎉 You earned {publicComputed.earnedPoints} Loyalty Points on this bill!
@@ -2269,6 +2275,13 @@ export default function App() {
                       </>
                     )}
                   </div>
+
+                    {/* --- AMOUNT IN WORDS (BULK/HIDDEN VIEW) --- */}
+                  <div style={{ marginTop: "10px", padding: "8px 0", borderTop: "1px dashed #cbd5e1", borderBottom: "1px dashed #cbd5e1", textAlign: "left", fontSize: "0.9rem", color: "#334155", fontStyle: "italic", fontWeight: "500", textTransform: "capitalize" }}>
+                    <span style={{ color: "#64748b", fontStyle: "normal", marginRight: "5px" }}>Amount in Words:</span> 
+                    {numberToWords(b.totals?.grand_total || 0)}
+                  </div>
+
                   {b.earned_points > 0 && (
                     <div style={{ textAlign: "center", marginTop: "15px", padding: "10px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px dashed #22c55e", color: "#166534", fontWeight: "bold", fontSize: "0.9rem" }}>
                       🎉 You earned {b.earned_points} Loyalty Points on this bill!
@@ -2428,6 +2441,12 @@ export default function App() {
                     <p className="upi-id">UPI: {upiId}</p>
                   </div>
                 )}
+              </div>
+
+            {/* --- AMOUNT IN WORDS (MAIN ADMIN/PRINT VIEW) --- */}
+              <div style={{ marginTop: "10px", padding: "8px 0", borderTop: "1px dashed #cbd5e1", borderBottom: "1px dashed #cbd5e1", textAlign: "left", fontSize: "0.9rem", color: "#334155", fontStyle: "italic", fontWeight: "500", textTransform: "capitalize" }}>
+                <span style={{ color: "#64748b", fontStyle: "normal", marginRight: "5px" }}>Amount in Words:</span> 
+                {numberToWords(computed?.grandTotal || 0)}
               </div>
 
               {computed.earnedPoints > 0 && (
