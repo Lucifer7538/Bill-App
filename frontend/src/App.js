@@ -112,9 +112,10 @@ const getInitialPrintScale = () => {
     const saved = Number(localStorage.getItem("jj_print_scale") || "100"); 
     return Number.isFinite(saved) ? clampPrintScale(saved) : 100; 
 };
+
 // --- NUMBER TO WORDS CONVERTER (INDIAN FORMAT) ---
 const numberToWords = (num) => {
-    if (num === 0 || isNaN(num) || !num) return "Rupees Zero Only";
+    if (num === 0 || isNaN(num) || !num) return "Zero Rupees Only";
     const a = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
     const b = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
 
@@ -131,9 +132,9 @@ const numberToWords = (num) => {
     const rupees = parseInt(parts[0], 10);
     const paise = parseInt(parts[1], 10);
 
-    let res = "Rupees " + convertWhole(rupees);
+    let res = convertWhole(rupees).trim() + " Rupees";
     if (paise > 0) {
-        res += " and Paise " + convertWhole(paise);
+        res += " and " + convertWhole(paise).trim() + " Paise";
     }
     return res + " Only";
 };
