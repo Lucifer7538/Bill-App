@@ -2624,8 +2624,31 @@ const checkIsBlank = () => {
             </div>
 
             <div style={{ marginBottom: "15px", paddingBottom: "15px", borderBottom: "1px dashed var(--border)" }}>
-              <label className="select-label" style={{ fontSize: "0.8rem", marginBottom: "4px", display: "block" }}>Bill Number (Editable)</label>
-              <Input value={documentNumber} onChange={(e) => { setDocumentNumber(e.target.value); markDirty(); }} placeholder="e.g. INV-0212" disabled={!!currentBillId} style={{ fontWeight: "bold", color: "var(--brand)", backgroundColor: currentBillId ? "#f1f5f9" : "white" }} />
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+              <label className="select-label" style={{ fontSize: "0.8rem", margin: 0 }}>Bill Number</label>
+              {currentBillId && (
+                 <Button 
+                   size="sm" 
+                   variant="outline" 
+                   onClick={(e) => { 
+                     e.preventDefault(); 
+                     if(window.confirm("Fetch the next available safe number to fix this duplicate?")) {
+                       reserveNumber(mode, billBranchId);
+                       markDirty();
+                     }
+                   }} 
+                   style={{ height: "24px", fontSize: "0.75rem", padding: "0 8px", borderColor: "#eab308", color: "#b45309", backgroundColor: "#fefce8" }}
+                 >
+                   ⚠️ Fix Duplicate (Get New No.)
+                 </Button>
+              )}
+            </div>
+            <Input 
+              value={isNumberLoading ? "Fetching..." : documentNumber} 
+              onChange={(e) => { setDocumentNumber(e.target.value); markDirty(); }} 
+              placeholder="e.g. INV-0212" 
+              style={{ fontWeight: "bold", color: "var(--brand)", backgroundColor: "white" }} 
+            />
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.85rem", marginBottom: "5px", color: "#16a34a", fontWeight: "bold" }}>
