@@ -402,8 +402,33 @@ async def delete_bill(document_number: str, _=Depends(require_auth)):
                     "store_credit": credit_revert
                 }}
             )
+            
     await bills_collection.delete_one({"document_number": document_number})
-    return {"message": "Deleted"}
+
+    # --- AUTO-CORRECT THE BILL COUNTER IN THE DATABASE ---
+    if bill:
+        mode = bill.get("mode")
+        branch_id = bill.get("branch_id")
+        if mode and branch_id:
+            # Find all remaining bills for this branch and mode
+            remaining_bills = await bills_collection.find({"mode": mode, "branch_id": branch_id}).to_list(None)
+            highest_val = 0
+            for b in remaining_bills:
+                match = re.search(r'\d+$', b.get("document_number", ""))
+                if match:
+                    v = int(match.group())
+                    if v > highest_val: 
+                        highest_val = v
+                    
+            # Tell the database to dial the counter back to the actual highest existing bill
+            await counters_collection.update_one(
+                {"mode": mode, "branch_id": branch_id}, 
+                {"$set": {"value": highest_val}}, 
+                upsert=True
+            )
+    # -----------------------------------------------------
+
+    return {"message": "Deleted and Counter Auto-Corrected"}
 
 
 @api_router.delete("/bills/all")
