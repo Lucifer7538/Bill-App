@@ -2413,7 +2413,7 @@ const checkIsBlank = () => {
             </div>
             <div style={{ backgroundColor: "white", padding: "25px", borderRadius: "12px", border: "1px solid #bbf7d0", marginBottom: "25px", textAlign: "center" }}>
               <h4 style={{ color: "#15803d", marginTop: 0, textAlign: "left" }}>Upload Design Images</h4>
-              <Input type="file" accept="image/*" multiple style={{ maxWidth: "300px", margin: "20px auto" }} />
+              <Input id="imageUpload" type="file" accept="image/*" style={{ maxWidth: "300px", margin: "20px auto" }} /> style={{ maxWidth: "300px", margin: "20px auto" }} />
               {broadcastMode === "web" && <p style={{ fontSize: "0.8rem", color: "#ea580c" }}>⚠️ In Web loop mode, images must be pasted manually into chats.</p>}
             </div>
             <div style={{ backgroundColor: "white", padding: "25px", borderRadius: "12px", border: "1px solid #bbf7d0", marginBottom: "25px" }}>
