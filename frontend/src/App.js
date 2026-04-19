@@ -3,7 +3,7 @@ import axios from "axios";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import Barcode from "react-barcode";
-import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Store, Upload, Download, Keyboard, Cpu, Wifi, CheckCircle2, LineChart, Package, AlertCircle, Lock } from "lucide-react"; 
+import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Store, Download, Keyboard, Cpu, LineChart, Package, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Toaster, toast } from "sonner";
@@ -1214,7 +1214,7 @@ const checkIsBlank = () => {
     setBillDate(today()); 
     setIsDirty(false); 
     await reserveNumber(nextMode, nextBranch); 
-   -
+    
    // --- NEW LOGIC: USE THE RECYCLED NUMBER IF ONE EXISTS ---
     const recycleKey = `recycled_${nextMode}_${nextBranch}`;
     if (settings[recycleKey] && settings[recycleKey] !== null) {
