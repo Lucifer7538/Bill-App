@@ -2411,10 +2411,19 @@ const checkIsBlank = () => {
                 <option value="recent">Recent Customers (30 Days)</option>
               </select>
             </div>
-            <div style={{ backgroundColor: "white", padding: "25px", borderRadius: "12px", border: "1px solid #bbf7d0", marginBottom: "25px", textAlign: "center" }}>
-              <h4 style={{ color: "#15803d", marginTop: 0, textAlign: "left" }}>Upload Design Images</h4>
-              <div style={{ maxWidth: "300px", margin: "20px auto" }}>     <input id="imageUpload" type="file" accept="image/*" style={{ width: "100%", padding: "10px", borderRadius: "8px", border: "1px solid #cbd5e1" }} /> </div> style={{ maxWidth: "300px", margin: "20px auto" }} />
-              {broadcastMode === "web" && <p style={{ fontSize: "0.8rem", color: "#ea580c" }}>⚠️ In Web loop mode, images must be pasted manually into chats.</p>}
+            
+          <div style={{ backgroundColor: "white", padding: "25px", borderRadius: "12px", border: "1px solid #bbf7d0", marginBottom: "25px" }}>
+           <h4 style={{ color: "#15803d", marginTop: 0 }}>Upload Design Images</h4>
+             <input 
+               id="imageUpload" 
+                type="file" 
+                 accept="image/*" 
+                  style={{ width: "100%", padding: "10px", border: "1px solid #cbd5e1", borderRadius: "8px", marginTop: "10px" }} 
+                  />
+  
+               <p style={{ fontSize: "0.85rem", color: "#d97706", marginTop: "10px", marginBottom: 0 }}>
+               ⚠️ In Web loop mode, images must be pasted manually into chats.
+              </p>
             </div>
             <div style={{ backgroundColor: "white", padding: "25px", borderRadius: "12px", border: "1px solid #bbf7d0", marginBottom: "25px" }}>
               <h4 style={{ color: "#15803d", marginTop: 0 }}>Offer Message</h4>
