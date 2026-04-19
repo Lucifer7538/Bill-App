@@ -2429,7 +2429,42 @@ const checkIsBlank = () => {
               <h4 style={{ color: "#15803d", marginTop: 0 }}>Offer Message</h4>
               <textarea id="broadcastMessageInput" placeholder="Huge Festival Discount..." style={{ width: "100%", height: "150px", padding: "15px", border: "1px solid #cbd5e1", borderRadius: "8px" }} />
             </div>
-            <Button style={{ width: "100%", backgroundColor: broadcastMode === "web" ? "#25D366" : "#0f172a", color: "white", padding: "20px", fontSize: "1.2rem" }} onClick={() => alert(broadcastMode === "web" ? "Web Loop: App will now open chats sequentially." : "Agent Mode: Sending data to Render Python backend to begin background sending.")}>
+            <Button 
+              style={{ width: "100%", backgroundColor: broadcastMode === "web" ? "#25D366" : "#0f172a", color: "white", padding: "20px", fontSize: "1.2rem" }} 
+              onClick={async () => {
+                // Get the message (Ensure your textarea has id="broadcastMessageInput" or change this to match your state variable)
+                const msg = document.getElementById("broadcastMessageInput")?.value || "";
+                
+                if (!msg) return alert("Please enter an offer message!");
+
+                if (broadcastMode === "web") {
+                  alert("Web Loop mode requires manual pasting of images. (Coming soon)");
+                } else {
+                  // --- ROUTING TO LOCAL LAPTOP AGENT ---
+                  const fileInput = document.getElementById("imageUpload");
+                  if (!fileInput.files || fileInput.files.length === 0) {
+                      return alert("Please upload an image for the agent!");
+                  }
+
+                  const formData = new FormData();
+                  formData.append("image", fileInput.files[0]);
+                  formData.append("message", msg);
+                  
+                  try {
+                    alert("Sending package to your local PC Agent...");
+                    
+                    // THIS IS THE MAGIC LINE: It points to your physical laptop, not Render!
+                    await axios.post(`http://127.0.0.1:8000/trigger-agent`, formData, {
+                        headers: { "Content-Type": "multipart/form-data" }
+                    });
+                    
+                    alert("🤖 Agent Activated! Take your hands off the mouse.");
+                  } catch (err) {
+                    alert("❌ Could not reach PC. Is local_agent.py running in your terminal?");
+                  }
+                }
+              }}
+            >
               🚀 {broadcastMode === "web" ? "START WHATSAPP WEB LOOP" : "TRIGGER PYTHON SEND AGENT"}
             </Button>
           </div>
