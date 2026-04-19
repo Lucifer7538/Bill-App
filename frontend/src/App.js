@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
-import { Barcode } from "react-barcode";
+import Barcode from "react-barcode";
 import { ArrowLeft, Wallet, Building2, Banknote, History, Plus, Store, Upload, Download, Keyboard, Cpu, Wifi, CheckCircle2, LineChart, Package, AlertCircle, Lock } from "lucide-react"; 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +23,6 @@ const createItem = (defaultHsn = "", desc = "", wt = "", mc = "") => ({
   amount_override: "", 
   mc_override: mc
 });
-
 const defaultSettings = {
   shop_name: "Jalaram Jewellers", 
   tagline: "The Silver Specialist", 
@@ -60,9 +59,6 @@ const defaultSettings = {
   about_qr_data_url: STATIC_ABOUT_QR_URL, 
   custom_fonts: [],
   master_items: [], 
-  enable_barcode_system: false,
-  item_categories: [{ id: "C1", name: "Silver Payal", mc_per_gram: 30 }, { id: "C2", name: "Silver Ring", mc_per_gram: 40 }],
-  social_media_links: { facebook: "", instagram: "", whatsapp_api_key: "" },
   inventory: [], 
   inventory_logs: [], 
   shortcuts: [
@@ -361,6 +357,45 @@ export default function App() {
   }, []);
   
   const isMobileSplit = viewportWidth <= 1024;
+
+  // --- BARCODE SCANNER BRAIN ---
+  useEffect(() => {
+    if (!settings.enable_barcode_system) return;
+    let barcodeBuffer = "";
+    let lastKeyTime = Date.now();
+    
+    const handleScanner = (e) => {
+      const tag = document.activeElement?.tagName.toLowerCase();
+      if (tag === 'input' || tag === 'textarea') return;
+
+      const currentTime = Date.now();
+      if (currentTime - lastKeyTime > 40) barcodeBuffer = "";
+      lastKeyTime = currentTime;
+
+      if (e.key === "Enter" && barcodeBuffer.length > 3) {
+        e.preventDefault();
+        const [scName, scWt] = barcodeBuffer.split("-");
+        if (scName && scWt) {
+          const masterMatch = (settings.master_items || []).find(mi => mi.name.toLowerCase() === scName.toLowerCase());
+          setItems(prev => {
+            const last = prev[prev.length - 1];
+            if (!last.description && !last.weight) {
+               const narr = [...prev]; 
+               narr[narr.length - 1] = { ...last, description: scName, weight: scWt, mc_override: masterMatch?.mc ? String(masterMatch.mc) : "" };
+               return narr;
+            }
+            return [...prev, createItem(settings.default_hsn, scName, scWt, masterMatch?.mc ? String(masterMatch.mc) : "")];
+          });
+          toast.success(`Scanned: ${scName}`);
+        }
+        barcodeBuffer = "";
+      } else if (e.key.length === 1) barcodeBuffer += e.key;
+    };
+
+    window.addEventListener('keydown', handleScanner, true);
+    return () => window.removeEventListener('keydown', handleScanner, true);
+  }, [settings.enable_barcode_system, settings.master_items, settings.default_hsn]);
+  
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
   
@@ -418,6 +453,14 @@ export default function App() {
   const [isBalancePaid, setIsBalancePaid] = useState(false);
 
   const [showSettings, setShowSettings] = useState(false);
+  // --- NEW SYSTEM STATES ---
+  const [showBroadcastPanel, setShowBroadcastPanel] = useState(false);
+  const [broadcastMode, setBroadcastMode] = useState("web");
+  const [barcodeQueue, setBarcodeQueue] = useState([]);
+  const [bcInputName, setBcInputName] = useState("");
+  const [bcInputWeight, setBcInputWeight] = useState("");
+  const [bcSuggestFocus, setBcSuggestFocus] = useState(false);
+  const [activePrintGroup, setActivePrintGroup] = useState("");
   const [settingsTab, setSettingsTab] = useState("design"); 
   const [showAbout, setShowAbout] = useState(false);
   const [showRecentBills, setShowRecentBills] = useState(false);
@@ -720,55 +763,6 @@ export default function App() {
     window.addEventListener('keydown', handleGlobalKeyDown, true);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
   }); 
-
-  // --- BARCODE SCANNER LASER LISTENER ---
-  useEffect(() => {
-    if (!settings.enable_barcode_system) return;
-    
-    let barcodeBuffer = "";
-    let lastKeyTime = Date.now();
-
-    const handleScannerKeyDown = (e) => {
-      const activeTag = document.activeElement?.tagName.toLowerCase();
-      if (activeTag === 'input' || activeTag === 'textarea') return;
-
-      const currentTime = Date.now();
-      if (currentTime - lastKeyTime > 30) {
-        barcodeBuffer = "";
-      }
-      lastKeyTime = currentTime;
-
-      if (e.key === "Enter" && barcodeBuffer.length > 3) {
-        e.preventDefault();
-        const parts = barcodeBuffer.split("-");
-        if (parts.length >= 2) {
-          const scannedName = parts[0];
-          const scannedWeight = parts[1];
-          
-          const categoryMatch = (settings.master_items || []).find(mi => mi.name.toLowerCase() === scannedName.toLowerCase());
-          const mcToApply = categoryMatch && categoryMatch.mc ? String(categoryMatch.mc) : "";
-
-          setItems(prev => {
-             const lastItem = prev[prev.length - 1];
-             if (!lastItem.description && !lastItem.weight) {
-                const newArr = [...prev];
-                newArr[newArr.length - 1] = { ...lastItem, description: scannedName, weight: scannedWeight, mc_override: mcToApply };
-                return newArr;
-             } else {
-                return [...prev, createItem(settings.default_hsn, scannedName, scannedWeight, mcToApply)];
-             }
-          });
-          toast.success(`Scanned: ${scannedName} (${scannedWeight}g)`);
-        }
-        barcodeBuffer = ""; 
-      } else if (e.key.length === 1) {
-        barcodeBuffer += e.key;
-      }
-    };
-
-    window.addEventListener('keydown', handleScannerKeyDown, true);
-    return () => window.removeEventListener('keydown', handleScannerKeyDown, true);
-  }, [settings.enable_barcode_system, settings.master_items, settings.default_hsn]);
 
   useEffect(() => { 
       localStorage.setItem("jj_print_scale", String(clampPrintScale(printScale))); 
@@ -2371,6 +2365,62 @@ export default function App() {
         })}
       </div>
 
+        {/* WHATSAPP BROADCAST DASHBOARD */}
+      {showBroadcastPanel && (
+        <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", backgroundColor: "#f0fdf4", zIndex: 200, overflowY: "auto" }}>
+          <div className="drawer-header" style={{ backgroundColor: "white", borderBottom: "1px solid #bbf7d0", padding: "20px 40px", position: "sticky", top: 0, zIndex: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <h3 style={{ margin: 0, color: "#166534" }}>📢 WhatsApp Agent Dashboard</h3>
+            <Button variant="outline" onClick={() => setShowBroadcastPanel(false)}>Back to Billing</Button>
+          </div>
+          <div style={{ padding: "40px", maxWidth: "800px", margin: "0 auto" }}>
+            <div style={{ display: "flex", backgroundColor: "white", borderRadius: "12px", border: "1px solid #bbf7d0", padding: "10px", marginBottom: "25px" }}>
+              <Button variant={broadcastMode === "web" ? "default" : "ghost"} onClick={() => setBroadcastMode("web")} style={{ flex: 1, backgroundColor: broadcastMode === "web" ? "#16a34a" : "transparent", color: broadcastMode === "web" ? "white" : "#475569" }}>📱 Standard WhatsApp Loop</Button>
+              <Button variant={broadcastMode === "api" ? "default" : "ghost"} onClick={() => setBroadcastMode("api")} style={{ flex: 1, backgroundColor: broadcastMode === "api" ? "#0f172a" : "transparent", color: broadcastMode === "api" ? "white" : "#475569" }}>🤖 Python Background Agent</Button>
+            </div>
+            <div style={{ backgroundColor: "white", padding: "25px", borderRadius: "12px", border: "1px solid #bbf7d0", marginBottom: "25px" }}>
+              <h4 style={{ color: "#15803d", marginTop: 0 }}>Target Audience</h4>
+              <select className="native-select" style={{ width: "100%", padding: "12px", border: "2px solid #86efac", borderRadius: "8px" }}>
+                <option value="all">Blast to ALL Supabase Customers</option>
+                <option value="recent">Recent Customers (30 Days)</option>
+              </select>
+            </div>
+            <div style={{ backgroundColor: "white", padding: "25px", borderRadius: "12px", border: "1px solid #bbf7d0", marginBottom: "25px", textAlign: "center" }}>
+              <h4 style={{ color: "#15803d", marginTop: 0, textAlign: "left" }}>Upload Design Images</h4>
+              <Input type="file" accept="image/*" multiple style={{ maxWidth: "300px", margin: "20px auto" }} />
+              {broadcastMode === "web" && <p style={{ fontSize: "0.8rem", color: "#ea580c" }}>⚠️ In Web loop mode, images must be pasted manually into chats.</p>}
+            </div>
+            <div style={{ backgroundColor: "white", padding: "25px", borderRadius: "12px", border: "1px solid #bbf7d0", marginBottom: "25px" }}>
+              <h4 style={{ color: "#15803d", marginTop: 0 }}>Offer Message</h4>
+              <textarea id="broadcastMessageInput" placeholder="Huge Festival Discount..." style={{ width: "100%", height: "150px", padding: "15px", border: "1px solid #cbd5e1", borderRadius: "8px" }} />
+            </div>
+            <Button style={{ width: "100%", backgroundColor: broadcastMode === "web" ? "#25D366" : "#0f172a", color: "white", padding: "20px", fontSize: "1.2rem" }} onClick={() => alert(broadcastMode === "web" ? "Web Loop: App will now open chats sequentially." : "Agent Mode: Sending data to Render Python backend to begin background sending.")}>
+              🚀 {broadcastMode === "web" ? "START WHATSAPP WEB LOOP" : "TRIGGER PYTHON SEND AGENT"}
+            </Button>
+          </div>
+        </section>
+      )}
+
+      {/* A4 GRID FOR PRINTER */}
+      <style>
+        {`
+          @media print {
+            @page { size: A4; margin: 10mm; }
+            .a4-barcode-grid { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 15px !important; width: 190mm !important; margin: 0 auto !important; background: white !important; }
+            .a4-label { border: 1px dashed #cccccc !important; padding: 10px !important; text-align: center !important; height: 36mm !important; display: flex !important; flex-direction: column !important; justify-content: center !important; align-items: center !important; background: white !important; page-break-inside: avoid !important; }
+          }
+        `}
+      </style>
+      <div className="print-only a4-barcode-grid" style={{ display: "none" }}>
+         {(barcodeQueue || []).filter(item => item.name === activePrintGroup).map(item => (
+           <div key={item.id} className="a4-label">
+              <p style={{ margin: "0", fontSize: "9px", fontWeight: "bold", color: "black" }}>{settings?.shop_name || "Jewellers"}</p>
+              <Barcode value={`${item.name}-${item.weight}`} width={1.1} height={38} fontSize={9} displayValue={false} />
+              <p style={{ margin: "2px 0 0 0", fontSize: "11px", fontWeight: "bold", color: "black" }}>{item.name}</p>
+              <p style={{ margin: "0", fontSize: "11px", color: "black" }}>Wt: {item.weight}g</p>
+           </div>
+         ))}
+      </div>
+
       <header className="top-bar no-print" style={{ zIndex: 50, position: "relative", flexShrink: 0, minHeight: "65px", height: "auto", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 20px", flexWrap: "wrap", gap: "10px" }}>
         <div className="brand-block" style={{ display: "flex", alignItems: "center", gap: "15px", flexWrap: "nowrap" }}>
           <div><h1 className="brand-title" style={{ margin: 0, fontSize: "1.2rem", color: "white" }}>{settings.shop_name}</h1></div>
@@ -3139,34 +3189,6 @@ export default function App() {
               }}>+ Add to Inventory</Button>
             </div>
 
-              {settings.enable_barcode_system && (
-              <div style={{ padding: "15px", backgroundColor: "#faf5ff", borderRadius: "8px", border: "1px solid #e9d5ff", marginBottom: "20px" }}>
-                <h4 style={{ margin: "0 0 10px 0", color: "#7e22ce" }}>Print Barcode Tags</h4>
-                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "10px" }}>
-                  <select className="native-select" style={{ flex: 1 }} onChange={(e) => {
-                    const selected = (settings.inventory || []).find(i => i.id === e.target.value);
-                    if(selected) { setInvItemName(selected.name); setInvWeight(selected.weightInGrams); }
-                  }}>
-                    <option value="">Select Item from Stock...</option>
-                    {(settings.inventory || []).map(inv => <option key={inv.id} value={inv.id}>{inv.name}</option>)}
-                  </select>
-                </div>
-                
-                {invItemName && invWeight && (
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "15px", backgroundColor: "white", borderRadius: "8px", border: "1px dashed #d8b4fe" }}>
-                    <div id="barcode-print-area" style={{ padding: "5px", backgroundColor: "white", textAlign: "center", width: "58mm" }}>
-                       <p style={{ margin: "0 0 2px 0", fontSize: "10px", fontWeight: "bold" }}>{settings.shop_name}</p>
-                       <Barcode value={`${invItemName}-${invWeight}`} width={1.2} height={40} fontSize={10} displayValue={false} />
-                       <p style={{ margin: "2px 0 0 0", fontSize: "12px", fontWeight: "bold" }}>{invItemName}</p>
-                       <p style={{ margin: "0", fontSize: "12px" }}>Wt: {invWeight}g</p>
-                    </div>
-                    <Button onClick={() => downloadPdf("barcode-print-area", `Barcode_${invItemName}`)} style={{ marginTop: "10px", backgroundColor: "#9333ea" }}>Download Tag</Button>
-                  </div>
-                )}
-              </div>
-            )}
-
-              
             <h4 style={{ margin: "0 0 15px 0" }}>Current Stock Levels</h4>
             {(settings.inventory || []).length === 0 ? <p style={{ color: "#64748b" }}>No inventory items added yet.</p> : (
                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
@@ -3327,7 +3349,8 @@ export default function App() {
               <Button variant={settingsTab === "design" ? "default" : "ghost"} onClick={() => setSettingsTab("design")}>Design</Button>
               <Button variant={settingsTab === "business" ? "default" : "ghost"} onClick={() => setSettingsTab("business")}>Business & Branches</Button>
               <Button variant={settingsTab === "advanced" ? "default" : "ghost"} onClick={() => setSettingsTab("advanced")}>Advanced</Button>
-              <Button variant={settingsTab === "social" ? "default" : "ghost"} onClick={() => setSettingsTab("social")}>Social Media & CRM</Button>
+              <Button variant={settingsTab === "barcode" ? "default" : "ghost"} onClick={() => setSettingsTab("barcode")}>Barcode Manager</Button>
+               <Button variant="outline" style={{ borderColor: "#25D366", color: "#166534", marginLeft: "auto" }} onClick={() => { setShowSettings(false); setShowBroadcastPanel(true); }}>📢 WhatsApp Broadcast</Button>
             </div>
 
             {settingsTab === "design" && (
@@ -3557,34 +3580,71 @@ export default function App() {
                 </div>
               </div>
             )}
-              {settingsTab === "social" && (
+
+              {settingsTab === "barcode" && (
               <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-                <div style={{ padding: "15px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px solid #bbf7d0" }}>
-                  <h4 style={{ color: "#166534", margin: "0 0 10px 0" }}>WhatsApp Business CRM (API)</h4>
-                  <p style={{ fontSize: "0.85rem", color: "#15803d", marginBottom: "15px" }}>Customer chats and details will sync automatically when webhooks are active.</p>
-                  <Button style={{ backgroundColor: "#25D366", color: "white", width: "100%", marginBottom: "10px" }}>Broadcast Offer Catalog</Button>
-                  <Button variant="outline" style={{ width: "100%", borderColor: "#25D366", color: "#166534" }} onClick={() => alert("Backend API integration required to open chat sync window.")}>Manage Automated Replies</Button>
+                <div style={{ padding: "20px", backgroundColor: "#faf5ff", borderRadius: "12px", border: "1px solid #d8b4fe" }}>
+                  <h4 style={{ color: "#7e22ce", margin: "0 0 10px 0" }}>1. Add Items to Printing Queue</h4>
+                  <div style={{ position: "relative", marginBottom: "15px" }}>
+                    <label className="select-label">Item Name (Suggestions from Master Items)</label>
+                    <Input value={bcInputName} onChange={(e) => setBcInputName(e.target.value)} onFocus={() => setBcSuggestFocus(true)} onBlur={() => setTimeout(() => setBcSuggestFocus(false), 200)} placeholder="e.g. CB Payal" />
+                    {bcSuggestFocus && bcInputName.length >= 1 && (
+                       <div style={{ position: "absolute", top: "100%", left: 0, width: "100%", backgroundColor: "white", border: "1px solid #cbd5e1", borderRadius: "6px", zIndex: 50, maxHeight: "150px", overflowY: "auto", boxShadow: "0 10px 15px rgba(0,0,0,0.1)" }}>
+                          {(settings.master_items || []).filter(mi => mi.name.toLowerCase().includes(bcInputName.toLowerCase())).map(match => (
+                              <div key={match.id} onMouseDown={(e) => { e.preventDefault(); setBcInputName(match.name); setBcSuggestFocus(false); }} style={{ padding: "10px", borderBottom: "1px solid #f1f5f9", cursor: "pointer", fontSize: "0.9rem" }}><strong>{match.name}</strong></div>
+                          ))}
+                       </div>
+                    )}
+                  </div>
+                  <div style={{ marginBottom: "15px" }}>
+                    <label className="select-label">Item Weight (Grams)</label>
+                    <Input type="number" value={bcInputWeight} onChange={(e) => setBcInputWeight(e.target.value)} placeholder="e.g. 2.3" />
+                  </div>
+                  <Button style={{ width: "100%", backgroundColor: "#9333ea", color: "white" }} onClick={() => {
+                      if (!bcInputName || !bcInputWeight) return toast.error("Enter name and weight!");
+                      setBarcodeQueue([...barcodeQueue, { id: Date.now().toString(), name: bcInputName, weight: bcInputWeight }]);
+                      setBcInputWeight(""); 
+                      toast.success(`Saved ${bcInputName} to Queue`);
+                    }}>+ Add to Print List</Button>
                 </div>
 
-                <div style={{ padding: "15px", backgroundColor: "#eff6ff", borderRadius: "8px", border: "1px solid #bfdbfe" }}>
-                  <h4 style={{ color: "#1e40af", margin: "0 0 10px 0" }}>Facebook & Instagram Sync</h4>
-                  <p style={{ fontSize: "0.85rem", color: "#1d4ed8", marginBottom: "15px" }}>Post your latest jewellery designs directly to your connected Meta pages.</p>
-                  <Button style={{ backgroundColor: "#1877F2", color: "white", width: "100%", marginBottom: "10px" }}>Connect Facebook Page</Button>
-                  <Button style={{ background: "linear-gradient(45deg, #f09433 0%, #dc2743 50%, #bc1888 100%)", color: "white", width: "100%" }}>Connect Instagram</Button>
+                <div style={{ padding: "20px", backgroundColor: "#f8fafc", borderRadius: "12px", border: "1px solid #cbd5e1" }}>
+                  <h4 style={{ color: "#0f172a", margin: "0 0 15px 0" }}>2. Organized Print Dashboard</h4>
+                  {barcodeQueue.length === 0 ? <p style={{ color: "#64748b", fontSize: "0.9rem" }}>Queue is empty.</p> : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+                      {Object.entries(barcodeQueue.reduce((acc, item) => {
+                        if (!acc[item.name]) acc[item.name] = [];
+                        acc[item.name].push(item);
+                        return acc;
+                      }, {})).map(([groupName, items]) => (
+                        <div key={groupName} style={{ backgroundColor: "white", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "15px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2px dashed #e2e8f0", paddingBottom: "10px", marginBottom: "10px" }}>
+                            <strong style={{ fontSize: "1.1rem" }}>📦 {groupName}</strong>
+                            <Button size="sm" style={{ backgroundColor: "#0f172a" }} onClick={() => { setActivePrintGroup(groupName); setTimeout(() => window.print(), 300); }}>Print {items.length} Barcodes</Button>
+                          </div>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                            {items.map((it, idx) => <span key={idx} style={{ backgroundColor: "#f1f5f9", padding: "4px 8px", borderRadius: "4px", fontSize: "0.85rem" }}>{it.weight}g</span>)}
+                          </div>
+                          <Button variant="ghost" size="sm" style={{ marginTop: "10px", color: "#ef4444", height: "auto", padding: 0 }} onClick={() => setBarcodeQueue(barcodeQueue.filter(i => i.name !== groupName))}>Clear Group</Button>
+                        </div>
+                      ))}
+                      <Button variant="outline" style={{ borderColor: "#ef4444", color: "#ef4444" }} onClick={() => setBarcodeQueue([])}>Clear Entire Queue</Button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
             
             {settingsTab === "advanced" && (
                 <div style={{ padding: "15px", backgroundColor: "#fdf4ff", borderRadius: "8px", border: "1px solid #f5d0fe", marginBottom: "15px", marginTop: "15px" }}>
-                  <h4 style={{ color: "#86198f", margin: "0 0 10px 0" }}>Barcode System</h4>
+                  <h4 style={{ color: "#86198f", margin: "0 0 10px 0" }}>Barcode Scanner Power</h4>
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <input type="checkbox" checked={settings.enable_barcode_system} onChange={(e) => setSettings({ ...settings, enable_barcode_system: e.target.checked })} style={{ width: "20px", height: "20px" }} />
-                    <strong>Enable Barcode Generation & Scanning</strong>
+                    <input type="checkbox" checked={settings.enable_barcode_system || false} onChange={(e) => setSettings({ ...settings, enable_barcode_system: e.target.checked })} style={{ width: "20px", height: "20px" }} />
+                    <strong>Enable Laser Scanner Listening</strong>
                   </div>
-                  <p style={{ fontSize: "0.8rem", color: "#a21caf", marginTop: "5px" }}>Turn this on to generate sticky barcodes in the Inventory tab and enable the scanner laser.</p>
                 </div>
             )}
+
             <Button onClick={saveSettings} style={{ width: "100%", marginTop: "20px", backgroundColor: "#0f172a", padding: "15px", fontSize: "1.1rem" }}>Save All Settings</Button>
           </div>
         </section>
