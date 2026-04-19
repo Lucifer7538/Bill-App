@@ -115,28 +115,33 @@ const getInitialPrintScale = () => {
 
 // --- NUMBER TO WORDS CONVERTER (INDIAN FORMAT) ---
 const numberToWords = (num) => {
-    if (num === 0 || isNaN(num) || !num) return "Zero Rupees Only";
-    const a = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
-    const b = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+  const validNum = Number(num);
+  if (validNum === 0 || isNaN(validNum)) return "Zero Rupees Only";
+  
+  const isNegative = validNum < 0;
+  const absNum = Math.abs(validNum);
 
-    const convertWhole = (n) => {
-        if (n < 20) return a[n];
-        if (n < 100) return b[Math.floor(n / 10)] + (n % 10 !== 0 ? " " + a[n % 10] : "");
-        if (n < 1000) return a[Math.floor(n / 100)] + " Hundred" + (n % 100 !== 0 ? " and " + convertWhole(n % 100) : "");
-        if (n < 100000) return convertWhole(Math.floor(n / 1000)) + " Thousand" + (n % 1000 !== 0 ? " " + convertWhole(n % 1000) : "");
-        if (n < 10000000) return convertWhole(Math.floor(n / 100000)) + " Lakh" + (n % 100000 !== 0 ? " " + convertWhole(n % 100000) : "");
-        return convertWhole(Math.floor(n / 10000000)) + " Crore" + (n % 10000000 !== 0 ? " " + convertWhole(n % 10000000) : "");
-    };
+  const a = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+  const b = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
 
-    const parts = String(Number(num).toFixed(2)).split(".");
-    const rupees = parseInt(parts[0], 10);
-    const paise = parseInt(parts[1], 10);
+  const convertWhole = (n) => {
+      if (n < 20) return a[n];
+      if (n < 100) return b[Math.floor(n / 10)] + (n % 10 !== 0 ? " " + a[n % 10] : "");
+      if (n < 1000) return a[Math.floor(n / 100)] + " Hundred" + (n % 100 !== 0 ? " and " + convertWhole(n % 100) : "");
+      if (n < 100000) return convertWhole(Math.floor(n / 1000)) + " Thousand" + (n % 1000 !== 0 ? " " + convertWhole(n % 1000) : "");
+      if (n < 10000000) return convertWhole(Math.floor(n / 100000)) + " Lakh" + (n % 100000 !== 0 ? " " + convertWhole(n % 100000) : "");
+      return convertWhole(Math.floor(n / 10000000)) + " Crore" + (n % 10000000 !== 0 ? " " + convertWhole(n % 10000000) : "");
+  };
 
-    let res = convertWhole(rupees).trim() + " Rupees";
-    if (paise > 0) {
-        res += " and " + convertWhole(paise).trim() + " Paise";
-    }
-    return res + " Only";
+  const parts = String(absNum.toFixed(2)).split(".");
+  const rupees = parseInt(parts[0], 10);
+  const paise = parseInt(parts[1], 10);
+
+  let res = convertWhole(rupees).trim() + " Rupees";
+  if (paise > 0) {
+      res += " and " + convertWhole(paise).trim() + " Paise";
+  }
+  return (isNegative ? "Minus " : "") + res + " Only";
 };
 // -------------------------------------------------
 
@@ -1022,8 +1027,15 @@ export default function App() {
   const reserveNumber = async (activeMode, activeBranch) => {
     setIsNumberLoading(true);
     try { 
-        const response = await axios.get(`${API}/bills/next-number`, { headers: authHeaders, params: { mode: activeMode, branch_id: activeBranch } }); 
+        // We added `t: Date.now()` to explicitly block the browser from caching the old number!
+        const response = await axios.get(`${API}/bills/next-number`, { 
+            headers: authHeaders, 
+            params: { mode: activeMode, branch_id: activeBranch, t: Date.now() } 
+        }); 
         setDocumentNumber(response.data.document_number || ""); 
+    } catch (err) {
+        console.error("Failed to fetch the next bill number", err);
+        toast.error("Network error: Could not fetch next bill number.");
     } finally { 
         setIsNumberLoading(false); 
     }
@@ -1157,12 +1169,11 @@ export default function App() {
       markDirty(); 
       setItems((prev) => prev.map((item) => (item.id === id ? { ...item, [key]: value } : item))); 
   };
-
-  const checkIsBlank = () => { 
-      return !customer.name.trim() && 
-             !customer.phone.trim() && 
-             !customer.address.trim() && 
-             !(items || []).some(i => i.description.trim() || i.weight.trim() || i.amount_override.trim()) && 
+const checkIsBlank = () => { 
+      return !(customer.name || "").trim() && 
+             !(customer.phone || "").trim() && 
+             !(customer.address || "").trim() && 
+             !(items || []).some(i => (i.description || "").trim() || (i.weight || "").trim() || (i.amount_override || "").trim()) && 
              (!discount || discount === "0") && 
              (!exchange || exchange === "0") && 
              !paymentMethod && 
@@ -1170,6 +1181,7 @@ export default function App() {
              !advanceAmount && 
              !splitCash; 
   };
+ 
   const clearBill = async (nextMode = mode, nextBranch = billBranchId) => {
     setCurrentBillId(null); 
     setEditingDocNumber(null); 
