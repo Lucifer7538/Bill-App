@@ -8,7 +8,7 @@ import re
 import uuid
 
 from dotenv import load_dotenv
-from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Query, BackgroundTasks
 from motor.motor_asyncio import AsyncIOMotorClient
 from pymongo import ReturnDocument
 import requests
@@ -464,6 +464,76 @@ async def sync_old_points():
             await customers_collection.update_one(query, {"$inc": {"points": points_to_add, "loyalty_points": points_to_add, "credit": credit_to_add, "store_credit": credit_to_add}}, upsert=True)
             updated_count += 1
     return {"message": f"Successfully synced points from {updated_count} old bills!"}
+
+# --- THE PYTHON WHATSAPP AGENT (BACKGROUND TASK) ---
+async def run_whatsapp_agent(target_audience: str, message: str, branch_id: str):
+    print(f"🤖 WhatsApp Agent Started! Target: {target_audience}")
+    
+    # 1. Fetch the target audience from MongoDB
+    query = {"phone": {"$ne": ""}, "phone": {"$exists": True}}
+    
+    if target_audience == "recent":
+        # Customers from the last 30 days
+        thirty_days_ago = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
+        query["updated_at"] = {"$gte": thirty_days_ago}
+        
+    customers = await customers_collection.find(query).to_list(None)
+    print(f"🤖 Found {len(customers)} customers to message.")
+
+    # 2. Loop through customers and send messages
+    for idx, customer in enumerate(customers):
+        raw_phone = customer.get("phone", "")
+        # Clean the phone number (remove spaces, dashes)
+        clean_phone = "".join(filter(str.isdigit, raw_phone))
+        
+        # Ensure it has the India country code
+        if len(clean_phone) == 10:
+            clean_phone = f"91{clean_phone}"
+            
+        if len(clean_phone) < 10:
+            continue # Skip invalid numbers
+
+        # Personalize the message
+        personalized_msg = message.replace("{name}", customer.get("name", "Valued Customer"))
+
+        # ---------------------------------------------------------
+        # ⚠️ INSERT YOUR WHATSAPP API LOGIC HERE ⚠️
+        # Example using a standard API (like UltraMsg or Meta Cloud)
+        # ---------------------------------------------------------
+        try:
+            print(f"[{idx+1}/{len(customers)}] Sending to {clean_phone}...")
+            
+            # Example API Call (Uncomment and replace with your provider's details)
+            # api_url = "https://api.ultramsg.com/YOUR_INSTANCE_ID/messages/chat"
+            # payload = {
+            #     "token": "YOUR_API_TOKEN",
+            #     "to": clean_phone,
+            #     "body": personalized_msg
+            # }
+            # requests.post(api_url, json=payload)
+            
+            # Anti-Ban Safety Delay: Wait 3 to 5 seconds between messages
+            await asyncio.sleep(4) 
+            
+        except Exception as e:
+            print(f"❌ Failed to send to {clean_phone}: {e}")
+
+    print("✅ WhatsApp Broadcast Complete!")
+
+# --- THE API ENDPOINT TO TRIGGER THE AGENT ---
+@api_router.post("/whatsapp/broadcast")
+async def start_broadcast(payload: dict, background_tasks: BackgroundTasks, _=Depends(require_auth)):
+    target_audience = payload.get("audience", "all")
+    message = payload.get("message", "")
+    branch_id = payload.get("branch_id", "B1")
+    
+    if not message:
+        raise HTTPException(400, "Message cannot be empty.")
+
+    # Send the task to the background so the frontend doesn't get stuck loading
+    background_tasks.add_task(run_whatsapp_agent, target_audience, message, branch_id)
+    
+    return {"status": "success", "message": "🤖 Background agent triggered successfully!"}
 
 app.include_router(api_router)
 
