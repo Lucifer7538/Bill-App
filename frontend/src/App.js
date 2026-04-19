@@ -358,44 +358,6 @@ export default function App() {
   
   const isMobileSplit = viewportWidth <= 1024;
 
-  // --- BARCODE SCANNER BRAIN ---
-  useEffect(() => {
-    if (!settings.enable_barcode_system) return;
-    let barcodeBuffer = "";
-    let lastKeyTime = Date.now();
-    
-    const handleScanner = (e) => {
-      const tag = document.activeElement?.tagName.toLowerCase();
-      if (tag === 'input' || tag === 'textarea') return;
-
-      const currentTime = Date.now();
-      if (currentTime - lastKeyTime > 40) barcodeBuffer = "";
-      lastKeyTime = currentTime;
-
-      if (e.key === "Enter" && barcodeBuffer.length > 3) {
-        e.preventDefault();
-        const [scName, scWt] = barcodeBuffer.split("-");
-        if (scName && scWt) {
-          const masterMatch = (settings.master_items || []).find(mi => mi.name.toLowerCase() === scName.toLowerCase());
-          setItems(prev => {
-            const last = prev[prev.length - 1];
-            if (!last.description && !last.weight) {
-               const narr = [...prev]; 
-               narr[narr.length - 1] = { ...last, description: scName, weight: scWt, mc_override: masterMatch?.mc ? String(masterMatch.mc) : "" };
-               return narr;
-            }
-            return [...prev, createItem(settings.default_hsn, scName, scWt, masterMatch?.mc ? String(masterMatch.mc) : "")];
-          });
-          toast.success(`Scanned: ${scName}`);
-        }
-        barcodeBuffer = "";
-      } else if (e.key.length === 1) barcodeBuffer += e.key;
-    };
-
-    window.addEventListener('keydown', handleScanner, true);
-    return () => window.removeEventListener('keydown', handleScanner, true);
-  }, [settings.enable_barcode_system, settings.master_items, settings.default_hsn]);
-  
   const [isDirty, setIsDirty] = useState(false);
   const markDirty = () => setIsDirty(true);
   
@@ -516,6 +478,44 @@ export default function App() {
   const activeGlobalBranch = (settings.branches || []).find(b => b.id === globalBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
   const activeBillBranch = (settings.branches || []).find(b => b.id === billBranchId) || (settings.branches || [])[0] || defaultSettings.branches[0];
 
+  // --- BARCODE SCANNER BRAIN ---
+  useEffect(() => {
+    if (!settings.enable_barcode_system) return;
+    let barcodeBuffer = "";
+    let lastKeyTime = Date.now();
+    
+    const handleScanner = (e) => {
+      const tag = document.activeElement?.tagName.toLowerCase();
+      if (tag === 'input' || tag === 'textarea') return;
+
+      const currentTime = Date.now();
+      if (currentTime - lastKeyTime > 40) barcodeBuffer = "";
+      lastKeyTime = currentTime;
+
+      if (e.key === "Enter" && barcodeBuffer.length > 3) {
+        e.preventDefault();
+        const [scName, scWt] = barcodeBuffer.split("-");
+        if (scName && scWt) {
+          const masterMatch = (settings.master_items || []).find(mi => mi.name.toLowerCase() === scName.toLowerCase());
+          setItems(prev => {
+            const last = prev[prev.length - 1];
+            if (!last.description && !last.weight) {
+               const narr = [...prev]; 
+               narr[narr.length - 1] = { ...last, description: scName, weight: scWt, mc_override: masterMatch?.mc ? String(masterMatch.mc) : "" };
+               return narr;
+            }
+            return [...prev, createItem(settings.default_hsn, scName, scWt, masterMatch?.mc ? String(masterMatch.mc) : "")];
+          });
+          toast.success(`Scanned: ${scName}`);
+        }
+        barcodeBuffer = "";
+      } else if (e.key.length === 1) barcodeBuffer += e.key;
+    };
+
+    window.addEventListener('keydown', handleScanner, true);
+    return () => window.removeEventListener('keydown', handleScanner, true);
+  }, [settings.enable_barcode_system, settings.master_items, settings.default_hsn]);
+  
   // --- NEW: HYBRID INTERNET SPELL CHECKER ENGINE ---
   useEffect(() => {
     const timers = {};
