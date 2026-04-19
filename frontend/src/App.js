@@ -343,6 +343,7 @@ const GLOBAL_PRINT_CSS = `
 export default function App() {
   const [viewportWidth, setViewportWidth] = useState(window.innerWidth);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [printType, setPrintType] = useState("bill");
 
   useEffect(() => {
       const handleResize = () => setViewportWidth(window.innerWidth);
@@ -762,7 +763,7 @@ export default function App() {
       if (checkKey('focus_redeem')) { e.preventDefault(); e.stopPropagation(); document.getElementById('redeemedPointsInput')?.focus(); return; }
       if (checkKey('focus_credit')) { e.preventDefault(); e.stopPropagation(); document.getElementById('appliedCreditInput')?.focus(); return; }
       if (checkKey('download_pdf')) { e.preventDefault(); e.stopPropagation(); downloadPdf("bill-print-root", documentNumber || mode); return; }
-      if (checkKey('print_bill')) { e.preventDefault(); e.stopPropagation(); window.print(); return; }
+      if (checkKey('print_bill')) { e.preventDefault(); e.stopPropagation(); setPrintType("bill"); setTimeout(() => window.print(), 100); return; }
       if (checkKey('iot_qr')) { e.preventDefault(); e.stopPropagation(); sendQrToDisplay(computed.grandTotal, mode === 'invoice' ? activeBillBranch.invoice_upi_id : activeBillBranch.estimate_upi_id); return; }
     };
     window.addEventListener('keydown', handleGlobalKeyDown, true);
@@ -2014,7 +2015,7 @@ const checkIsBlank = () => {
         
         <div className="no-print" style={{ marginBottom: '20px', display: 'flex', gap: '15px' }}>
           <Button onClick={() => downloadPdf("public-bill-root", publicBill.document_number)}>Download PDF</Button>
-          <Button variant="outline" onClick={() => window.print()}>Print Bill</Button>
+          <Button variant="outline" onClick={() => { setPrintType("bill"); setTimeout(() => window.print(), 100); }}>Print Bill</Button>
         </div>
 
         <section id="public-bill-root" className="bill-sheet" style={{ "--print-scale-factor": 1, position: 'relative', zIndex: 1 }}>
@@ -2427,15 +2428,19 @@ const checkIsBlank = () => {
           }
         `}
       </style>
-      <div className="print-only a4-barcode-grid" style={{ display: "none" }}>
-         {(barcodeQueue || []).filter(item => item.name === activePrintGroup).map(item => (
-           <div key={item.id} className="a4-label">
-              <p style={{ margin: "0", fontSize: "9px", fontWeight: "bold", color: "black" }}>{settings?.shop_name || "Jewellers"}</p>
-              <Barcode value={`${item.name}-${item.weight}`} width={1.1} height={38} fontSize={9} displayValue={false} />
-              <p style={{ margin: "2px 0 0 0", fontSize: "11px", fontWeight: "bold", color: "black" }}>{item.name}</p>
-              <p style={{ margin: "0", fontSize: "11px", color: "black" }}>Wt: {item.weight}g</p>
-           </div>
-         ))}
+      
+      {/* ADDED WRAPPER AND PRINT TYPE CHECK */}
+      <div className={`print-only ${printType === "bill" ? "no-print" : ""}`} style={{ display: "none", width: "100%", justifyContent: "center" }}>
+         <div className="a4-barcode-grid">
+           {(barcodeQueue || []).filter(item => item.name === activePrintGroup).map(item => (
+             <div key={item.id} className="a4-label">
+                <p style={{ margin: "0", fontSize: "9px", fontWeight: "bold", color: "black" }}>{settings?.shop_name || "Jewellers"}</p>
+                <Barcode value={`${item.name}-${item.weight}`} width={1.1} height={38} fontSize={9} displayValue={false} />
+                <p style={{ margin: "2px 0 0 0", fontSize: "11px", fontWeight: "bold", color: "black" }}>{item.name}</p>
+                <p style={{ margin: "0", fontSize: "11px", color: "black" }}>Wt: {item.weight}g</p>
+             </div>
+           ))}
+         </div>
       </div>
 
       <header className="top-bar no-print" style={{ zIndex: 50, position: "relative", flexShrink: 0, minHeight: "65px", height: "auto", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 20px", flexWrap: "wrap", gap: "10px" }}>
@@ -2472,7 +2477,7 @@ const checkIsBlank = () => {
 
       <main className="main-layout" style={isPrinting ? { height: "auto", overflow: "visible", display: "block" } : { flex: 1, display: "flex", flexDirection: isMobileSplit ? "column" : "row", overflowY: isMobileSplit ? "auto" : "hidden", overflowX: "hidden", backgroundColor: "#f1f5f9", minHeight: 0, paddingBottom: isMobileSplit ? "40px" : "0" }}>
         
-        <section style={isPrinting ? { padding: 0, margin: 0, overflow: "visible" } : { flex: isMobileSplit ? "none" : "3", overflow: isMobileSplit ? "visible" : "auto", padding: "20px", height: isMobileSplit ? "max-content" : "100%" }}>
+        <section className={printType === "barcode" ? "no-print" : ""} style={isPrinting ? { padding: 0, margin: 0, overflow: "visible" } : { flex: isMobileSplit ? "none" : "3", overflow: isMobileSplit ? "visible" : "auto", padding: "20px", height: isMobileSplit ? "max-content" : "100%" }}>
           <div id="bill-print-root" className="bill-sheet" style={{ "--print-scale-factor": (printScale / 100).toFixed(3), position: 'relative', zIndex: 1, margin: "0 auto" }}>
             {(txType === "sale" ? isPaymentDone : isBalancePaid) && <div className="watermark-done">FULLY PAID</div>}
             <div className="bill-header">
@@ -2878,7 +2883,7 @@ const checkIsBlank = () => {
             <Button onClick={() => setShowLedger(true)} style={{ backgroundColor: "#16a34a", color: "white" }}>Daily Sales & Ledger</Button>
             <Button onClick={() => { setShowRecentBills(true); setBillSearchQuery(""); setRecentBranchFilter("ALL"); setRecentModeFilter("ALL"); setRecentDateFilter("ALL"); }} variant="outline">Recent Bills</Button>
             <Button onClick={() => downloadPdf("bill-print-root", documentNumber || mode)}>Download PDF</Button>
-            <Button onClick={() => window.print()}>Print</Button>
+            <Button onClick={() => { setPrintType("bill"); setTimeout(() => window.print(), 100); }}>Print</Button>
             <Button onClick={shareWhatsApp}>WhatsApp Link</Button>
             <Button onClick={shareEmail}>Email Link</Button>
             <Button onClick={handleNewBillClick} variant="outline">New Bill</Button>
@@ -3660,7 +3665,7 @@ const checkIsBlank = () => {
                         <div key={groupName} style={{ backgroundColor: "white", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "15px" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2px dashed #e2e8f0", paddingBottom: "10px", marginBottom: "10px" }}>
                             <strong style={{ fontSize: "1.1rem" }}>📦 {groupName}</strong>
-                            <Button size="sm" style={{ backgroundColor: "#0f172a" }} onClick={() => { setActivePrintGroup(groupName); setTimeout(() => window.print(), 300); }}>Print {items.length} Barcodes</Button>
+                            <Button size="sm" style={{ backgroundColor: "#0f172a" }} onClick={() => { setActivePrintGroup(groupName); setPrintType("barcode"); setTimeout(() => window.print(), 300); }}>Print {items.length} Barcodes</Button>
                           </div>
                           <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
                             {items.map((it, idx) => <span key={idx} style={{ backgroundColor: "#f1f5f9", padding: "4px 8px", borderRadius: "4px", fontSize: "0.85rem" }}>{it.weight}g</span>)}
