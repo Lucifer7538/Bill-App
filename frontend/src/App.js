@@ -1050,19 +1050,23 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
+ useEffect(() => {
     if (isPublicView) return;
     const bootstrap = async () => { 
         if (!token) return; 
         try { 
             await loadSettings(); 
             await fetchCloudStatus(); 
+            
+            // THIS IS THE NEW LINE YOU NEED:
+            reserveNumber("invoice", "B1"); 
+            
         } catch { 
             toast.error("Could not load billing settings."); 
         } 
     };
     bootstrap();
-  }, [token, isPublicView]); 
+  }, [token, isPublicView]);
 
   useEffect(() => {
     if (!token || isPublicView) return;
@@ -1210,12 +1214,13 @@ const checkIsBlank = () => {
     setBillDate(today()); 
     setIsDirty(false); 
     await reserveNumber(nextMode, nextBranch); 
-    // --- NEW LOGIC: USE THE RECYCLED NUMBER IF ONE EXISTS ---
+   -
+   // --- NEW LOGIC: USE THE RECYCLED NUMBER IF ONE EXISTS ---
     const recycleKey = `recycled_${nextMode}_${nextBranch}`;
-    if (settings[recycleKey]) {
+    if (settings[recycleKey] && settings[recycleKey] !== null) {
         setDocumentNumber(settings[recycleKey]);
-        const newSettings = { ...settings };
-        delete newSettings[recycleKey];
+        // By explicitly setting it to null, we force the database to erase it!
+        const newSettings = { ...settings, [recycleKey]: null };
         setSettings(newSettings);
         axios.put(`${API}/settings`, newSettings, { headers: authHeaders }).catch(console.error);
     }
