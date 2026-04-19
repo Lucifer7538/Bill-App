@@ -1298,25 +1298,34 @@ const checkIsBlank = () => {
     goToBillTop();
   };
 
-  const handleDeleteBill = async (bill) => {
+ const handleDeleteBill = async (bill) => {
     if (!window.confirm(`Are you sure you want to permanently delete ${bill.document_number}?`)) return;
     try { 
         await axios.delete(`${API}/bills/${bill.document_number}`, { headers: authHeaders }); 
         setRecentBillsList((prev) => prev.filter((b) => b.document_number !== bill.document_number)); 
-      // --- NEW LOGIC: ONLY CATCH THE HIGHEST NUMBER ---
+        
+        // --- FIXED RECYCLING LOGIC ---
         const sameModeBills = recentBillsList.filter(b => b.mode === bill.mode && b.branch_id === bill.branch_id);
         const getNum = (docStr) => parseInt((docStr || "").replace(/\D/g, '')) || 0;
         const deletedNum = getNum(bill.document_number);
         const isHighest = sameModeBills.every(b => getNum(b.document_number) <= deletedNum);
 
-        if (isHighest) {
+        let recycledNum = null;
+        if (isHighest) recycledNum = bill.document_number;
+
+        if (currentBillId === bill.id) { 
+            await clearBill(mode, billBranchId); 
+            // If we deleted the open bill, immediately apply the recycled number to the screen!
+            if (recycledNum) setDocumentNumber(recycledNum);
+        } else if (recycledNum) {
+            // If we deleted from the drawer, save the recycled number to the cloud for the next blank bill
             const recycleKey = `recycled_${bill.mode}_${bill.branch_id}`;
-            const newSettings = { ...settings, [recycleKey]: bill.document_number };
+            const newSettings = { ...settings, [recycleKey]: recycledNum };
             setSettings(newSettings);
-            axios.put(`${API}/settings`, newSettings, { headers: authHeaders }).catch(console.error);
+            await axios.put(`${API}/settings`, newSettings, { headers: authHeaders });
         }
-        // ------------------------------------------------
-        if (currentBillId === bill.id) await clearBill(mode, billBranchId); 
+        // -----------------------------
+        
         toast.success(`${bill.document_number} deleted successfully.`); 
         await loadSettings(); 
     } catch { 
