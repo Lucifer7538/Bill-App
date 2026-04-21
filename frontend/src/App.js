@@ -501,22 +501,32 @@ export default function App() {
 
       if (e.key === "Enter" && barcodeBuffer.length > 3) {
         e.preventDefault();
-        const [scName, scWt] = barcodeBuffer.split("-");
-        if (scName && scWt) {
-          const masterMatch = (settings.master_items || []).find(mi => mi.name.toLowerCase() === scName.toLowerCase());
-          setItems(prev => {
-            const last = prev[prev.length - 1];
-            const mcVal = masterMatch?.mc ? String(masterMatch.mc) : "";
-            const amtVal = masterMatch?.fixed_amount ? String(masterMatch.fixed_amount) : "";
-            
-            if (!last.description && !last.weight) {
-               const narr = [...prev]; 
-               narr[narr.length - 1] = { ...last, description: scName, weight: scWt, mc_override: mcVal, amount_override: amtVal };
-               return narr;
-            }
-            return [...prev, createItem(settings.default_hsn, scName, scWt, mcVal, amtVal)];
-          });
-          toast.success(`Scanned: ${scName}`);
+        
+        // --- FIX: Safely split only at the very last hyphen ---
+        const lastDash = barcodeBuffer.lastIndexOf("-");
+        if (lastDash !== -1) {
+          const scName = barcodeBuffer.substring(0, lastDash);
+          let scWt = barcodeBuffer.substring(lastDash + 1);
+          
+          // Clear the weight box if it's a fixed amount item
+          if (scWt.toLowerCase() === "fixed") scWt = ""; 
+          
+          if (scName) {
+            const masterMatch = (settings.master_items || []).find(mi => mi.name.toLowerCase() === scName.toLowerCase());
+            setItems(prev => {
+              const last = prev[prev.length - 1];
+              const mcVal = masterMatch?.mc ? String(masterMatch.mc) : "";
+              const amtVal = masterMatch?.fixed_amount ? String(masterMatch.fixed_amount) : "";
+              
+              if (!last.description && !last.weight) {
+                 const narr = [...prev]; 
+                 narr[narr.length - 1] = { ...last, description: scName, weight: scWt, mc_override: mcVal, amount_override: amtVal };
+                 return narr;
+              }
+              return [...prev, createItem(settings.default_hsn, scName, scWt, mcVal, amtVal)];
+            });
+            toast.success(`Scanned: ${scName}`);
+          }
         }
         barcodeBuffer = "";
       } else if (e.key.length === 1) barcodeBuffer += e.key;
