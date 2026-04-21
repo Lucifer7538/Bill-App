@@ -2518,7 +2518,7 @@ const checkIsBlank = () => {
            {(barcodeQueue || []).filter(item => item.name === activePrintGroup).map(item => (
              <div key={item.id} className="a4-label">
                 <p style={{ margin: "0", fontSize: "9px", fontWeight: "bold", color: "black" }}>{settings?.shop_name || "Jewellers"}</p>
-                <Barcode value={`${item.name}-${item.weight || 'Fixed'}`} width={1.1} height={38} fontSize={9} displayValue={false} />
+                <Barcode value={`${item.name}-${item.weight || 'Fixed'}`} width={1.2} height={40} displayValue={false} margin={8} background="#ffffff" />
                 <p style={{ margin: "2px 0 0 0", fontSize: "11px", fontWeight: "bold", color: "black" }}>{item.name}</p>
                 
                 <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "center" }}>
