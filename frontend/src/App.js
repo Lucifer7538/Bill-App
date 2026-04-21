@@ -429,6 +429,7 @@ export default function App() {
   const [bcInputWeight, setBcInputWeight] = useState("");
   const [bcSuggestFocus, setBcSuggestFocus] = useState(false);
   const [activePrintGroup, setActivePrintGroup] = useState("");
+  const [printWithPrice, setPrintWithPrice] = useState(false);
   const [settingsTab, setSettingsTab] = useState("design"); 
   const [showAbout, setShowAbout] = useState(false);
   const [showRecentBills, setShowRecentBills] = useState(false);
@@ -2502,19 +2503,22 @@ const checkIsBlank = () => {
       </style>
       
       {/* ADDED WRAPPER AND PRINT TYPE CHECK */}
-      <div className={`print-only ${printType === "bill" ? "no-print" : ""}`} style={{ display: "none", width: "100%", justifyContent: "center" }}>
+     <div className={`print-only ${printType === "bill" ? "no-print" : ""}`} style={{ display: "none", width: "100%", justifyContent: "center" }}>
          <div className="a4-barcode-grid">
            {(barcodeQueue || []).filter(item => item.name === activePrintGroup).map(item => (
              <div key={item.id} className="a4-label">
                 <p style={{ margin: "0", fontSize: "9px", fontWeight: "bold", color: "black" }}>{settings?.shop_name || "Jewellers"}</p>
-                <Barcode value={`${item.name}-${item.weight}`} width={1.1} height={38} fontSize={9} displayValue={false} />
+                <Barcode value={`${item.name}-${item.weight || 'Fixed'}`} width={1.1} height={38} fontSize={9} displayValue={false} />
                 <p style={{ margin: "2px 0 0 0", fontSize: "11px", fontWeight: "bold", color: "black" }}>{item.name}</p>
-                <p style={{ margin: "0", fontSize: "11px", color: "black" }}>Wt: {item.weight}g</p>
+                
+                <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "center" }}>
+                    {item.weight ? <p style={{ margin: "0", fontSize: "11px", color: "black" }}>Wt: {item.weight}g</p> : null}
+                    {printWithPrice && item.price ? <p style={{ margin: "0", fontSize: "11px", fontWeight: "bold", color: "black" }}>₹{item.price}</p> : null}
+                </div>
              </div>
            ))}
          </div>
       </div>
-
       <header className="top-bar no-print" style={{ zIndex: 50, position: "relative", flexShrink: 0, minHeight: "65px", height: "auto", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 20px", flexWrap: "wrap", gap: "10px" }}>
         <div className="brand-block" style={{ display: "flex", alignItems: "center", gap: "15px", flexWrap: "nowrap" }}>
           <div><h1 className="brand-title" style={{ margin: 0, fontSize: "1.2rem", color: "white" }}>{settings.shop_name}</h1></div>
@@ -3726,8 +3730,19 @@ const checkIsBlank = () => {
                     <Input type="number" value={bcInputWeight} onChange={(e) => setBcInputWeight(e.target.value)} placeholder="e.g. 2.3" />
                   </div>
                   <Button style={{ width: "100%", backgroundColor: "#9333ea", color: "white" }} onClick={() => {
-                      if (!bcInputName || !bcInputWeight) return toast.error("Enter name and weight!");
-                      setBarcodeQueue([...barcodeQueue, { id: Date.now().toString(), name: bcInputName, weight: bcInputWeight }]);
+                      if (!bcInputName) return toast.error("Enter item name!");
+                      
+                      // Grabs ONLY the fixed_amount from Master Items
+                      const masterMatch = (settings.master_items || []).find(mi => mi.name.toLowerCase() === bcInputName.toLowerCase());
+                      const fixedPrice = masterMatch?.fixed_amount ? Number(masterMatch.fixed_amount) : null;
+
+                      setBarcodeQueue([...barcodeQueue, { 
+                          id: Date.now().toString(), 
+                          name: bcInputName, 
+                          weight: bcInputWeight || "", 
+                          price: fixedPrice 
+                      }]);
+                      
                       setBcInputWeight(""); 
                       toast.success(`Saved ${bcInputName} to Queue`);
                     }}>+ Add to Print List</Button>
@@ -3743,12 +3758,18 @@ const checkIsBlank = () => {
                         return acc;
                       }, {})).map(([groupName, items]) => (
                         <div key={groupName} style={{ backgroundColor: "white", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "15px" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2px dashed #e2e8f0", paddingBottom: "10px", marginBottom: "10px" }}>
+                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2px dashed #e2e8f0", paddingBottom: "10px", marginBottom: "10px", flexWrap: "wrap", gap: "10px" }}>
                             <strong style={{ fontSize: "1.1rem" }}>📦 {groupName}</strong>
-                            <Button size="sm" style={{ backgroundColor: "#0f172a" }} onClick={() => { setActivePrintGroup(groupName); setPrintType("barcode"); setTimeout(() => window.print(), 300); }}>Print {items.length} Barcodes</Button>
+                            <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
+                               <label style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "0.9rem", cursor: "pointer", color: "#475569", fontWeight: "bold" }}>
+                                 <input type="checkbox" checked={printWithPrice} onChange={(e) => setPrintWithPrice(e.target.checked)} style={{ width: "16px", height: "16px" }} />
+                                 Print with Price
+                               </label>
+                               <Button size="sm" style={{ backgroundColor: "#0f172a" }} onClick={() => { setActivePrintGroup(groupName); setPrintType("barcode"); setTimeout(() => window.print(), 300); }}>Print {items.length} Barcodes</Button>
+                            </div>
                           </div>
                           <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-                            {items.map((it, idx) => <span key={idx} style={{ backgroundColor: "#f1f5f9", padding: "4px 8px", borderRadius: "4px", fontSize: "0.85rem" }}>{it.weight}g</span>)}
+                            {items.map((it, idx) => <span key={idx} style={{ backgroundColor: "#f1f5f9", padding: "4px 8px", borderRadius: "4px", fontSize: "0.85rem" }}>{it.weight ? `${it.weight}g` : "Fixed"}</span>)}
                           </div>
                           <Button variant="ghost" size="sm" style={{ marginTop: "10px", color: "#ef4444", height: "auto", padding: 0 }} onClick={() => setBarcodeQueue(barcodeQueue.filter(i => i.name !== groupName))}>Clear Group</Button>
                         </div>
