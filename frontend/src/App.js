@@ -3296,7 +3296,6 @@ const checkIsBlank = () => {
 
                  const newLog = { id: Date.now().toString(), date: today(), name: invItemName.trim(), weight: invWeight, unit: invUnit, quantity: addedQty, branch_id: globalBranchId };
 
-                 const newLog = { id: Date.now().toString(), date: today(), name: invItemName.trim(), weight: invWeight, unit: invUnit, quantity: addedQty };
                  currentLogs.unshift(newLog); 
 
                  const newSettings = { ...settings, inventory: currentInv, inventory_logs: currentLogs };
