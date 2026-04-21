@@ -13,14 +13,14 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL ? BACKEND_URL.replace(/\/$/, '') : ""}/api`;
 const STATIC_ABOUT_QR_URL = process.env.REACT_APP_ABOUT_QR_URL;
 
-const createItem = (defaultHsn = "", desc = "", wt = "", mc = "") => ({
+const createItem = (defaultHsn = "", desc = "", wt = "", mc = "", fixedAmt = "") => ({
   id: `${Date.now()}-${Math.random()}`, 
   description: desc, 
   hsn: defaultHsn, 
   weight: wt, 
   quantity: "1", 
   rate_override: "", 
-  amount_override: "", 
+  amount_override: fixedAmt, 
   mc_override: mc
 });
 const defaultSettings = {
@@ -505,12 +505,15 @@ export default function App() {
           const masterMatch = (settings.master_items || []).find(mi => mi.name.toLowerCase() === scName.toLowerCase());
           setItems(prev => {
             const last = prev[prev.length - 1];
+            const mcVal = masterMatch?.mc ? String(masterMatch.mc) : "";
+            const amtVal = masterMatch?.fixed_amount ? String(masterMatch.fixed_amount) : "";
+            
             if (!last.description && !last.weight) {
                const narr = [...prev]; 
-               narr[narr.length - 1] = { ...last, description: scName, weight: scWt, mc_override: masterMatch?.mc ? String(masterMatch.mc) : "" };
+               narr[narr.length - 1] = { ...last, description: scName, weight: scWt, mc_override: mcVal, amount_override: amtVal };
                return narr;
             }
-            return [...prev, createItem(settings.default_hsn, scName, scWt, masterMatch?.mc ? String(masterMatch.mc) : "")];
+            return [...prev, createItem(settings.default_hsn, scName, scWt, mcVal, amtVal)];
           });
           toast.success(`Scanned: ${scName}`);
         }
@@ -1631,6 +1634,19 @@ const checkIsBlank = () => {
   };
 
  const saveBill = async () => {
+   // --- NEW VALIDATION: Check Customer Details ---
+    if (!customer.name.trim() || !customer.phone.trim()) {
+        toast.error("⚠️ Customer details missing! Please fill in both Name and Phone.");
+        document.getElementById('customerNameInput')?.focus();
+        return; // Stops the function from proceeding
+    }
+
+    // --- NEW VALIDATION: Check Item Descriptions ---
+    const missingDescription = computed.items.some(item => !item.description || !item.description.trim());
+    if (missingDescription) {
+        toast.error("⚠️ Item details missing! Please add a description for all items before saving.");
+        return; // Stops the function from proceeding
+    }
     if (txType === "sale" && !paymentMethod) { 
         toast.error("Please select a payment method."); 
         return; 
@@ -1713,8 +1729,11 @@ const checkIsBlank = () => {
         
         computed.items.forEach(item => {
            const desc = (item.description || "").trim().toLowerCase();
-           const invIndex = updatedInventory.findIndex(inv => (inv.name || "").trim().toLowerCase() === desc);
-           
+           // NEW: Added branch check so B1 sales don't deduct B2 stock
+           const invIndex = updatedInventory.findIndex(inv => 
+              (inv.name || "").trim().toLowerCase() === desc && 
+              inv.branch_id === billBranchId
+           );
            if (invIndex !== -1 && num(item.weight) > 0) {
               // 1. Deduct the Weight
               const totalItemWeight = num(item.weight) * num(item.quantity || 1);
@@ -2779,13 +2798,15 @@ const checkIsBlank = () => {
                      <div style={{ position: "absolute", top: "100%", left: 0, width: "100%", backgroundColor: "white", border: "1px solid #cbd5e1", borderRadius: "6px", zIndex: 50, maxHeight: "200px", overflowY: "auto", boxShadow: "0 10px 15px rgba(0,0,0,0.1)" }}>
                         {(settings.master_items || []).filter(mi => mi.name.toLowerCase().includes(item.description.toLowerCase())).length > 0 ? (
                             (settings.master_items || []).filter(mi => mi.name.toLowerCase().includes(item.description.toLowerCase())).map(match => (
-                                <div key={match.id} onMouseDown={(e) => {
+                               <div key={match.id} onMouseDown={(e) => {
                                     e.preventDefault(); 
                                     updateItem(item.id, "description", match.name);
                                     if (match.mc) updateItem(item.id, "mc_override", String(match.mc));
+                                    if (match.fixed_amount) updateItem(item.id, "amount_override", String(match.fixed_amount));
                                     setDescFocusId(null);
                                 }} style={{ padding: "10px", borderBottom: "1px solid #f1f5f9", cursor: "pointer", fontSize: "0.9rem" }}>
-                                   <strong style={{ color: "#0f172a" }}>{match.name}</strong> {match.mc ? <span style={{ color: "#16a34a", fontSize: "0.8rem", marginLeft: "5px" }}>(Auto-MC: ₹{match.mc}/g)</span> : ""}
+                                   <strong style={{ color: "#0f172a" }}>{match.name}</strong> 
+                                   {match.fixed_amount ? <span style={{ color: "#16a34a", fontSize: "0.8rem", marginLeft: "5px" }}>(Auto-Fixed: ₹{match.fixed_amount})</span> : (match.mc ? <span style={{ color: "#16a34a", fontSize: "0.8rem", marginLeft: "5px" }}>(Auto-MC: ₹{match.mc}/g)</span> : "")}
                                 </div>
                             ))
                         ) : (
@@ -3264,13 +3285,16 @@ const checkIsBlank = () => {
                  let currentInv = [...(settings.inventory || [])];
                  let currentLogs = [...(settings.inventory_logs || [])];
 
-                 const existingIndex = currentInv.findIndex(i => i.name.toLowerCase() === invItemName.toLowerCase().trim());
+                // NEW: Tag new stock and logs with globalBranchId
+                 const existingIndex = currentInv.findIndex(i => i.name.toLowerCase() === invItemName.toLowerCase().trim() && i.branch_id === globalBranchId);
                  if (existingIndex !== -1) { 
                      currentInv[existingIndex].weightInGrams += weightGrams; 
                      currentInv[existingIndex].quantity = (currentInv[existingIndex].quantity || 0) + addedQty;
                  } else { 
-                     currentInv.push({ id: Date.now().toString(), name: invItemName.trim(), weightInGrams: weightGrams, quantity: addedQty }); 
+                     currentInv.push({ id: Date.now().toString(), name: invItemName.trim(), weightInGrams: weightGrams, quantity: addedQty, branch_id: globalBranchId }); 
                  }
+
+                 const newLog = { id: Date.now().toString(), date: today(), name: invItemName.trim(), weight: invWeight, unit: invUnit, quantity: addedQty, branch_id: globalBranchId };
 
                  const newLog = { id: Date.now().toString(), date: today(), name: invItemName.trim(), weight: invWeight, unit: invUnit, quantity: addedQty };
                  currentLogs.unshift(newLog); 
@@ -3288,9 +3312,10 @@ const checkIsBlank = () => {
             </div>
 
             <h4 style={{ margin: "0 0 15px 0" }}>Current Stock Levels</h4>
-            {(settings.inventory || []).length === 0 ? <p style={{ color: "#64748b" }}>No inventory items added yet.</p> : (
+            {/* NEW: Added .filter() so you only see the stock for the branch you are currently viewing */}
+            {(settings.inventory || []).filter(inv => inv.branch_id === globalBranchId).length === 0 ? <p style={{ color: "#64748b" }}>No inventory items added for this branch yet.</p> : (
                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                 {(settings.inventory || []).map((inv, idx) => (
+                 {(settings.inventory || []).filter(inv => inv.branch_id === globalBranchId).map((inv, idx) => (
                     <div key={inv.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px", border: "1px solid #cbd5e1", borderRadius: "8px", backgroundColor: "white" }}>
                        <strong style={{ fontSize: "1.1rem" }}>{inv.name}</strong>
                        <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
@@ -3437,7 +3462,7 @@ const checkIsBlank = () => {
       )}
       {/* SETTINGS DRAWER */}
       {showSettings && (
-        <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "600px", backgroundColor: "white", zIndex: 100, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
+        <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "100vw", backgroundColor: "white", zIndex: 100, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
           <div className="drawer-header" style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10, paddingBottom: "15px", borderBottom: "1px solid #e2e8f0" }}>
             <h3 style={{ margin: "20px 20px 10px 20px" }}>System Settings</h3>
             <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowSettings(false)} style={{ marginLeft: "20px" }}><ArrowLeft className="drawer-back-icon" style={{ marginRight: "5px" }} /><span>Close Menu</span></Button>
@@ -3593,10 +3618,11 @@ const checkIsBlank = () => {
                   
                   <div style={{ display: "flex", gap: "10px", marginBottom: "15px" }}>
                      <Button size="sm" style={{ backgroundColor: "#ca8a04", color: "white" }} onClick={() => {
-                        const name = prompt("Enter Item Name (e.g. CB Payal):");
+                        const name = prompt("Enter Item Name (e.g. Silver Coin):");
                         if (!name) return;
-                        const mc = prompt("Enter default Making Charge per gram (e.g. 30):");
-                        const newSettings = { ...settings, master_items: [...(settings.master_items || []), { id: Date.now().toString(), name, mc: mc ? Number(mc) : null }] };
+                        const mc = prompt("Enter default Making Charge per gram (Leave blank if not applicable):");
+                        const fixedAmt = prompt("Enter Fixed Amount ₹ (Leave blank if not applicable):");
+                        const newSettings = { ...settings, master_items: [...(settings.master_items || []), { id: Date.now().toString(), name, mc: mc ? Number(mc) : null, fixed_amount: fixedAmt ? Number(fixedAmt) : null }] };
                         setSettings(newSettings);
                      }}>+ Add Master Item</Button>
                   </div>
@@ -3607,7 +3633,9 @@ const checkIsBlank = () => {
                          <div key={mi.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px", backgroundColor: "white", border: "1px solid #fde047", borderRadius: "6px" }}>
                             <strong style={{ fontSize: "0.9rem" }}>{mi.name}</strong>
                             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                               <span style={{ fontSize: "0.85rem", color: "#16a34a" }}>{mi.mc ? `₹${mi.mc}/g` : "Default MC"}</span>
+                               <span style={{ fontSize: "0.85rem", color: "#16a34a" }}>
+                                 {mi.fixed_amount ? `Fixed: ₹${mi.fixed_amount}` : (mi.mc ? `MC: ₹${mi.mc}/g` : "Default Pricing")}
+                               </span>
                                <Button size="sm" variant="ghost" onClick={() => {
                                   const newList = [...settings.master_items]; 
                                   newList.splice(idx, 1);
