@@ -2156,7 +2156,7 @@ const checkIsBlank = () => {
               )}
               {num(publicComputed.redeemedPoints) > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED ({publicComputed.redeemedPoints} pts)</span><strong style={{color:"#16a34a"}}>- ₹{money(publicComputed.redeemedValue)}</strong></div>}
               {num(publicComputed.appliedCredit) > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>STORE CREDIT APPLIED</span><strong style={{color:"#16a34a"}}>- ₹{money(publicComputed.appliedCredit)}</strong></div>}
-              <div className="totals-row"><span>{paymentMethod === "Credit Card" ? "MDR (Credit)" : paymentMethod === "Debit Card" ? (isRuPay ? "MDR (RuPay 0%)" : "MDR (Debit)") : "MDR / Card Fee"}</span><strong>₹{money(publicComputed.mdr)}</strong></div>
+              <div className="totals-row"><span>MDR / Bank Fee</span><strong>₹{money(publicComputed.mdr)}</strong></div>
               <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(publicComputed.roundOff)}</strong></div>
               {num(publicComputed.savedCredit) > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(publicComputed.savedCredit)}</strong></div>}
               <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(publicComputed.grandTotal)}</strong></div>
