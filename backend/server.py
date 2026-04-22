@@ -14,6 +14,11 @@ from pymongo import ReturnDocument
 import requests
 from fastapi.middleware.cors import CORSMiddleware
 import paho.mqtt.client as mqtt # --- NEW: MQTT LIBRARY ---
+import smtplib
+from email.mime.text import MIMEText
+import random
+
+OTP_STORE = {} # Temporary memory to store the forgot password codes
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -161,16 +166,77 @@ def require_auth(authorization: str = Header(None)):
 @app.get("/")
 async def root(): return {"status": "online", "server": "Jalaram-Master-V12", "msg": "Backend is awake"}
 
-@api_router.post("/auth/login")
-async def login(payload: dict):
-    if str(payload.get("passcode")) != str(AUTH_PASSCODE): raise HTTPException(401)
-    t = str(uuid.uuid4())
-    ACTIVE_TOKENS[t] = (datetime.now(timezone.utc) + timedelta(hours=12)).isoformat()
-    return {"access_token": t, "expires_at": ACTIVE_TOKENS[t]}
+@api_router.post("/auth/forgot-password")
+async def forgot_password(background_tasks: BackgroundTasks):
+    settings = await settings_collection.find_one({"key": "app_settings"})
+    admin_email = settings.get("admin_email", "") if settings else ""
+    
+    if not admin_email or "@" not in admin_email:
+        raise HTTPException(400, "Admin email not configured in settings.")
+    
+    otp = str(random.randint(100000, 999999))
+    OTP_STORE[admin_email] = {
+        "otp": otp,
+        "expires": datetime.now(timezone.utc) + timedelta(minutes=10)
+    }
+    
+    # It tries to read your .env file first, then falls back to the hardcoded string
+    sender = os.environ.get("SMTP_USER", "jalaramjewellers26@gmail.com") 
+    password = os.environ.get("SMTP_PASS", "") 
+    
+    def send_email_sync():
+        try:
+            msg = MIMEText(f"Your password reset OTP is: {otp}\nThis code is valid for 10 minutes.")
+            msg['Subject'] = 'Password Reset OTP'
+            msg['From'] = sender
+            msg['To'] = admin_email
+            
+            with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+                server.login(sender, password)
+                server.send_message(msg)
+            print("✅ OTP Email Sent Successfully!")
+        except Exception as e:
+            print(f"❌ Failed to send OTP email: {e}")
 
-@api_router.get("/auth/verify")
-async def verify(_=Depends(require_auth)): return {"valid": True}
-
+    # Sends the email in the background so the frontend doesn't freeze
+    background_tasks.add_task(send_email_sync)
+    
+    return {"message": "If the email is registered, an OTP will be sent shortly."}
+    @api_router.post("/auth/reset-password")
+async def reset_password(payload: dict):
+    email = payload.get("email", "").strip()
+    otp = payload.get("otp", "").strip()
+    new_passcode = payload.get("new_passcode", "").strip()
+    
+    # 1. Validate that the frontend sent all the required pieces
+    if not email or not otp or not new_passcode:
+        raise HTTPException(400, "Email, OTP, and new passcode are required.")
+        
+    # 2. Check if we actually have an OTP stored for this email
+    stored_data = OTP_STORE.get(email)
+    if not stored_data:
+        raise HTTPException(400, "No active OTP request found for this email.")
+        
+    # 3. Check if the OTP has expired (past the 10-minute window)
+    if datetime.now(timezone.utc) > stored_data["expires"]:
+        del OTP_STORE[email]  # Clean up the dead OTP
+        raise HTTPException(401, "OTP has expired. Please request a new one.")
+        
+    # 4. Check if the numbers match
+    if str(stored_data["otp"]) != str(otp):
+        raise HTTPException(401, "Invalid OTP.")
+        
+    # 5. Success! Update the master passcode in the database
+    await settings_collection.update_one(
+        {"key": "app_settings"},
+        {"$set": {"app_passcode": str(new_passcode), "updated_at": now_iso()}},
+        upsert=True
+    )
+    
+    # 6. Burn the OTP so it can't be used twice by a bad actor
+    del OTP_STORE[email]
+    
+    return {"status": "success", "message": "Passcode reset successfully! You can now log in."}
 # --- NEW: IOT CONTROL ENDPOINTS ---
 
 @api_router.get("/cloud/mqtt/status")
@@ -223,6 +289,10 @@ async def set_balances(payload: dict, _=Depends(require_auth)):
 async def adjust(payload: dict, _=Depends(require_auth)):
     try:
         branch_id = payload.get("branch_id")
+        # --- NEW: BRANCH ID GUARDRAIL ---
+        if not branch_id:
+            raise HTTPException(status_code=400, detail="CRITICAL: branch_id is required to adjust the ledger.")
+        # --------------------------------
         await settings_collection.update_one(
             {"key": "app_settings", "branches.id": branch_id},
             {"$inc": {"branches.$.cash_balance": payload.get("cash_change", 0), "branches.$.estimate_bank_balance": payload.get("estimate_bank_change", 0), "branches.$.invoice_bank_balance": payload.get("invoice_bank_change", 0)}}
@@ -240,7 +310,17 @@ async def next_num(mode: str, branch_id: str, _=Depends(require_auth)):
     doc = await counters_collection.find_one({"mode": mode, "branch_id": branch_id})
     val = (doc.get("value", 0) if doc else 0) + 1
     prefix = "INV" if mode == "invoice" else "EST"
-    return {"document_number": f"{branch_id}-{prefix}-{val:04d}"}
+    
+    # FIX FOR MASSIVE BRANCH IDs: Convert "B17768..." into "B2", "B3" based on list order
+    settings = await settings_collection.find_one({"key": "app_settings"})
+    short_branch = branch_id
+    if settings and "branches" in settings:
+        for idx, b in enumerate(settings["branches"]):
+            if str(b.get("id")) == str(branch_id):
+                short_branch = f"B{idx + 1}"
+                break
+                
+    return {"document_number": f"{short_branch}-{prefix}-{val:04d}"}
 
 @api_router.post("/bills/reset-counter")
 async def reset_counter(payload: dict, _=Depends(require_auth)):
@@ -257,6 +337,10 @@ async def save_bill(payload: dict, _=Depends(require_auth)):
     doc_num = payload.get("document_number", "")
     mode = payload.get("mode")
     branch_id = payload.get("branch_id")
+    # --- NEW: BRANCH ID GUARDRAIL ---
+    if not branch_id:
+        raise HTTPException(status_code=400, detail="CRITICAL: branch_id is missing from the payload.")
+    # --------------------------------
 
     match = re.search(r'\d+$', doc_num)
     if match:
@@ -304,6 +388,10 @@ async def save_bill(payload: dict, _=Depends(require_auth)):
 async def update_bill_by_id(bill_id: str, payload: dict, _=Depends(require_auth)):
     existing = await bills_collection.find_one({"id": bill_id})
     if not existing: raise HTTPException(404, "Bill ID not found")
+        # --- NEW: BRANCH ID GUARDRAIL ---
+    if not payload.get("branch_id"):
+        raise HTTPException(status_code=400, detail="CRITICAL: branch_id is missing from the update payload.")
+    # --------------------------------
 
     doc_num = payload.get("document_number", "")
     match = re.search(r'\d+$', doc_num)
