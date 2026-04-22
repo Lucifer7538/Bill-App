@@ -202,38 +202,32 @@ async def forgot_password(background_tasks: BackgroundTasks):
     background_tasks.add_task(send_email_sync)
     
     return {"message": "If the email is registered, an OTP will be sent shortly."}
-    @api_router.post("/auth/reset-password")
+@api_router.post("/auth/reset-password")
 async def reset_password(payload: dict):
     email = payload.get("email", "").strip()
     otp = payload.get("otp", "").strip()
     new_passcode = payload.get("new_passcode", "").strip()
     
-    # 1. Validate that the frontend sent all the required pieces
     if not email or not otp or not new_passcode:
         raise HTTPException(400, "Email, OTP, and new passcode are required.")
         
-    # 2. Check if we actually have an OTP stored for this email
     stored_data = OTP_STORE.get(email)
     if not stored_data:
         raise HTTPException(400, "No active OTP request found for this email.")
         
-    # 3. Check if the OTP has expired (past the 10-minute window)
     if datetime.now(timezone.utc) > stored_data["expires"]:
-        del OTP_STORE[email]  # Clean up the dead OTP
+        del OTP_STORE[email]
         raise HTTPException(401, "OTP has expired. Please request a new one.")
         
-    # 4. Check if the numbers match
     if str(stored_data["otp"]) != str(otp):
         raise HTTPException(401, "Invalid OTP.")
         
-    # 5. Success! Update the master passcode in the database
     await settings_collection.update_one(
         {"key": "app_settings"},
         {"$set": {"app_passcode": str(new_passcode), "updated_at": now_iso()}},
         upsert=True
     )
     
-    # 6. Burn the OTP so it can't be used twice by a bad actor
     del OTP_STORE[email]
     
     return {"status": "success", "message": "Passcode reset successfully! You can now log in."}
