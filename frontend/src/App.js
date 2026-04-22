@@ -1174,7 +1174,7 @@ export default function App() {
     if (paymentMethod === "Credit Card") mdrBase = (taxable + gstApplied) * (mdrCreditPct / 100);
     
     const mdrBankGstPct = num(settings.mdr_gst !== undefined ? settings.mdr_gst : 18);
-    const mdr = mdrBase + (mdrBase * (mdrBankGstPct / 100)); // Fully dynamic!
+    const mdr = mdrBase + (mdrBase * (mdrBankGstPct / 100));
     
     const bonusPointsVal = num(bonusPoints);
     const earnedPoints = Math.floor(totalWeight * ptPerGram) + bonusPointsVal;
@@ -1926,14 +1926,27 @@ const checkIsBlank = () => {
     const subtotal = mapped.reduce((sum, row) => sum + row.amount, 0); 
     const taxable = subtotal;
     
-    const cgst = publicBill.mode === "invoice" ? taxable * 0.015 : 0; 
-    const sgst = publicBill.mode === "invoice" ? taxable * 0.015 : 0; 
-    const igst = 0;
+   const cgstPct = num(publicSettings?.cgst_percent !== undefined ? publicSettings.cgst_percent : 1.5);
+    const sgstPct = num(publicSettings?.sgst_percent !== undefined ? publicSettings.sgst_percent : 1.5);
+    const igstPct = num(publicSettings?.igst_percent !== undefined ? publicSettings.igst_percent : 0);
+
+    const cgst = publicBill.mode === "invoice" ? taxable * (cgstPct / 100) : 0; 
+    const sgst = publicBill.mode === "invoice" ? taxable * (sgstPct / 100) : 0; 
+    const igst = publicBill.mode === "invoice" ? taxable * (igstPct / 100) : 0;
     const gstApplied = publicBill.mode === "invoice" ? cgst + sgst + igst : 0;
     
     const discount = num(publicBill.discount || publicBill.totals?.discount || 0); 
     const exchange = num(publicBill.exchange || publicBill.totals?.exchange || 0);
-    const mdr = publicBill.payment_method === "Card" ? (taxable + gstApplied) * 0.02 : 0;
+
+    const mdrDebitPct = num(publicSettings?.mdr_debit !== undefined ? publicSettings.mdr_debit : 0.9);
+    const mdrCreditPct = num(publicSettings?.mdr_credit !== undefined ? publicSettings.mdr_credit : 1.5);
+    
+    let mdrBase = 0;
+    if (publicBill.payment_method === "Debit Card") mdrBase = (taxable + gstApplied) * (mdrDebitPct / 100);
+    if (publicBill.payment_method === "Credit Card") mdrBase = (taxable + gstApplied) * (mdrCreditPct / 100);
+    
+    const mdrBankGstPct = num(publicSettings?.mdr_gst !== undefined ? publicSettings.mdr_gst : 18);
+    const mdr = mdrBase + (mdrBase * (mdrBankGstPct / 100));
     
     const bonusPointsVal = num(publicBill.bonus_points || 0);
     const earnedPoints = publicBill.earned_points !== undefined ? num(publicBill.earned_points) : (Math.floor(totalWeight * ptPerGram) + bonusPointsVal);
@@ -2231,10 +2244,10 @@ const checkIsBlank = () => {
     );
   }
 
-  if (!token) {
+ if (!token) {
     if (!isAdminView && !isPublicView) {
       return (
-        <div className="" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9', height: '100dvh', padding: '20px', textAlign: 'center' }}>
+        <div className="login-shell" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9', height: '100dvh', padding: '20px', textAlign: 'center' }}>
           <Store size={64} color="#0f172a" style={{ marginBottom: '20px' }} />
           <h1 style={{ color: '#0f172a', marginBottom: '10px' }}>Welcome to {settings?.shop_name || "Jalaram Jewellers"}</h1>
           <p style={{ color: '#475569', fontSize: '1.1rem', maxWidth: '400px', lineHeight: '1.6' }}>
@@ -2243,6 +2256,7 @@ const checkIsBlank = () => {
         </div>
       );
     }
+
     const handleSendOtp = async (e) => {
         e.preventDefault();
         setSendingOtp(true);
@@ -2314,7 +2328,7 @@ const checkIsBlank = () => {
 
   if (token && settingsLoaded && !isPublicView && !gatewayPassed) {
      return (
-        <div className="" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9', height: '100vh' }}>
+        <div className="login-shell" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9', height: '100vh' }}>
            <div className="login-card" style={{ maxWidth: '400px', width: '90%', textAlign: 'center', backgroundColor: 'white', padding: '30px', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
               <Store size={48} color="#0f172a" style={{ margin: '0 auto 15px auto' }} />
               <h2 style={{ marginBottom: '10px', color: '#0f172a' }}>Select Branch</h2>
@@ -2427,10 +2441,10 @@ const checkIsBlank = () => {
                     <div className="totals-row"><span>{b.mode === "invoice" ? "Taxable Amt." : "TOTAL"}</span><strong>₹{money(b.totals?.taxable_amount || b.totals?.subtotal || 0)}</strong></div>
                     {b.mode === "invoice" ? (
                       <>
-                         <div className="totals-row"><span>CGST @ {settings.cgst_percent || 1.5}%</span><strong>₹{money(computed.cgst)}</strong></div>
-                         <div className="totals-row"><span>SGST @ {settings.sgst_percent || 1.5}%</span><strong>₹{money(computed.sgst)}</strong></div>
-                          <div className="totals-row"><span>IGST @ {settings.igst_percent || 0}%</span><strong>₹{money(computed.igst)}</strong></div>
-                        </>
+                        <div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(b.totals?.cgst || 0)}</strong></div>
+                        <div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(b.totals?.sgst || 0)}</strong></div>
+                        <div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(b.totals?.igst || 0)}</strong></div>
+                      </>
                     ) : (
                       <>
                         <div className="totals-row"><span>DISCOUNT</span><strong>₹{money(b.totals?.discount || 0)}</strong></div>
@@ -2956,12 +2970,12 @@ const checkIsBlank = () => {
                   <option value="" disabled>Select Method</option>
                   <option value="Cash">Cash</option>
                   <option value="UPI">UPI</option>
-                  {mode === "invoice" && ( 
-                    <>                      
-                    <option value="Debit Card">Debit Card</option>                     
-                    <option value="Credit Card">Credit Card</option>                     
-                    </>                  
-                    )}
+                  {mode === "invoice" && (
+                    <>
+                      <option value="Debit Card">Debit Card</option>
+                      <option value="Credit Card">Credit Card</option>
+                    </>
+                  )}
                   <option value="Split">Split (Cash + UPI)</option>
                 </select>
                 {paymentMethod === "Split" && (
@@ -2995,12 +3009,12 @@ const checkIsBlank = () => {
                   <option value="" disabled>Select Advance Method</option>
                   <option value="Cash">Cash</option>
                   <option value="UPI">UPI</option>
-                  {mode === "invoice" && (  
-                    <>                      
-                    <option value="Debit Card">Debit Card</option>                       
-                    <option value="Credit Card">Credit Card</option>                    
-                    </>                   
-                    )}
+                  {mode === "invoice" && (
+                    <>
+                      <option value="Debit Card">Debit Card</option>
+                      <option value="Credit Card">Credit Card</option>
+                    </>
+                  )}
                   <option value="Split">Split (Cash + UPI)</option>
                 </select>
                 {advanceMethod === "Split" && (
@@ -3030,12 +3044,12 @@ const checkIsBlank = () => {
                   <option value="" disabled>Select Balance Method</option>
                   <option value="Cash">Cash</option>
                   <option value="UPI">UPI</option>
-                  {mode === "invoice" && (  
-                    <>                      
-                    <option value="Debit Card">Debit Card</option>                      
-                    <option value="Credit Card">Credit Card</option>                    
-                    </>                  
-                    )}
+                  {mode === "invoice" && (
+                    <>
+                      <option value="Debit Card">Debit Card</option>
+                      <option value="Credit Card">Credit Card</option>
+                    </>
+                  )}
                   <option value="Split">Split (Cash + UPI)</option>
                 </select>
                 {balanceMethod === "Split" && (
@@ -3348,7 +3362,7 @@ const checkIsBlank = () => {
                   <Button size="sm" onClick={() => downloadPdf("inventory-log-root", `Inventory_Log_${today()}`)} style={{ backgroundColor: "#16a34a", color: "white" }}><Download size={14} style={{ marginRight: "5px" }} /> Save PDF</Button>
                 </div>
                 <div id="inventory-log-root" style={{ backgroundColor: "white", padding: "15px", borderRadius: "6px", border: "1px dashed #cbd5e1", maxHeight: "400px", overflowY: "auto" }}>
-                  <h2 className="print-only" style={{ textAlign: "center", marginBottom: "20px" }}>{settings.shop_name} - Stock Addition Log</h2>
+                <h2 className="print-only" style={{ textAlign: "center", marginBottom: "20px" }}>{settings.shop_name} - Stock Addition Log</h2>
                   {(() => {
                     const branchLogs = (settings.inventory_logs || []).filter(log => log.branch_id === globalBranchId);
                     if (branchLogs.length === 0) return <p style={{ color: "#64748b", fontSize: "0.9rem" }}>No stock added yet for this branch.</p>;
@@ -3375,6 +3389,9 @@ const checkIsBlank = () => {
                       </table>
                     );
                   })()}
+                </div>
+              </div>
+            )}
 
             <div style={{ padding: "15px", backgroundColor: "#f0f9ff", borderRadius: "8px", border: "1px solid #bae6fd", marginBottom: "20px" }}>
               <h4 style={{ margin: "0 0 10px 0", color: "#0369a1" }}>Add Incoming Stock</h4>
@@ -3571,7 +3588,7 @@ const checkIsBlank = () => {
           </div>
         </section>
       )}
-     {/* SETTINGS DRAWER */}
+      {/* SETTINGS DRAWER */}
       {showSettings && (
         <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "100vw", backgroundColor: "white", zIndex: 100, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
           <div className="drawer-header" style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10, paddingBottom: "15px", borderBottom: "1px solid #e2e8f0" }}>
@@ -3635,15 +3652,14 @@ const checkIsBlank = () => {
                   <label className="select-label">Default HSN Code</label>
                   <Input value={settings.default_hsn} onChange={(e) => setSettings({ ...settings, default_hsn: e.target.value })} />
                 </div>
-
-                <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
+              <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
                   <h4 style={{ margin: "0 0 15px 0" }}>Taxes & MDR</h4>
                   <div style={{ display: "flex", gap: "10px", marginBottom: "10px", flexWrap: "wrap" }}>
                       <div style={{ flex: "1 1 100px" }}>
                           <label className="select-label">CGST (%)</label>
                           <Input type="number" step="0.1" value={settings.cgst_percent || 1.5} onChange={(e) => setSettings({ ...settings, cgst_percent: Number(e.target.value) })} />
                       </div>
-                      <div style={{ flex: "1 1 100px" }}>
+                      <div style={{ flex: 1 }}>
                           <label className="select-label">SGST (%)</label>
                           <Input type="number" step="0.1" value={settings.sgst_percent || 1.5} onChange={(e) => setSettings({ ...settings, sgst_percent: Number(e.target.value) })} />
                       </div>
@@ -3853,13 +3869,6 @@ const checkIsBlank = () => {
                   </div>
                   <p style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "10px" }}>Note: System actions are locked, but you can safely change their key combinations. Add custom entries as a quick reference guide for your staff.</p>
                 </div>
-                <div style={{ padding: "15px", backgroundColor: "#fdf4ff", borderRadius: "8px", border: "1px solid #f5d0fe", marginBottom: "15px", marginTop: "15px" }}>
-                  <h4 style={{ color: "#86198f", margin: "0 0 10px 0" }}>Barcode Scanner Power</h4>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <input type="checkbox" checked={settings.enable_barcode_system || false} onChange={(e) => setSettings({ ...settings, enable_barcode_system: e.target.checked })} style={{ width: "20px", height: "20px" }} />
-                    <strong>Enable Laser Scanner Listening</strong>
-                  </div>
-                </div>
               </div>
             )}
 
@@ -3933,7 +3942,18 @@ const checkIsBlank = () => {
                 </div>
               </div>
             )}
-          <Button onClick={saveSettings} style={{ width: "100%", marginTop: "20px", backgroundColor: "#0f172a", padding: "15px", fontSize: "1.1rem" }}>Save All Settings</Button>
+            
+            {settingsTab === "advanced" && (
+                <div style={{ padding: "15px", backgroundColor: "#fdf4ff", borderRadius: "8px", border: "1px solid #f5d0fe", marginBottom: "15px", marginTop: "15px" }}>
+                  <h4 style={{ color: "#86198f", margin: "0 0 10px 0" }}>Barcode Scanner Power</h4>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <input type="checkbox" checked={settings.enable_barcode_system || false} onChange={(e) => setSettings({ ...settings, enable_barcode_system: e.target.checked })} style={{ width: "20px", height: "20px" }} />
+                    <strong>Enable Laser Scanner Listening</strong>
+                  </div>
+                </div>
+            )}
+
+            <Button onClick={saveSettings} style={{ width: "100%", marginTop: "20px", backgroundColor: "#0f172a", padding: "15px", fontSize: "1.1rem" }}>Save All Settings</Button>
           </div>
         </section>
       )}
