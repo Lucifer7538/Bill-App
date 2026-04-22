@@ -2275,7 +2275,7 @@ const checkIsBlank = () => {
         e.preventDefault();
         setResettingPwd(true);
         try {
-            await axios.post(`${API}/auth/reset-password`, { otp: otpCode, new_password: newPassword });
+            await axios.post(`${API}/auth/reset-password`, { otp: otpCode, new_passcode: newPassword });
             toast.success("Password reset successfully! Please login.");
             setShowForgotPwd(false);
             setOtpSent(false);
