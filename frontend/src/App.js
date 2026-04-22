@@ -2009,7 +2009,13 @@ const checkIsBlank = () => {
   const dynamicQrUrl = `https://quickchart.io/qr?text=${encodeURIComponent(upiUri)}&size=220`;
 
   if (isPublicView) {
-    if (publicLoading) return <div className="loading-screen">Loading your bill...</div>;
+    if (publicLoading) return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh', backgroundColor: '#3e2723', backgroundImage: 'radial-gradient(#5d4037 15%, transparent 16%), radial-gradient(#5d4037 15%, transparent 16%)', backgroundSize: '60px 60px', backgroundPosition: '0 0, 30px 30px', color: '#fef3c7' }}>
+        <style>{`@keyframes spin { 100% { transform: rotate(360deg); } } @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }`}</style>
+        <div style={{ width: '60px', height: '60px', border: '5px solid rgba(255,255,255,0.2)', borderTopColor: '#fcd34d', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+        <h2 style={{ marginTop: '25px', animation: 'pulse 1.5s infinite', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>Unlocking Vault...</h2>
+      </div>
+    );
     if (publicBill === "NOT_FOUND" || !publicBill) return <div className="loading-screen">Bill not found or has been deleted.</div>;
 
     const isSale = publicBill.tx_type === "sale" || !publicBill.tx_type;
@@ -2232,14 +2238,18 @@ const checkIsBlank = () => {
 
   if (checkingSession) {
     return (
-      <div className="loading-screen" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#0f172a' }}>Loading billing dashboard...</div>
-        {isWakingUp && (
-          <div style={{ marginTop: '20px', textAlign: 'center', padding: '15px', backgroundColor: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', maxWidth: '320px' }}>
-            <p style={{ margin: '0 0 15px 0', fontSize: '0.9rem', color: '#64748b' }}>The database server is currently waking up from sleep mode. This usually takes about <strong>30 to 60 seconds</strong>.</p>
-            <Button variant="outline" onClick={() => { localStorage.clear(); window.location.reload(); }} style={{ width: '100%', borderColor: '#ef4444', color: '#ef4444' }}>Force Quit & Clear Session</Button>
-          </div>
-        )}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh', backgroundColor: '#291d17', backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.05) 10px, rgba(0,0,0,0.05) 20px)' }}>
+        <style>{`@keyframes spin { 100% { transform: rotate(360deg); } } @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }`}</style>
+        <div style={{ padding: '40px', backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: '16px', textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.4)', maxWidth: '350px' }}>
+          <div style={{ width: '50px', height: '50px', border: '5px solid #e2e8f0', borderTopColor: '#b45309', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 20px auto' }}></div>
+          <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#78350f', animation: 'pulse 1.5s infinite', marginBottom: '10px' }}>Loading {settings?.shop_name || "Jalaram Jewellers"}...</div>
+          {isWakingUp && (
+            <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px dashed #cbd5e1' }}>
+              <p style={{ margin: '0 0 15px 0', fontSize: '0.85rem', color: '#64748b' }}>Database is waking up from sleep mode. This takes about <strong>30-60 seconds</strong>.</p>
+              <Button variant="outline" onClick={() => { localStorage.clear(); window.location.reload(); }} style={{ width: '100%', borderColor: '#ef4444', color: '#ef4444' }}>Force Restart</Button>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -2943,7 +2953,9 @@ const checkIsBlank = () => {
             <Input id="appliedCreditInput" type="number" value={appliedCredit} onChange={(e) => { setAppliedCredit(e.target.value); markDirty(); }} placeholder={`Use Store Credit (Max: ₹${money(customer.credit || 0)})`} />
             <Input id="redeemedPointsInput" type="number" value={redeemedPoints} onChange={(e) => { setRedeemedPoints(e.target.value); markDirty(); }} placeholder={`Redeem Points (Max: ${customer.points || 0})`} />
             <Input id="discountInput" value={discount} onChange={(e) => { setDiscount(e.target.value); markDirty(); }} placeholder="Discount" />
-            <Input value={exchange} onChange={(e) => { setExchange(e.target.value); markDirty(); }} placeholder="Exchange Amount" />
+            {settings.enable_exchange_field && (
+              <Input value={exchange} onChange={(e) => { setExchange(e.target.value); markDirty(); }} placeholder="Exchange Amount" />
+            )}
             <Input value={savedCredit} onChange={(e) => { setSavedCredit(e.target.value); markDirty(); }} placeholder="Save as Store Credit (For negative totals)" />
             <Input value={manualRoundOff} onChange={(e) => { setManualRoundOff(e.target.value); markDirty(); }} placeholder="Manual round off (optional)" />
           </div>
@@ -3753,6 +3765,14 @@ const checkIsBlank = () => {
 
             {settingsTab === "advanced" && (
               <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+
+                  <div style={{ padding: "15px", backgroundColor: "#fffbeb", borderRadius: "8px", border: "1px solid #fde68a", marginBottom: "15px" }}>
+                  <h4 style={{ margin: "0 0 10px 0", color: "#92400e" }}>Billing Features</h4>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <input type="checkbox" checked={settings.enable_exchange_field || false} onChange={(e) => setSettings({ ...settings, enable_exchange_field: e.target.checked })} style={{ width: "20px", height: "20px", cursor: "pointer" }} />
+                    <strong style={{ color: "#92400e" }}>Enable 'Exchange Amount' Field on Bills</strong>
+                  </div>
+                </div>
 
                {/* --- PRINTER / PAPER SIZE SETTINGS --- */}
                 <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1", marginBottom: "15px" }}>
