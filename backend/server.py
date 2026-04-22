@@ -162,9 +162,8 @@ def require_auth(authorization: str = Header(None)):
     token = authorization.replace("Bearer ", "").strip()
     if token not in ACTIVE_TOKENS: raise HTTPException(401, "Login Expired")
     return token
-    @app.get("/")
+@app.get("/")
 async def root(): return {"status": "online", "server": "Jalaram-Master-V12", "msg": "Backend is awake"}
-
 # --- RESTORED & UPGRADED LOGIN ENDPOINTS ---
 @api_router.post("/auth/login")
 async def login(payload: dict):
