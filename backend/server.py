@@ -204,31 +204,40 @@ async def forgot_password(background_tasks: BackgroundTasks):
     return {"message": "If the email is registered, an OTP will be sent shortly."}
 @api_router.post("/auth/reset-password")
 async def reset_password(payload: dict):
-    email = payload.get("email", "").strip()
+    # We only pull the OTP and the new passcode from the frontend now
     otp = payload.get("otp", "").strip()
     new_passcode = payload.get("new_passcode", "").strip()
     
-    if not email or not otp or not new_passcode:
-        raise HTTPException(400, "Email, OTP, and new passcode are required.")
+    if not otp or not new_passcode:
+        raise HTTPException(400, "OTP and new passcode are required.")
         
-    stored_data = OTP_STORE.get(email)
+    # We fetch the admin email straight from the database settings
+    settings = await settings_collection.find_one({"key": "app_settings"})
+    admin_email = settings.get("admin_email", "") if settings else ""
+    
+    if not admin_email:
+        raise HTTPException(400, "Admin email not configured in settings.")
+        
+    # Now we check the temporary memory using that database email
+    stored_data = OTP_STORE.get(admin_email)
     if not stored_data:
-        raise HTTPException(400, "No active OTP request found for this email.")
+        raise HTTPException(400, "No active OTP request found.")
         
     if datetime.now(timezone.utc) > stored_data["expires"]:
-        del OTP_STORE[email]
+        del OTP_STORE[admin_email]  
         raise HTTPException(401, "OTP has expired. Please request a new one.")
         
     if str(stored_data["otp"]) != str(otp):
         raise HTTPException(401, "Invalid OTP.")
         
+    # Success! Update the password
     await settings_collection.update_one(
         {"key": "app_settings"},
         {"$set": {"app_passcode": str(new_passcode), "updated_at": now_iso()}},
         upsert=True
     )
     
-    del OTP_STORE[email]
+    del OTP_STORE[admin_email]
     
     return {"status": "success", "message": "Passcode reset successfully! You can now log in."}
 # --- NEW: IOT CONTROL ENDPOINTS ---
