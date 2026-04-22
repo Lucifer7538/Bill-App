@@ -54,6 +54,13 @@ const defaultSettings = {
   default_hsn: "7113",
   loyalty_points_per_gram: 1, 
   loyalty_point_value_rs: 1,
+  cgst_percent: 1.5,
+  sgst_percent: 1.5,
+  igst_percent: 0,
+  mdr_debit: 0.9,
+  mdr_credit: 1.5,
+  mdr_gst: 18,
+  admin_email: "jalaramjewellers26@gmail.com",
   formula_note: "Line total = Weight x (Silver rate per gram + Making charge per gram)", 
   logo_data_url: "", 
   about_qr_data_url: STATIC_ABOUT_QR_URL, 
@@ -379,6 +386,12 @@ export default function App() {
   const [checkingSession, setCheckingSession] = useState(Boolean(localStorage.getItem("jj_auth_token")));
   const [isWakingUp, setIsWakingUp] = useState(false);
   const [loggingIn, setLoggingIn] = useState(false);
+  const [showForgotPwd, setShowForgotPwd] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [resettingPwd, setResettingPwd] = useState(false);
 
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [gatewayPassed, setGatewayPassed] = useState(false);
@@ -1144,11 +1157,24 @@ export default function App() {
     const subtotal = mapped.reduce((sum, row) => sum + row.amount, 0); 
     const taxable = subtotal;
     
-    const cgst = mode === "invoice" ? taxable * 0.015 : 0; 
-    const sgst = mode === "invoice" ? taxable * 0.015 : 0; 
-    const igst = 0;
+   const cgstPct = num(settings.cgst_percent !== undefined ? settings.cgst_percent : 1.5);
+    const sgstPct = num(settings.sgst_percent !== undefined ? settings.sgst_percent : 1.5);
+    const igstPct = num(settings.igst_percent !== undefined ? settings.igst_percent : 0);
+
+    const cgst = mode === "invoice" ? taxable * (cgstPct / 100) : 0; 
+    const sgst = mode === "invoice" ? taxable * (sgstPct / 100) : 0; 
+    const igst = mode === "invoice" ? taxable * (igstPct / 100) : 0;
     const gstApplied = mode === "invoice" ? cgst + sgst + igst : 0;
-    const mdr = paymentMethod === "Card" ? (taxable + gstApplied) * 0.02 : 0;
+
+    const mdrDebitPct = num(settings.mdr_debit !== undefined ? settings.mdr_debit : 0.9);
+    const mdrCreditPct = num(settings.mdr_credit !== undefined ? settings.mdr_credit : 1.5);
+    
+    let mdrBase = 0;
+    if (paymentMethod === "Debit Card") mdrBase = (taxable + gstApplied) * (mdrDebitPct / 100);
+    if (paymentMethod === "Credit Card") mdrBase = (taxable + gstApplied) * (mdrCreditPct / 100);
+    
+    const mdrBankGstPct = num(settings.mdr_gst !== undefined ? settings.mdr_gst : 18);
+    const mdr = mdrBase + (mdrBase * (mdrBankGstPct / 100)); // Fully dynamic!
     
     const bonusPointsVal = num(bonusPoints);
     const earnedPoints = Math.floor(totalWeight * ptPerGram) + bonusPointsVal;
@@ -2208,7 +2234,7 @@ const checkIsBlank = () => {
   if (!token) {
     if (!isAdminView && !isPublicView) {
       return (
-        <div className="login-shell" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9', height: '100dvh', padding: '20px', textAlign: 'center' }}>
+        <div className="" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9', height: '100dvh', padding: '20px', textAlign: 'center' }}>
           <Store size={64} color="#0f172a" style={{ marginBottom: '20px' }} />
           <h1 style={{ color: '#0f172a', marginBottom: '10px' }}>Welcome to {settings?.shop_name || "Jalaram Jewellers"}</h1>
           <p style={{ color: '#475569', fontSize: '1.1rem', maxWidth: '400px', lineHeight: '1.6' }}>
@@ -2217,22 +2243,78 @@ const checkIsBlank = () => {
         </div>
       );
     }
+    const handleSendOtp = async (e) => {
+        e.preventDefault();
+        setSendingOtp(true);
+        try {
+            await axios.post(`${API}/auth/forgot-password`);
+            toast.success("OTP sent to admin email!");
+            setOtpSent(true);
+        } catch {
+            toast.error("Failed to send OTP.");
+        } finally {
+            setSendingOtp(false);
+        }
+    };
+
+    const handleResetPassword = async (e) => {
+        e.preventDefault();
+        setResettingPwd(true);
+        try {
+            await axios.post(`${API}/auth/reset-password`, { otp: otpCode, new_password: newPassword });
+            toast.success("Password reset successfully! Please login.");
+            setShowForgotPwd(false);
+            setOtpSent(false);
+            setPasscode(newPassword);
+            setOtpCode("");
+            setNewPassword("");
+        } catch {
+            toast.error("Invalid OTP or failed to reset.");
+        } finally {
+            setResettingPwd(false);
+        }
+    };
+
     return (
       <div className="login-shell">
         <Toaster position="bottom-right" />
-        <form className="login-card" onSubmit={handleLogin}>
+        <div className="login-card">
           <h1 className="login-title">{settings?.shop_name || "Jalaram Jewellers"}</h1>
-          <p className="login-subtitle">Enter passcode to access billing panel</p>
-          <Input type="password" value={passcode} onChange={(e) => setPasscode(e.target.value)} placeholder="Enter passcode" />
-          <Button type="submit" disabled={loggingIn}>{loggingIn ? "Checking..." : "Login"}</Button>
-        </form>
+          
+          {!showForgotPwd ? (
+              <form onSubmit={handleLogin}>
+                  <p className="login-subtitle">Enter passcode to access billing panel</p>
+                  <Input type="password" value={passcode} onChange={(e) => setPasscode(e.target.value)} placeholder="Enter passcode" style={{ marginBottom: "10px" }} />
+                  <Button type="submit" disabled={loggingIn} style={{ width: "100%", marginBottom: "10px" }}>{loggingIn ? "Checking..." : "Login"}</Button>
+                  <Button type="button" variant="ghost" onClick={() => setShowForgotPwd(true)} style={{ width: "100%", color: "#64748b" }}>Forgot Passcode?</Button>
+              </form>
+          ) : (
+              <div>
+                  <p className="login-subtitle">Reset your passcode securely</p>
+                  {!otpSent ? (
+                      <form onSubmit={handleSendOtp}>
+                          <p style={{ fontSize: "0.85rem", color: "#475569", marginBottom: "15px" }}>An OTP will be sent to the admin email configured in settings.</p>
+                          <Button type="submit" disabled={sendingOtp} style={{ width: "100%", marginBottom: "10px" }}>{sendingOtp ? "Sending..." : "Send Verification OTP"}</Button>
+                          <Button type="button" variant="ghost" onClick={() => setShowForgotPwd(false)} style={{ width: "100%" }}>Cancel</Button>
+                      </form>
+                  ) : (
+                      <form onSubmit={handleResetPassword}>
+                          <Input type="text" value={otpCode} onChange={(e) => setOtpCode(e.target.value)} placeholder="Enter 6-digit OTP" style={{ marginBottom: "10px" }} required />
+                          <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Enter New Passcode" style={{ marginBottom: "10px" }} required />
+                          <Button type="submit" disabled={resettingPwd} style={{ width: "100%", marginBottom: "10px", backgroundColor: "#16a34a" }}>{resettingPwd ? "Resetting..." : "Verify & Save Password"}</Button>
+                          <Button type="button" variant="ghost" onClick={() => { setOtpSent(false); setShowForgotPwd(false); }} style={{ width: "100%" }}>Cancel</Button>
+                      </form>
+                  )}
+              </div>
+          )}
+        </div>
       </div>
     );
   }
 
   if (token && settingsLoaded && !isPublicView && !gatewayPassed) {
      return (
-        <div className="login-shell" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9', height: '100vh' }}>
+        <div className="" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1f5f9', height: '100vh' }}>
            <div className="login-card" style={{ maxWidth: '400px', width: '90%', textAlign: 'center', backgroundColor: 'white', padding: '30px', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
               <Store size={48} color="#0f172a" style={{ margin: '0 auto 15px auto' }} />
               <h2 style={{ marginBottom: '10px', color: '#0f172a' }}>Select Branch</h2>
@@ -2345,10 +2427,10 @@ const checkIsBlank = () => {
                     <div className="totals-row"><span>{b.mode === "invoice" ? "Taxable Amt." : "TOTAL"}</span><strong>₹{money(b.totals?.taxable_amount || b.totals?.subtotal || 0)}</strong></div>
                     {b.mode === "invoice" ? (
                       <>
-                        <div className="totals-row"><span>CGST @ 1.5%</span><strong>₹{money(b.totals?.cgst || 0)}</strong></div>
-                        <div className="totals-row"><span>SGST @ 1.5%</span><strong>₹{money(b.totals?.sgst || 0)}</strong></div>
-                        <div className="totals-row"><span>IGST @ 0%</span><strong>₹{money(b.totals?.igst || 0)}</strong></div>
-                      </>
+                         <div className="totals-row"><span>CGST @ {settings.cgst_percent || 1.5}%</span><strong>₹{money(computed.cgst)}</strong></div>
+                         <div className="totals-row"><span>SGST @ {settings.sgst_percent || 1.5}%</span><strong>₹{money(computed.sgst)}</strong></div>
+                          <div className="totals-row"><span>IGST @ {settings.igst_percent || 0}%</span><strong>₹{money(computed.igst)}</strong></div>
+                        </>
                     ) : (
                       <>
                         <div className="totals-row"><span>DISCOUNT</span><strong>₹{money(b.totals?.discount || 0)}</strong></div>
@@ -2874,7 +2956,12 @@ const checkIsBlank = () => {
                   <option value="" disabled>Select Method</option>
                   <option value="Cash">Cash</option>
                   <option value="UPI">UPI</option>
-                  {mode === "invoice" && <option value="Card">Card</option>}
+                  {mode === "invoice" && ( 
+                    <>                      
+                    <option value="Debit Card">Debit Card</option>                     
+                    <option value="Credit Card">Credit Card</option>                     
+                    </>                  
+                    )}
                   <option value="Split">Split (Cash + UPI)</option>
                 </select>
                 {paymentMethod === "Split" && (
@@ -2908,7 +2995,12 @@ const checkIsBlank = () => {
                   <option value="" disabled>Select Advance Method</option>
                   <option value="Cash">Cash</option>
                   <option value="UPI">UPI</option>
-                  {mode === "invoice" && <option value="Card">Card</option>}
+                  {mode === "invoice" && (  
+                    <>                      
+                    <option value="Debit Card">Debit Card</option>                       
+                    <option value="Credit Card">Credit Card</option>                    
+                    </>                   
+                    )}
                   <option value="Split">Split (Cash + UPI)</option>
                 </select>
                 {advanceMethod === "Split" && (
@@ -2938,7 +3030,12 @@ const checkIsBlank = () => {
                   <option value="" disabled>Select Balance Method</option>
                   <option value="Cash">Cash</option>
                   <option value="UPI">UPI</option>
-                  {mode === "invoice" && <option value="Card">Card</option>}
+                  {mode === "invoice" && (  
+                    <>                      
+                    <option value="Debit Card">Debit Card</option>                      
+                    <option value="Credit Card">Credit Card</option>                    
+                    </>                  
+                    )}
                   <option value="Split">Split (Cash + UPI)</option>
                 </select>
                 {balanceMethod === "Split" && (
@@ -3252,31 +3349,32 @@ const checkIsBlank = () => {
                 </div>
                 <div id="inventory-log-root" style={{ backgroundColor: "white", padding: "15px", borderRadius: "6px", border: "1px dashed #cbd5e1", maxHeight: "400px", overflowY: "auto" }}>
                   <h2 className="print-only" style={{ textAlign: "center", marginBottom: "20px" }}>{settings.shop_name} - Stock Addition Log</h2>
-                  {(settings.inventory_logs || []).length === 0 ? <p style={{ color: "#64748b", fontSize: "0.9rem" }}>No stock added yet.</p> : (
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
-                      <thead>
-                        <tr style={{ borderBottom: "2px solid #cbd5e1", textAlign: "left" }}>
-                          <th style={{ padding: "8px" }}>Date</th>
-                          <th style={{ padding: "8px" }}>Item Name</th>
-                          <th style={{ padding: "8px" }}>Qty Added</th>
-                          <th style={{ padding: "8px" }}>Weight Added</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(settings.inventory_logs || []).map(log => (
-                          <tr key={log.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                            <td style={{ padding: "8px" }}>{log.date}</td>
-                            <td style={{ padding: "8px", fontWeight: "bold" }}>{log.name}</td>
-                            <td style={{ padding: "8px", color: "#0284c7" }}>+{log.quantity || 0} Pcs</td>
-                            <td style={{ padding: "8px", color: "#16a34a" }}>+{log.weight} {log.unit}</td>
+                  {(() => {
+                    const branchLogs = (settings.inventory_logs || []).filter(log => log.branch_id === globalBranchId);
+                    if (branchLogs.length === 0) return <p style={{ color: "#64748b", fontSize: "0.9rem" }}>No stock added yet for this branch.</p>;
+                    return (
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
+                        <thead>
+                          <tr style={{ borderBottom: "2px solid #cbd5e1", textAlign: "left" }}>
+                            <th style={{ padding: "8px" }}>Date</th>
+                            <th style={{ padding: "8px" }}>Item Name</th>
+                            <th style={{ padding: "8px" }}>Qty Added</th>
+                            <th style={{ padding: "8px" }}>Weight Added</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              </div>
-            )}
+                        </thead>
+                        <tbody>
+                          {branchLogs.map(log => (
+                            <tr key={log.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                              <td style={{ padding: "8px" }}>{log.date}</td>
+                              <td style={{ padding: "8px", fontWeight: "bold" }}>{log.name}</td>
+                              <td style={{ padding: "8px", color: "#0284c7" }}>+{log.quantity || 0} Pcs</td>
+                              <td style={{ padding: "8px", color: "#16a34a" }}>+{log.weight} {log.unit}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    );
+                  })()}
 
             <div style={{ padding: "15px", backgroundColor: "#f0f9ff", borderRadius: "8px", border: "1px solid #bae6fd", marginBottom: "20px" }}>
               <h4 style={{ margin: "0 0 10px 0", color: "#0369a1" }}>Add Incoming Stock</h4>
@@ -3536,6 +3634,43 @@ const checkIsBlank = () => {
                   
                   <label className="select-label">Default HSN Code</label>
                   <Input value={settings.default_hsn} onChange={(e) => setSettings({ ...settings, default_hsn: e.target.value })} />
+                </div>
+              <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
+                  <h4 style={{ margin: "0 0 15px 0" }}>Taxes & MDR</h4>
+                  <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+                      <div style={{ flex: 1 }}>
+                          <label className="select-label">CGST (%)</label>
+                          <Input type="number" step="0.1" value={settings.cgst_percent || 1.5} onChange={(e) => setSettings({ ...settings, cgst_percent: Number(e.target.value) })} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                          <label className="select-label">SGST (%)</label>
+                          <Input type="number" step="0.1" value={settings.sgst_percent || 1.5} onChange={(e) => setSettings({ ...settings, sgst_percent: Number(e.target.value) })} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                          <label className="select-label">IGST (%)</label>
+                          <Input type="number" step="0.1" value={settings.igst_percent || 0} onChange={(e) => setSettings({ ...settings, igst_percent: Number(e.target.value) })} />
+                      </div>
+                  </div>
+                  <div style={{ display: "flex", gap: "10px" }}>
+                      <div style={{ flex: 1 }}>
+                          <label className="select-label">Debit Card MDR (%)</label>
+                          <Input type="number" step="0.1" value={settings.mdr_debit || 0.9} onChange={(e) => setSettings({ ...settings, mdr_debit: Number(e.target.value) })} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                          <label className="select-label">Credit Card MDR (%)</label>
+                          <Input type="number" step="0.1" value={settings.mdr_credit || 1.5} onChange={(e) => setSettings({ ...settings, mdr_credit: Number(e.target.value) })} />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                          <label className="select-label">Bank GST on MDR (%)</label>
+                          <Input type="number" step="0.1" value={settings.mdr_gst || 18} onChange={(e) => setSettings({ ...settings, mdr_gst: Number(e.target.value) })} />
+                      </div>
+                  </div>
+                </div>
+
+                <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
+                  <h4 style={{ margin: "0 0 15px 0" }}>Security</h4>
+                  <label className="select-label">Admin Email (For Password Reset OTP)</label>
+                  <Input type="email" value={settings.admin_email || ""} onChange={(e) => setSettings({ ...settings, admin_email: e.target.value })} placeholder="admin@domain.com" />
                 </div>
 
                 <div style={{ padding: "15px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px solid #bbf7d0" }}>
