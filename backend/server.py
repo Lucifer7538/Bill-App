@@ -162,6 +162,36 @@ def require_auth(authorization: str = Header(None)):
     token = authorization.replace("Bearer ", "").strip()
     if token not in ACTIVE_TOKENS: raise HTTPException(401, "Login Expired")
     return token
+    @app.get("/")
+async def root(): return {"status": "online", "server": "Jalaram-Master-V12", "msg": "Backend is awake"}
+
+# --- RESTORED & UPGRADED LOGIN ENDPOINTS ---
+@api_router.post("/auth/login")
+async def login(payload: dict):
+    print(f"🕵️ DEBUG LOGIN - Payload received: {payload}")
+    
+    settings = await settings_collection.find_one({"key": "app_settings"})
+    db_passcode = settings.get("app_passcode") if settings else None
+    active_pass = db_passcode if db_passcode else AUTH_PASSCODE
+    
+    # Be flexible! Catch the password no matter what the frontend calls it
+    attempt = payload.get("passcode", "") or payload.get("password", "") or payload.get("admin_password", "")
+    attempt = str(attempt).strip()
+    
+    if attempt != str(active_pass): 
+        print(f"❌ DEBUG LOGIN - Failed: Expected {active_pass}, but got {attempt}")
+        raise HTTPException(401, "Invalid Passcode")
+        
+    t = str(uuid.uuid4())
+    ACTIVE_TOKENS[t] = (datetime.now(timezone.utc) + timedelta(hours=12)).isoformat()
+    print("✅ DEBUG LOGIN - Success! User logged in.")
+    
+    return {"access_token": t, "expires_at": ACTIVE_TOKENS[t]}
+
+@api_router.get("/auth/verify")
+async def verify(_=Depends(require_auth)): 
+    return {"valid": True}
+# -------------------------------------------
 
 @app.get("/")
 async def root(): return {"status": "online", "server": "Jalaram-Master-V12", "msg": "Backend is awake"}
