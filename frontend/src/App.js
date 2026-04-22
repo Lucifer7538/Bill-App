@@ -2010,12 +2010,34 @@ const checkIsBlank = () => {
 
   if (isPublicView) {
     if (publicLoading) return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh', backgroundColor: '#3e2723', backgroundImage: 'radial-gradient(#5d4037 15%, transparent 16%), radial-gradient(#5d4037 15%, transparent 16%)', backgroundSize: '60px 60px', backgroundPosition: '0 0, 30px 30px', color: '#fef3c7' }}>
-        <style>{`@keyframes spin { 100% { transform: rotate(360deg); } } @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }`}</style>
-        <div style={{ width: '60px', height: '60px', border: '5px solid rgba(255,255,255,0.2)', borderTopColor: '#fcd34d', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-        <h2 style={{ marginTop: '25px', animation: 'pulse 1.5s infinite', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>Unlocking Vault...</h2>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px', minHeight: '100dvh', backgroundColor: '#f1f5f9' }}>
+      <style>{`@keyframes shimmer { 0% { background-position: -800px 0 } 100% { background-position: 800px 0 } } .skel { background: linear-gradient(90deg, #e2e8f0 25%, #f8fafc 50%, #e2e8f0 75%); background-size: 800px 100%; animation: shimmer 1.5s infinite linear; border-radius: 6px; }`}</style>
+      <div style={{ width: '100%', maxWidth: '800px', backgroundColor: 'white', padding: '40px', borderRadius: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.05)' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
+          <div className="skel" style={{ width: '80px', height: '80px', borderRadius: '50%' }}></div>
+        </div>
+        <div className="skel" style={{ height: '30px', width: '40%', margin: '0 auto 15px auto' }}></div>
+        <div className="skel" style={{ height: '15px', width: '25%', margin: '0 auto 40px auto' }}></div>
+        
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '30px' }}>
+          <div className="skel" style={{ height: '20px', width: '30%' }}></div>
+          <div className="skel" style={{ height: '20px', width: '20%' }}></div>
+        </div>
+        
+        <div className="skel" style={{ height: '40px', width: '100%', marginBottom: '10px' }}></div>
+        <div className="skel" style={{ height: '40px', width: '100%', marginBottom: '10px' }}></div>
+        <div className="skel" style={{ height: '40px', width: '100%', marginBottom: '30px' }}></div>
+        
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <div style={{ width: '40%' }}>
+             <div className="skel" style={{ height: '20px', width: '100%', marginBottom: '10px' }}></div>
+             <div className="skel" style={{ height: '20px', width: '100%', marginBottom: '10px' }}></div>
+             <div className="skel" style={{ height: '30px', width: '100%' }}></div>
+          </div>
+        </div>
       </div>
-    );
+    </div>
+  );
     if (publicBill === "NOT_FOUND" || !publicBill) return <div className="loading-screen">Bill not found or has been deleted.</div>;
 
     const isSale = publicBill.tx_type === "sale" || !publicBill.tx_type;
@@ -2236,24 +2258,38 @@ const checkIsBlank = () => {
     );
   }
 
-  if (checkingSession) {
+ if (checkingSession) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100dvh', backgroundColor: '#291d17', backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.05) 10px, rgba(0,0,0,0.05) 20px)' }}>
-        <style>{`@keyframes spin { 100% { transform: rotate(360deg); } } @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }`}</style>
-        <div style={{ padding: '40px', backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: '16px', textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.4)', maxWidth: '350px' }}>
-          <div style={{ width: '50px', height: '50px', border: '5px solid #e2e8f0', borderTopColor: '#b45309', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 20px auto' }}></div>
-          <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#78350f', animation: 'pulse 1.5s infinite', marginBottom: '10px' }}>Loading {settings?.shop_name || "Jalaram Jewellers"}...</div>
-          {isWakingUp && (
-            <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px dashed #cbd5e1' }}>
-              <p style={{ margin: '0 0 15px 0', fontSize: '0.85rem', color: '#64748b' }}>Database is waking up from sleep mode. This takes about <strong>30-60 seconds</strong>.</p>
-              <Button variant="outline" onClick={() => { localStorage.clear(); window.location.reload(); }} style={{ width: '100%', borderColor: '#ef4444', color: '#ef4444' }}>Force Restart</Button>
-            </div>
-          )}
+      <div style={{ display: 'flex', height: '100dvh', backgroundColor: '#f1f5f9', overflow: 'hidden' }}>
+        <style>{`@keyframes shimmer { 0% { background-position: -1000px 0 } 100% { background-position: 1000px 0 } } .skel { background: linear-gradient(90deg, #e2e8f0 25%, #f8fafc 50%, #e2e8f0 75%); background-size: 1000px 100%; animation: shimmer 1.5s infinite linear; border-radius: 8px; }`}</style>
+        
+        {/* Fake Screen & Sidebar Skeleton */}
+        <div style={{ flex: 3, padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+             <div className="skel" style={{ height: '50px', width: '30%' }}></div>
+             <div className="skel" style={{ height: '40px', width: '15%', borderRadius: '20px' }}></div>
+           </div>
+           <div className="skel" style={{ flex: 1, width: '100%', borderRadius: '12px' }}></div>
+        </div>
+
+        <div style={{ flex: 2, borderLeft: '1px solid #cbd5e1', padding: '20px', backgroundColor: 'white', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+           <div className="skel" style={{ height: '40px', width: '100%' }}></div>
+           <div className="skel" style={{ height: '60px', width: '100%' }}></div>
+           <div className="skel" style={{ height: '200px', width: '100%', marginTop: '20px' }}></div>
+           <div className="skel" style={{ height: '120px', width: '100%', marginTop: '20px' }}></div>
+           
+           {/* Pop-up for database wake-up */}
+           {isWakingUp && (
+              <div style={{ position: 'absolute', bottom: '30px', right: '30px', backgroundColor: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 10px 30px rgba(0,0,0,0.15)', border: '1px solid #cbd5e1', zIndex: 100, width: '320px' }}>
+                 <p style={{ margin: '0 0 10px 0', fontWeight: 'bold', color: '#0f172a', fontSize: '1.1rem' }}>Waking up database ⏳</p>
+                 <p style={{ margin: '0 0 15px 0', fontSize: '0.85rem', color: '#64748b' }}>Please wait about 30 seconds for the cloud server to spin up.</p>
+                 <Button variant="outline" onClick={() => { localStorage.clear(); window.location.reload(); }} style={{ width: '100%', borderColor: '#ef4444', color: '#ef4444' }}>Force Restart App</Button>
+              </div>
+           )}
         </div>
       </div>
     );
   }
-
  if (!token) {
     if (!isAdminView && !isPublicView) {
       return (
