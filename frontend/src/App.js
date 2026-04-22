@@ -3571,7 +3571,7 @@ const checkIsBlank = () => {
           </div>
         </section>
       )}
-      {/* SETTINGS DRAWER */}
+     {/* SETTINGS DRAWER */}
       {showSettings && (
         <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "100vw", backgroundColor: "white", zIndex: 100, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
           <div className="drawer-header" style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10, paddingBottom: "15px", borderBottom: "1px solid #e2e8f0" }}>
@@ -3635,32 +3635,33 @@ const checkIsBlank = () => {
                   <label className="select-label">Default HSN Code</label>
                   <Input value={settings.default_hsn} onChange={(e) => setSettings({ ...settings, default_hsn: e.target.value })} />
                 </div>
-              <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
+
+                <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
                   <h4 style={{ margin: "0 0 15px 0" }}>Taxes & MDR</h4>
-                  <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
-                      <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", gap: "10px", marginBottom: "10px", flexWrap: "wrap" }}>
+                      <div style={{ flex: "1 1 100px" }}>
                           <label className="select-label">CGST (%)</label>
                           <Input type="number" step="0.1" value={settings.cgst_percent || 1.5} onChange={(e) => setSettings({ ...settings, cgst_percent: Number(e.target.value) })} />
                       </div>
-                      <div style={{ flex: 1 }}>
+                      <div style={{ flex: "1 1 100px" }}>
                           <label className="select-label">SGST (%)</label>
                           <Input type="number" step="0.1" value={settings.sgst_percent || 1.5} onChange={(e) => setSettings({ ...settings, sgst_percent: Number(e.target.value) })} />
                       </div>
-                      <div style={{ flex: 1 }}>
+                      <div style={{ flex: "1 1 100px" }}>
                           <label className="select-label">IGST (%)</label>
                           <Input type="number" step="0.1" value={settings.igst_percent || 0} onChange={(e) => setSettings({ ...settings, igst_percent: Number(e.target.value) })} />
                       </div>
                   </div>
-                  <div style={{ display: "flex", gap: "10px" }}>
-                      <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                      <div style={{ flex: "1 1 100px" }}>
                           <label className="select-label">Debit Card MDR (%)</label>
                           <Input type="number" step="0.1" value={settings.mdr_debit || 0.9} onChange={(e) => setSettings({ ...settings, mdr_debit: Number(e.target.value) })} />
                       </div>
-                      <div style={{ flex: 1 }}>
+                      <div style={{ flex: "1 1 100px" }}>
                           <label className="select-label">Credit Card MDR (%)</label>
                           <Input type="number" step="0.1" value={settings.mdr_credit || 1.5} onChange={(e) => setSettings({ ...settings, mdr_credit: Number(e.target.value) })} />
                       </div>
-                      <div style={{ flex: 1 }}>
+                      <div style={{ flex: "1 1 100px" }}>
                           <label className="select-label">Bank GST on MDR (%)</label>
                           <Input type="number" step="0.1" value={settings.mdr_gst || 18} onChange={(e) => setSettings({ ...settings, mdr_gst: Number(e.target.value) })} />
                       </div>
@@ -3852,6 +3853,13 @@ const checkIsBlank = () => {
                   </div>
                   <p style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "10px" }}>Note: System actions are locked, but you can safely change their key combinations. Add custom entries as a quick reference guide for your staff.</p>
                 </div>
+                <div style={{ padding: "15px", backgroundColor: "#fdf4ff", borderRadius: "8px", border: "1px solid #f5d0fe", marginBottom: "15px", marginTop: "15px" }}>
+                  <h4 style={{ color: "#86198f", margin: "0 0 10px 0" }}>Barcode Scanner Power</h4>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <input type="checkbox" checked={settings.enable_barcode_system || false} onChange={(e) => setSettings({ ...settings, enable_barcode_system: e.target.checked })} style={{ width: "20px", height: "20px" }} />
+                    <strong>Enable Laser Scanner Listening</strong>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -3924,16 +3932,6 @@ const checkIsBlank = () => {
                   )}
                 </div>
               </div>
-            )}
-            
-            {settingsTab === "advanced" && (
-                <div style={{ padding: "15px", backgroundColor: "#fdf4ff", borderRadius: "8px", border: "1px solid #f5d0fe", marginBottom: "15px", marginTop: "15px" }}>
-                  <h4 style={{ color: "#86198f", margin: "0 0 10px 0" }}>Barcode Scanner Power</h4>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <input type="checkbox" checked={settings.enable_barcode_system || false} onChange={(e) => setSettings({ ...settings, enable_barcode_system: e.target.checked })} style={{ width: "20px", height: "20px" }} />
-                    <strong>Enable Laser Scanner Listening</strong>
-                  </div>
-                </div>
             )}
 
             <Button onClick={saveSettings} style={{ width: "100%", marginTop: "20px", backgroundColor: "#0f172a", padding: "15px", fontSize: "1.1rem" }}>Save All Settings</Button>
