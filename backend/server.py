@@ -403,27 +403,21 @@ async def get_logs(branch_id: str = Query(...), _=Depends(require_auth)):
 async def next_num(mode: str, branch_id: str, _=Depends(require_auth)):
     doc = await counters_collection.find_one({"mode": mode, "branch_id": branch_id})
     val = (doc.get("value", 0) if doc else 0) + 1
-    prefix = "INV" if mode == "invoice" else "EST"
-    
-    # FIX FOR MASSIVE BRANCH IDs: Convert "B17768..." into "B2", "B3" based on list order
-@api_router.get("/bills/next-number")
-async def next_num(mode: str, branch_id: str, _=Depends(require_auth)):
-    doc = await counters_collection.find_one({"mode": mode, "branch_id": branch_id})
-    val = (doc.get("value", 0) if doc else 0) + 1
     
     if mode == "invoice":
-        # Auto-calculate the Indian Financial Year (April 1 to March 31)
+        # Auto-calculate the Indian Financial Year
         now = datetime.now(timezone.utc)
         if now.month >= 4:
             fy = f"{now.strftime('%y')}-{(now.year + 1) % 100:02d}"
         else:
             fy = f"{(now.year - 1) % 100:02d}-{now.strftime('%y')}"
             
-        # :03d forces a minimum of 3 digits (001), but expands to 1000+ naturally
+        # Both branches output exactly what the CA wants. 
+        # :03d guarantees 001, 002... and automatically scales to 1000, 1001 when reached.
         return {"document_number": f"JW/{fy}/{val:03d}"}
         
     else:
-        # Keep Estimates formatting the old way
+        # Keep Estimates formatting as they were
         prefix = "EST"
         settings = await settings_collection.find_one({"key": "app_settings"})
         short_branch = branch_id
@@ -661,12 +655,16 @@ async def storage(_=Depends(require_auth)):
         return {"used_bytes": u, "quota_bytes": 512*1024*1024, "percentage": round((u/(512*1024*1024))*100, 2)}
     except: return {"used_bytes": 0, "quota_bytes": 512*1024*1024, "percentage": 0}
 
-@api_router.get("/bills/public/{document_number}")
-async def get_public(document_number: str):
-    bill = await bills_collection.find_one({"document_number": document_number}, {"_id": 0})
+@api_router.get("/bills/public/id/{bill_id}")
+async def get_public(bill_id: str):
+    # Search the database using the unique UUID, totally ignoring the document number
+    bill = await bills_collection.find_one({"id": bill_id}, {"_id": 0})
+    
+    if not bill:
+        raise HTTPException(404, "Bill not found")
+        
     settings = await settings_collection.find_one({"key": "app_settings"}, {"_id": 0})
     return {"bill": bill, "settings": settings}
-
 @api_router.post("/system/sync-old-points")
 async def sync_old_points():
     await customers_collection.update_many(
