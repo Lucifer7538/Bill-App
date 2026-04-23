@@ -163,7 +163,7 @@ async def require_auth(authorization: str = Header(None)):
     if not authorization: raise HTTPException(401, "No Token")
     token = authorization.replace("Bearer ", "").strip()
     
-    # Check the database for the permanent token
+    # Now the guard checks the database for the permanent token!
     token_doc = await active_tokens_collection.find_one({"token": token})
     if not token_doc: raise HTTPException(401, "Login Expired")
     
