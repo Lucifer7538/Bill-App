@@ -19,6 +19,7 @@ from email.mime.text import MIMEText
 import random
 
 OTP_STORE = {} # Temporary memory to store the forgot password codes
+LOGIN_OTP_STORE = {} # Temporary memory for 2FA logins
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -166,30 +167,82 @@ def require_auth(authorization: str = Header(None)):
 async def root(): return {"status": "online", "server": "Jalaram-Master-V12", "msg": "Backend is awake"}
 # --- RESTORED & UPGRADED LOGIN ENDPOINTS ---
 @api_router.post("/auth/login")
-async def login(payload: dict):
+async def login_step_one(payload: dict, background_tasks: BackgroundTasks):
     print(f"🕵️ DEBUG LOGIN - Payload received: {payload}")
     
     settings = await settings_collection.find_one({"key": "app_settings"})
     db_passcode = settings.get("app_passcode") if settings else None
     active_pass = db_passcode if db_passcode else AUTH_PASSCODE
     
-    # Be flexible! Catch the password no matter what the frontend calls it
-    attempt = payload.get("passcode", "") or payload.get("password", "") or payload.get("admin_password", "")
+    attempt = payload.get("passcode", "") or payload.get("password", "")
     attempt = str(attempt).strip()
     
     if attempt != str(active_pass): 
-        print(f"❌ DEBUG LOGIN - Failed: Expected {active_pass}, but got {attempt}")
+        print(f"❌ DEBUG LOGIN - Failed: Invalid Passcode")
         raise HTTPException(401, "Invalid Passcode")
         
+    admin_email = settings.get("admin_email", "") if settings else ""
+    if not admin_email:
+        raise HTTPException(400, "Admin email not set in settings. Cannot send 2FA.")
+
+    # Generate the 6-digit login OTP
+    otp = str(random.randint(100000, 999999))
+    LOGIN_OTP_STORE[admin_email] = {
+        "otp": otp,
+        "expires": datetime.now(timezone.utc) + timedelta(minutes=5),
+        "remember_me": payload.get("remember_me", False)
+    }
+    
+    sender = os.environ.get("SMTP_USER", "jalaramjewellers26@gmail.com") 
+    password = os.environ.get("SMTP_PASS", "") 
+    
+    def send_2fa_email():
+        try:
+            msg = MIMEText(f"Your Jalaram Jewellers Login 2FA Code is: {otp}\nValid for 5 minutes.")
+            msg['Subject'] = 'Login Verification Code'
+            msg['From'] = sender
+            msg['To'] = admin_email
+            
+            with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+                server.login(sender, password)
+                server.send_message(msg)
+            print("✅ 2FA Email Sent!")
+        except Exception as e:
+            print(f"❌ Failed to send 2FA email: {e}")
+
+    background_tasks.add_task(send_2fa_email)
+    return {"status": "otp_sent", "message": "2FA code sent to admin email."}
+
+@api_router.post("/auth/verify-login")
+async def verify_login_step_two(payload: dict):
+    otp_attempt = payload.get("otp", "").strip()
+    
+    settings = await settings_collection.find_one({"key": "app_settings"})
+    admin_email = settings.get("admin_email", "") if settings else ""
+    
+    stored_data = LOGIN_OTP_STORE.get(admin_email)
+    
+    if not stored_data or datetime.now(timezone.utc) > stored_data["expires"]:
+        raise HTTPException(401, "OTP has expired or was not requested.")
+        
+    if str(stored_data["otp"]) != str(otp_attempt):
+        raise HTTPException(401, "Invalid Verification Code.")
+        
+    # Success! Create the token. If Remember Me is true, token lasts 30 days. Otherwise, 12 hours.
     t = str(uuid.uuid4())
-    ACTIVE_TOKENS[t] = (datetime.now(timezone.utc) + timedelta(hours=12)).isoformat()
-    print("✅ DEBUG LOGIN - Success! User logged in.")
+    hours_to_keep = 24 * 30 if stored_data.get("remember_me") else 12
+    ACTIVE_TOKENS[t] = (datetime.now(timezone.utc) + timedelta(hours=hours_to_keep)).isoformat()
+    
+    del LOGIN_OTP_STORE[admin_email] # Burn the OTP
+    print("✅ DEBUG LOGIN - 2FA Success! User is logged in.")
     
     return {"access_token": t, "expires_at": ACTIVE_TOKENS[t]}
 
-@api_router.get("/auth/verify")
-async def verify(_=Depends(require_auth)): 
-    return {"valid": True}
+@api_router.post("/auth/logout-all")
+async def logout_all_devices(_=Depends(require_auth)):
+    # Wipes the active tokens dictionary entirely. Every single logged-in device gets kicked out.
+    ACTIVE_TOKENS.clear()
+    return {"message": "All devices have been successfully logged out."}
 # -------------------------------------------
 
 @app.get("/")
