@@ -569,7 +569,7 @@ async def toggle_pay(document_number: str, payload: dict, _=Depends(require_auth
         return {"message": "Payment Status Toggled"}
     except Exception as e: raise HTTPException(500, detail=str(e))
 
-@api_router.delete("/bills/{document_number}")
+@api_router.delete("/bills/{document_number:path}")
 async def delete_bill(document_number: str, _=Depends(require_auth)):
     bill = await bills_collection.find_one({"document_number": document_number})
     if bill:
@@ -613,7 +613,7 @@ async def delete_bill(document_number: str, _=Depends(require_auth)):
                     v = int(match.group())
                     if v > highest_val: 
                         highest_val = v
-                    
+                
             # Tell the database to dial the counter back to the actual highest existing bill
             await counters_collection.update_one(
                 {"mode": mode, "branch_id": branch_id}, 
@@ -623,8 +623,6 @@ async def delete_bill(document_number: str, _=Depends(require_auth)):
     # -----------------------------------------------------
 
     return {"message": "Deleted and Counter Auto-Corrected"}
-
-
 @api_router.delete("/bills/all")
 async def delete_all_bills(_=Depends(require_auth)):
     try:
