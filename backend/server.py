@@ -406,16 +406,34 @@ async def next_num(mode: str, branch_id: str, _=Depends(require_auth)):
     prefix = "INV" if mode == "invoice" else "EST"
     
     # FIX FOR MASSIVE BRANCH IDs: Convert "B17768..." into "B2", "B3" based on list order
-    settings = await settings_collection.find_one({"key": "app_settings"})
-    short_branch = branch_id
-    if settings and "branches" in settings:
-        for idx, b in enumerate(settings["branches"]):
-            if str(b.get("id")) == str(branch_id):
-                short_branch = f"B{idx + 1}"
-                break
-                
-    return {"document_number": f"{short_branch}-{prefix}-{val:04d}"}
-
+@api_router.get("/bills/next-number")
+async def next_num(mode: str, branch_id: str, _=Depends(require_auth)):
+    doc = await counters_collection.find_one({"mode": mode, "branch_id": branch_id})
+    val = (doc.get("value", 0) if doc else 0) + 1
+    
+    if mode == "invoice":
+        # Auto-calculate the Indian Financial Year (April 1 to March 31)
+        now = datetime.now(timezone.utc)
+        if now.month >= 4:
+            fy = f"{now.strftime('%y')}-{(now.year + 1) % 100:02d}"
+        else:
+            fy = f"{(now.year - 1) % 100:02d}-{now.strftime('%y')}"
+            
+        # :03d forces a minimum of 3 digits (001), but expands to 1000+ naturally
+        return {"document_number": f"JW/{fy}/{val:03d}"}
+        
+    else:
+        # Keep Estimates formatting the old way
+        prefix = "EST"
+        settings = await settings_collection.find_one({"key": "app_settings"})
+        short_branch = branch_id
+        if settings and "branches" in settings:
+            for idx, b in enumerate(settings["branches"]):
+                if str(b.get("id")) == str(branch_id):
+                    short_branch = f"B{idx + 1}"
+                    break
+                    
+        return {"document_number": f"{short_branch}-{prefix}-{val:04d}"}
 @api_router.post("/bills/reset-counter")
 async def reset_counter(payload: dict, _=Depends(require_auth)):
     try:
