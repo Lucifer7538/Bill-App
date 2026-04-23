@@ -392,6 +392,9 @@ export default function App() {
   const [otpSent, setOtpSent] = useState(false);
   const [sendingOtp, setSendingOtp] = useState(false);
   const [resettingPwd, setResettingPwd] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  const [showLoginOtp, setShowLoginOtp] = useState(false);
+  const [loginOtpCode, setLoginOtpCode] = useState("");
 
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [gatewayPassed, setGatewayPassed] = useState(false);
@@ -1529,20 +1532,49 @@ const checkIsBlank = () => {
       event.preventDefault(); 
       setLoggingIn(true); 
       try { 
-          const response = await axios.post(`${API}/auth/login`, { passcode }, { timeout: 15000 }); 
-          localStorage.setItem("jj_auth_token", response.data.access_token); 
-          setToken(response.data.access_token); 
-          setPasscode(""); 
-          toast.success("Logged in successfully"); 
+          // Step 1: Send Passcode and Remember Me choice
+          await axios.post(`${API}/auth/login`, { passcode, remember_me: rememberMe }, { timeout: 15000 }); 
+          toast.success("Passcode correct! Check admin email for 2FA code.");
+          setShowLoginOtp(true); // Switch screen to ask for OTP
       } catch (error) { 
           if (error?.response?.status === 401) { 
               toast.error("Wrong passcode."); 
           } else { 
-              toast.error("Server is waking up. Please wait 15-20 seconds and try again."); 
+              toast.error("Server error. Please try again."); 
           } 
       } finally { 
           setLoggingIn(false); 
       } 
+  };
+
+  const handleVerify2FA = async (event) => {
+      event.preventDefault();
+      setLoggingIn(true);
+      try {
+          // Step 2: Send the OTP to get the actual access token
+          const response = await axios.post(`${API}/auth/verify-login`, { otp: loginOtpCode });
+          localStorage.setItem("jj_auth_token", response.data.access_token); 
+          setToken(response.data.access_token); 
+          setPasscode(""); 
+          setLoginOtpCode("");
+          setShowLoginOtp(false);
+          toast.success("Login Successful!"); 
+      } catch (error) {
+          toast.error("Invalid or expired 2FA code.");
+      } finally {
+          setLoggingIn(false);
+      }
+  };
+
+  const handleLogoutAllDevices = async () => {
+      if (!window.confirm("⚠️ This will log out every device currently using the app. Are you sure?")) return;
+      try {
+          await axios.post(`${API}/auth/logout-all`, {}, { headers: authHeaders });
+          toast.success("All devices logged out securely.");
+          handleLogout(); // Log yourself out too
+      } catch (error) {
+          toast.error("Failed to log out devices.");
+      }
   };
 
   const handleLogout = () => { 
@@ -2341,13 +2373,29 @@ const checkIsBlank = () => {
         <div className="login-card">
           <h1 className="login-title">{settings?.shop_name || "Jalaram Jewellers"}</h1>
           
-          {!showForgotPwd ? (
-              <form onSubmit={handleLogin}>
-                  <p className="login-subtitle">Enter passcode to access billing panel</p>
-                  <Input type="password" value={passcode} onChange={(e) => setPasscode(e.target.value)} placeholder="Enter passcode" style={{ marginBottom: "10px" }} />
-                  <Button type="submit" disabled={loggingIn} style={{ width: "100%", marginBottom: "10px" }}>{loggingIn ? "Checking..." : "Login"}</Button>
-                  <Button type="button" variant="ghost" onClick={() => setShowForgotPwd(true)} style={{ width: "100%", color: "#64748b" }}>Forgot Passcode?</Button>
-              </form>
+         {!showForgotPwd ? (
+              !showLoginOtp ? (
+                  <form onSubmit={handleLogin}>
+                      <p className="login-subtitle">Enter passcode to access billing panel</p>
+                      <Input type="password" value={passcode} onChange={(e) => setPasscode(e.target.value)} placeholder="Enter passcode" style={{ marginBottom: "15px" }} required />
+                      
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px", justifyContent: "center" }}>
+                          <input type="checkbox" id="rememberMeBox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} style={{ width: "18px", height: "18px", cursor: "pointer" }} />
+                          <label htmlFor="rememberMeBox" style={{ cursor: "pointer", color: "#475569", fontSize: "0.95rem" }}>Remember me for 30 days</label>
+                      </div>
+
+                      <Button type="submit" disabled={loggingIn} style={{ width: "100%", marginBottom: "15px", padding: "20px", fontSize: "1.1rem" }}>{loggingIn ? "Verifying..." : "Continue to 2FA"}</Button>
+                      <Button type="button" variant="ghost" onClick={() => setShowForgotPwd(true)} style={{ width: "100%", color: "#64748b" }}>Forgot Passcode?</Button>
+                  </form>
+              ) : (
+                  <form onSubmit={handleVerify2FA}>
+                      <p className="login-subtitle">Enter the 6-digit code sent to the admin email.</p>
+                      <Input type="text" value={loginOtpCode} onChange={(e) => setLoginOtpCode(e.target.value)} placeholder="Enter 2FA Code" style={{ marginBottom: "15px", textAlign: "center", letterSpacing: "5px", fontSize: "1.2rem", fontWeight: "bold" }} required autoFocus />
+                      
+                      <Button type="submit" disabled={loggingIn} style={{ width: "100%", marginBottom: "15px", backgroundColor: "#16a34a", padding: "20px", fontSize: "1.1rem" }}>{loggingIn ? "Checking..." : "Verify & Login"}</Button>
+                      <Button type="button" variant="ghost" onClick={() => { setShowLoginOtp(false); setLoginOtpCode(""); }} style={{ width: "100%" }}>Cancel & Go Back</Button>
+                  </form>
+              )
           ) : (
               <div>
                   <p className="login-subtitle">Reset your passcode securely</p>
@@ -3734,10 +3782,15 @@ const checkIsBlank = () => {
 
                 <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
                   <h4 style={{ margin: "0 0 15px 0" }}>Security</h4>
-                  <label className="select-label">Admin Email (For Password Reset OTP)</label>
-                  <Input type="email" value={settings.admin_email || ""} onChange={(e) => setSettings({ ...settings, admin_email: e.target.value })} placeholder="admin@domain.com" />
+                  <label className="select-label">Admin Email (For Passcode Reset & 2FA)</label>
+                  <Input type="email" value={settings.admin_email || ""} onChange={(e) => setSettings({ ...settings, admin_email: e.target.value })} placeholder="admin@domain.com" style={{ marginBottom: "20px" }} />
+                  
+                  <div style={{ borderTop: "1px dashed #cbd5e1", paddingTop: "20px" }}>
+                    <h4 style={{ color: "#b91c1c", margin: "0 0 10px 0" }}>Active Sessions</h4>
+                    <p style={{ fontSize: "0.85rem", color: "#64748b", marginBottom: "10px" }}>If you left the app logged in on a public computer or a former staff member's phone, you can instantly terminate all active sessions.</p>
+                    <Button onClick={handleLogoutAllDevices} style={{ width: "100%", backgroundColor: "#7f1d1d", color: "white" }}>⚠️ Logout From All Devices Everywhere</Button>
+                  </div>
                 </div>
-
                 <div style={{ padding: "15px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px solid #bbf7d0" }}>
                   <h4 style={{ margin: "0 0 15px 0", color: "#16a34a" }}>Loyalty Points System</h4>
                   <label className="select-label">Points Earned Per 1 Gram</label>
