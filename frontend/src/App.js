@@ -24,6 +24,7 @@ const createItem = (defaultHsn = "", desc = "", wt = "", mc = "", fixedAmt = "")
   mc_override: mc
 });
 const defaultSettings = {
+  show_visit_branches: true,
   shop_name: "Jalaram Jewellers", 
   tagline: "The Silver Specialist", 
   phone_numbers: ["+91 9583221115", "+91 9776177296", "+91 7538977527"], 
@@ -181,7 +182,7 @@ const FontSelectOptions = ({ customFonts }) => (
   </>
 );
 
-const FooterLinksAndQRs = ({ branch, allBranches }) => {
+const FooterLinksAndQRs = ({ branch, allBranches, showBranches = true }) => {
   if (!branch) return null;
   return (
     <div style={{ marginTop: "25px", borderTop: "1px dashed #e2e8f0", paddingTop: "20px" }}>
@@ -194,12 +195,16 @@ const FooterLinksAndQRs = ({ branch, allBranches }) => {
           {branch.about_url && (<a href={branch.about_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#3b82f6", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>ℹ️ About Us</a>)}
         </div>
         
-        <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Visit Our Branches:</p>
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
-          {(allBranches || []).map(b => b.location_url && (
-            <a key={b.id} href={b.location_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#0f172a", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>📍 {b.name}</a>
-          ))}
-        </div>
+        {showBranches && (
+          <>
+            <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Visit Our Branches:</p>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+              {(allBranches || []).map(b => b.location_url && (
+                <a key={b.id} href={b.location_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#0f172a", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>📍 {b.name}</a>
+              ))}
+            </div>
+          </>
+        )}
       </div>
       
       <div className="print-only" style={{ display: 'flex', justifyContent: 'center', gap: '15px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
@@ -227,7 +232,7 @@ const FooterLinksAndQRs = ({ branch, allBranches }) => {
                 <p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>About Us</p>
             </div>
         )}
-        {(allBranches || []).map(b => b.location_url && (
+        {showBranches && (allBranches || []).map(b => b.location_url && (
             <div key={`qr-${b.id}`} style={{ textAlign: 'center' }}>
                 <img src={`https://quickchart.io/qr?text=${encodeURIComponent(b.location_url)}&size=100`} alt={`${b.name} QR`} crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} />
                 <p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>{b.name}</p>
@@ -716,7 +721,7 @@ export default function App() {
       setPublicLoading(true);
       const fetchPublicBill = async () => {
         try {
-          const res = await axios.get(`${API}/bills/public/${viewDoc}`);
+          const res = await axios.get(`${API}/bills/public/id/${viewDoc}`);
           setPublicBill(res.data.bill);
           const sData = { ...defaultSettings, ...res.data.settings };
           if (!sData.branches) sData.branches = defaultSettings.branches;
@@ -1897,7 +1902,11 @@ const checkIsBlank = () => {
   };
   
   const shareWhatsApp = () => { 
-    const link = `${window.location.origin}/?view=${documentNumber}`; 
+    if (!currentBillId) {
+        toast.error("Please save the bill before sharing!");
+        return;
+    }
+    const link = `${window.location.origin}/?view=${currentBillId}`; 
     const text = `*Hello* ${customer.name || "Customer"},\n Thank you for visiting Jalaram Jewellers\n\n Official ${mode === "invoice" ? "Invoice" : "Estimate"} Bill\n Here Is Your Bill No. ${documentNumber}\n Amount: ₹${money(computed.grandTotal)}.\n\n Here You can view and download it securely\n Link: ${link}\n\n *Stay Connected With us*\n WhatsApp Group\n Link (https://bit.ly/Jalaram-Group-WP)\n Instagram\n Link (https://bit.ly/Jalaram-IG)\n\n*We value Your Feedback*\n Dear ${customer.name || "Customer"}, Please Give us a minute to Rate our Behaviour and Service. Give us your Valuable Feedback so we can make your experience even better:\n ${activeBillBranch.map_url}\n\n   Thank you,\n${settings.shop_name} : The Silver Specialist\n\n  `; 
     
     let cleanedPhone = customer.phone.replace(/\D/g, ""); 
@@ -1907,7 +1916,11 @@ const checkIsBlank = () => {
   };
   
   const shareEmail = () => { 
-      const link = `${window.location.origin}/?view=${documentNumber}`; 
+      if (!currentBillId) {
+          toast.error("Please save the bill before sharing!");
+          return;
+      }
+      const link = `${window.location.origin}/?view=${currentBillId}`; 
       const subject = `${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber}`; 
       const body = `Dear ${customer.name || "Customer"},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`; 
       window.location.href = `mailto:${customer.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; 
@@ -2220,6 +2233,7 @@ const checkIsBlank = () => {
               <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(publicComputed.roundOff)}</strong></div>
               {num(publicComputed.savedCredit) > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(publicComputed.savedCredit)}</strong></div>}
               <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(publicComputed.grandTotal)}</strong></div>
+               <div style={{ textAlign: "right", fontSize: "0.8rem", color: "#64748b", marginTop: "2px", fontWeight: "bold" }}>E. & O.E.</div>
 
               {isSale ? (
                 <div className="totals-row" style={{ color: isPaid ? "#16a34a" : "#b45309", marginTop: "10px" }}>
@@ -2282,9 +2296,10 @@ const checkIsBlank = () => {
               )}
             </div>
             
-            <FooterLinksAndQRs branch={pbBranch} allBranches={publicSettings?.branches} />
+            <FooterLinksAndQRs branch={pbBranch} allBranches={publicSettings?.branches} showBranches={publicSettings?.show_visit_branches !== false && publicBill.mode === "invoice"} />
           </div>
           <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
+            
         </section>
       </div>
     );
@@ -2546,6 +2561,7 @@ const checkIsBlank = () => {
                     <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(b.totals?.round_off !== undefined ? b.totals.round_off : 0)}</strong></div>
                     {num(b.saved_credit) > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(b.saved_credit)}</strong></div>}
                     <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(b.totals?.grand_total || 0)}</strong></div>
+                     <div style={{ textAlign: "right", fontSize: "0.8rem", color: "#64748b", marginTop: "2px", fontWeight: "bold" }}>E. & O.E.</div>
                     
                     {b.tx_type === "sale" || !b.tx_type ? (
                       <div className="totals-row" style={{ color: b.is_payment_done ? "#16a34a" : "#b45309", marginTop: "10px" }}>
@@ -2595,14 +2611,14 @@ const checkIsBlank = () => {
                          <ul className="policies-list">
                             <li>6 Months of repair and polishing warranty only on silver ornaments.</li>
                             <li>You can replace purchased items within 7 days for manufacturing defects.</li>
-                         </ul>
-                      </>
-                    )}
-                  </div>
-                  <FooterLinksAndQRs branch={billBranch} allBranches={settings.branches} />
-                </div>
-                <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
-             </section>
+                        </ul>
+                   </>
+                 )}
+               </div>
+               <FooterLinksAndQRs branch={billBranch} allBranches={settings.branches} showBranches={settings.show_visit_branches !== false && b.mode === "invoice"} />
+             </div>
+             <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
+          </section>
            );
         })}
       </div>
@@ -2812,6 +2828,7 @@ const checkIsBlank = () => {
                 <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(computed.roundOff)}</strong></div>
                 {computed.savedCredit > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(computed.savedCredit)}</strong></div>}
                 <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(computed.grandTotal)}</strong></div>
+                 <div style={{ textAlign: "right", fontSize: "0.8rem", color: "#64748b", marginTop: "2px", fontWeight: "bold" }}>E. & O.E.</div>
 
                 {txType === "sale" ? (
                   <div className="totals-row" style={{ color: isPaymentDone ? "#16a34a" : "#b45309", marginTop: "10px" }}>
@@ -2870,16 +2887,13 @@ const checkIsBlank = () => {
                         <li>6 Months of repair and polishing warranty only on silver ornaments.</li>
                         <li>You can replace purchased items within 7 days for manufacturing defects.</li>
                      </ul>
-                  </>
-                )}
-              </div>
-              
-              <FooterLinksAndQRs branch={activeBillBranch} allBranches={settings.branches} />
-
-            </div>
-            <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
-          </div>
-        </section>
+                   </>
+                 )}
+               </div>
+               <FooterLinksAndQRs branch={billBranch} allBranches={settings.branches} showBranches={settings.show_visit_branches !== false && b.mode === "invoice"} />
+             </div>
+             <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
+          </section>
 
         <aside className="controls no-print" style={{ flex: isMobileSplit ? "none" : "2", overflowY: isMobileSplit ? "visible" : "auto", overflowX: "hidden", padding: "20px", backgroundColor: "white", borderLeft: isMobileSplit ? "none" : "1px solid #cbd5e1", borderTop: isMobileSplit ? "1px solid #cbd5e1" : "none", height: isMobileSplit ? "max-content" : "100%" }}>
           
@@ -3850,11 +3864,17 @@ const checkIsBlank = () => {
             {settingsTab === "advanced" && (
               <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
 
-                  <div style={{ padding: "15px", backgroundColor: "#fffbeb", borderRadius: "8px", border: "1px solid #fde68a", marginBottom: "15px" }}>
+                <div style={{ padding: "15px", backgroundColor: "#fffbeb", borderRadius: "8px", border: "1px solid #fde68a", marginBottom: "15px" }}>
                   <h4 style={{ margin: "0 0 10px 0", color: "#92400e" }}>Billing Features</h4>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <input type="checkbox" checked={settings.enable_exchange_field || false} onChange={(e) => setSettings({ ...settings, enable_exchange_field: e.target.checked })} style={{ width: "20px", height: "20px", cursor: "pointer" }} />
-                    <strong style={{ color: "#92400e" }}>Enable 'Exchange Amount' Field on Bills</strong>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <input type="checkbox" checked={settings.enable_exchange_field || false} onChange={(e) => setSettings({ ...settings, enable_exchange_field: e.target.checked })} style={{ width: "20px", height: "20px", cursor: "pointer" }} />
+                      <strong style={{ color: "#92400e" }}>Enable 'Exchange Amount' Field on Bills</strong>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <input type="checkbox" checked={settings.show_visit_branches !== false} onChange={(e) => setSettings({ ...settings, show_visit_branches: e.target.checked })} style={{ width: "20px", height: "20px", cursor: "pointer" }} />
+                      <strong style={{ color: "#92400e" }}>Show 'Visit Our Branches' Section on Bills</strong>
+                    </div>
                   </div>
                 </div>
 
