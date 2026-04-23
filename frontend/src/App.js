@@ -2299,7 +2299,7 @@ const checkIsBlank = () => {
             <FooterLinksAndQRs branch={pbBranch} allBranches={publicSettings?.branches} showBranches={publicSettings?.show_visit_branches !== false && publicBill.mode === "invoice"} />
           </div>
           <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
-          </div> {/*
+          </div> 
             
         </section>
       </div>
@@ -2619,7 +2619,7 @@ const checkIsBlank = () => {
                <FooterLinksAndQRs branch={billBranch} allBranches={settings.branches} showBranches={settings.show_visit_branches !== false && b.mode === "invoice"} />
              </div>
              <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
-            </div> {/*
+            </div>
           </section>
            );
         })}
@@ -2895,7 +2895,7 @@ const checkIsBlank = () => {
                <FooterLinksAndQRs branch={billBranch} allBranches={settings.branches} showBranches={settings.show_visit_branches !== false && b.mode === "invoice"} />
              </div>
              <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
-           </div> {/*
+           </div>
           </section>
 
         <aside className="controls no-print" style={{ flex: isMobileSplit ? "none" : "2", overflowY: isMobileSplit ? "visible" : "auto", overflowX: "hidden", padding: "20px", backgroundColor: "white", borderLeft: isMobileSplit ? "none" : "1px solid #cbd5e1", borderTop: isMobileSplit ? "1px solid #cbd5e1" : "none", height: isMobileSplit ? "max-content" : "100%" }}>
