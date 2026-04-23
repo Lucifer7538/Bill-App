@@ -58,7 +58,6 @@ app.add_middleware(
 )
 
 api_router = APIRouter(prefix="/api")
-ACTIVE_TOKENS: Dict[str, str] = {}
 AUTH_PASSCODE = os.environ.get("AUTH_PASSCODE", "1234")
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip()
@@ -168,8 +167,10 @@ async def require_auth(authorization: str = Header(None)):
     if not token_doc: raise HTTPException(401, "Login Expired")
     
     return token
+
 @app.get("/")
 async def root(): return {"status": "online", "server": "Jalaram-Master-V12", "msg": "Backend is awake"}
+
 # --- RESTORED & UPGRADED LOGIN ENDPOINTS ---
 @api_router.post("/auth/login")
 async def login_step_one(payload: dict, background_tasks: BackgroundTasks):
@@ -247,10 +248,12 @@ async def logout_all_devices(_=Depends(require_auth)):
     # Wipes the database collection entirely. Every single logged-in device gets kicked out.
     await active_tokens_collection.delete_many({})
     return {"message": "All devices have been successfully logged out."}
-# -------------------------------------------
 
-@app.get("/")
-async def root(): return {"status": "online", "server": "Jalaram-Master-V12", "msg": "Backend is awake"}
+# --- THIS IS THE MISSING HEARTBEAT ENDPOINT THAT WAS CAUSING THE CRASH ---
+@api_router.get("/auth/verify")
+async def verify(_=Depends(require_auth)): 
+    return {"valid": True}
+# -----------------------------------------------------------------------
 
 @api_router.post("/auth/forgot-password")
 async def forgot_password(background_tasks: BackgroundTasks):
@@ -288,6 +291,7 @@ async def forgot_password(background_tasks: BackgroundTasks):
     background_tasks.add_task(send_email_sync)
     
     return {"message": "If the email is registered, an OTP will be sent shortly."}
+
 @api_router.post("/auth/reset-password")
 async def reset_password(payload: dict):
     # We only pull the OTP and the new passcode from the frontend now
@@ -326,6 +330,7 @@ async def reset_password(payload: dict):
     del OTP_STORE[admin_email]
     
     return {"status": "success", "message": "Passcode reset successfully! You can now log in."}
+
 # --- NEW: IOT CONTROL ENDPOINTS ---
 
 @api_router.get("/cloud/mqtt/status")
