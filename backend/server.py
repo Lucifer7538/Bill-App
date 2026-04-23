@@ -34,6 +34,7 @@ customers_collection = db.customers
 bills_collection = db.bills
 counters_collection = db.number_counters
 ledger_logs_collection = db.ledger_logs 
+active_tokens_collection = db.active_tokens
 
 # --- NEW: HIVEMQ CLOUD CONFIGURATION ---
 MQTT_BROKER = "c625cc8e0231406e84c51c94ba9a220d.s1.eu.hivemq.cloud"
@@ -158,10 +159,14 @@ async def apply_ledger_diff(branch_id: str, diff_c: float, diff_eb: float, diff_
         "reason": reason, "cash_change": diff_c, "estimate_bank_change": diff_eb, "invoice_bank_change": diff_ib
     })
 
-def require_auth(authorization: str = Header(None)):
+async def require_auth(authorization: str = Header(None)):
     if not authorization: raise HTTPException(401, "No Token")
     token = authorization.replace("Bearer ", "").strip()
-    if token not in ACTIVE_TOKENS: raise HTTPException(401, "Login Expired")
+    
+    # Check the database for the permanent token
+    token_doc = await active_tokens_collection.find_one({"token": token})
+    if not token_doc: raise HTTPException(401, "Login Expired")
+    
     return token
 @app.get("/")
 async def root(): return {"status": "online", "server": "Jalaram-Master-V12", "msg": "Backend is awake"}
@@ -228,20 +233,19 @@ async def verify_login_step_two(payload: dict):
     if str(stored_data["otp"]) != str(otp_attempt):
         raise HTTPException(401, "Invalid Verification Code.")
         
-    # Success! Create the token. If Remember Me is true, token lasts 30 days. Otherwise, 12 hours.
+    # Success! Create a permanent token in the database
     t = str(uuid.uuid4())
-    hours_to_keep = 24 * 30 if stored_data.get("remember_me") else 12
-    ACTIVE_TOKENS[t] = (datetime.now(timezone.utc) + timedelta(hours=hours_to_keep)).isoformat()
+    await active_tokens_collection.insert_one({"token": t, "created_at": now_iso()})
     
     del LOGIN_OTP_STORE[admin_email] # Burn the OTP
-    print("✅ DEBUG LOGIN - 2FA Success! User is logged in.")
+    print("✅ DEBUG LOGIN - 2FA Success! User is securely logged in permanently.")
     
-    return {"access_token": t, "expires_at": ACTIVE_TOKENS[t]}
+    return {"access_token": t}
 
 @api_router.post("/auth/logout-all")
 async def logout_all_devices(_=Depends(require_auth)):
-    # Wipes the active tokens dictionary entirely. Every single logged-in device gets kicked out.
-    ACTIVE_TOKENS.clear()
+    # Wipes the database collection entirely. Every single logged-in device gets kicked out.
+    await active_tokens_collection.delete_many({})
     return {"message": "All devices have been successfully logged out."}
 # -------------------------------------------
 
