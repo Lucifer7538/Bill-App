@@ -2299,8 +2299,6 @@ const checkIsBlank = () => {
             <FooterLinksAndQRs branch={pbBranch} allBranches={publicSettings?.branches} showBranches={publicSettings?.show_visit_branches !== false && publicBill.mode === "invoice"} />
           </div>
           <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
-          </div> 
-            
         </section>
       </div>
     );
@@ -2892,7 +2890,7 @@ const checkIsBlank = () => {
                    </>
                  )}
                </div>
-               <FooterLinksAndQRs branch={billBranch} allBranches={settings.branches} showBranches={settings.show_visit_branches !== false && b.mode === "invoice"} />
+               <FooterLinksAndQRs branch={billBranch} allBranches={settings.branches} showBranches={settings.show_visit_branches !== false && mode === "invoice"} />
              </div>
              <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
            </div>
