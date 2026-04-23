@@ -1533,7 +1533,7 @@ const checkIsBlank = () => {
       setLoggingIn(true); 
       try { 
           // Step 1: Send Passcode and Remember Me choice
-          await axios.post(`${API}/auth/login`, { passcode, remember_me: rememberMe }, { timeout: 15000 }); 
+          await axios.post(`${API}/auth/login`, { passcode }, { timeout: 15000 });
           toast.success("Passcode correct! Check admin email for 2FA code.");
           setShowLoginOtp(true); // Switch screen to ask for OTP
       } catch (error) { 
@@ -2378,11 +2378,6 @@ const checkIsBlank = () => {
                   <form onSubmit={handleLogin}>
                       <p className="login-subtitle">Enter passcode to access billing panel</p>
                       <Input type="password" value={passcode} onChange={(e) => setPasscode(e.target.value)} placeholder="Enter passcode" style={{ marginBottom: "15px" }} required />
-                      
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px", justifyContent: "center" }}>
-                          <input type="checkbox" id="rememberMeBox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} style={{ width: "18px", height: "18px", cursor: "pointer" }} />
-                          <label htmlFor="rememberMeBox" style={{ cursor: "pointer", color: "#475569", fontSize: "0.95rem" }}>Remember me for 30 days</label>
-                      </div>
 
                       <Button type="submit" disabled={loggingIn} style={{ width: "100%", marginBottom: "15px", padding: "20px", fontSize: "1.1rem" }}>{loggingIn ? "Verifying..." : "Continue to 2FA"}</Button>
                       <Button type="button" variant="ghost" onClick={() => setShowForgotPwd(true)} style={{ width: "100%", color: "#64748b" }}>Forgot Passcode?</Button>
