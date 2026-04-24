@@ -712,7 +712,11 @@ export default function App() {
     if (viewDoc) {
       setIsPublicView(true); 
       setPublicLoading(true);
-      const res = await axios.get(`${API}/bills/public/id/${viewDoc}`);
+      
+      const fetchPublicBill = async () => {
+        try {
+          const res = await axios.get(`${API}/bills/public/id/${viewDoc}`);
+          setPublicBill(res.data.bill);
           const sData = { ...defaultSettings, ...res.data.settings };
           if (!sData.branches) sData.branches = defaultSettings.branches;
           if (sData.custom_fonts) sData.custom_fonts.forEach(f => registerFont(f.name, f.dataUrl));
@@ -723,6 +727,7 @@ export default function App() {
             setPublicLoading(false); 
         }
       };
+      
       fetchPublicBill();
     }
   }, []);
