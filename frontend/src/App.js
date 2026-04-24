@@ -380,7 +380,8 @@ export default function App() {
   const [publicSettings, setPublicSettings] = useState(null);
   const [publicLoading, setPublicLoading] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
-
+  const [isVerifyStep, setIsVerifyStep] = useState(false);
+  const [loginOtpCode, setLoginOtpCode] = useState("");
   const [passcode, setPasscode] = useState("");
   const [token, setToken] = useState(localStorage.getItem("jj_auth_token") || "");
   const [checkingSession, setCheckingSession] = useState(Boolean(localStorage.getItem("jj_auth_token")));
@@ -711,10 +712,7 @@ export default function App() {
     if (viewDoc) {
       setIsPublicView(true); 
       setPublicLoading(true);
-      const fetchPublicBill = async () => {
-        try {
-          const res = await axios.get(`${API}/bills/public/${viewDoc}`);
-          setPublicBill(res.data.bill);
+      const res = await axios.get(`${API}/bills/public/id/${viewDoc}`);
           const sData = { ...defaultSettings, ...res.data.settings };
           if (!sData.branches) sData.branches = defaultSettings.branches;
           if (sData.custom_fonts) sData.custom_fonts.forEach(f => registerFont(f.name, f.dataUrl));
@@ -1530,10 +1528,10 @@ const checkIsBlank = () => {
       setLoggingIn(true); 
       try { 
           const response = await axios.post(`${API}/auth/login`, { passcode }, { timeout: 15000 }); 
-          localStorage.setItem("jj_auth_token", response.data.access_token); 
-          setToken(response.data.access_token); 
-          setPasscode(""); 
-          toast.success("Logged in successfully"); 
+          if (response.data.status === "otp_sent") {
+              setIsVerifyStep(true);
+              toast.success("2FA Code sent to admin email!");
+          }
       } catch (error) { 
           if (error?.response?.status === 401) { 
               toast.error("Wrong passcode."); 
@@ -1545,6 +1543,22 @@ const checkIsBlank = () => {
       } 
   };
 
+  const handleVerifyOtp = async (event) => {
+      event.preventDefault();
+      setLoggingIn(true);
+      try {
+          const response = await axios.post(`${API}/auth/verify-login`, { otp: loginOtpCode });
+          localStorage.setItem("jj_auth_token", response.data.access_token);
+          setToken(response.data.access_token);
+          setIsVerifyStep(false);
+          setPasscode("");
+          toast.success("Securely Logged In");
+      } catch (error) {
+          toast.error("Invalid verification code.");
+      } finally {
+          setLoggingIn(false);
+      }
+  };
   const handleLogout = () => { 
       localStorage.removeItem("jj_auth_token"); 
       setToken(""); 
@@ -2342,12 +2356,21 @@ const checkIsBlank = () => {
           <h1 className="login-title">{settings?.shop_name || "Jalaram Jewellers"}</h1>
           
           {!showForgotPwd ? (
-              <form onSubmit={handleLogin}>
-                  <p className="login-subtitle">Enter passcode to access billing panel</p>
-                  <Input type="password" value={passcode} onChange={(e) => setPasscode(e.target.value)} placeholder="Enter passcode" style={{ marginBottom: "10px" }} />
-                  <Button type="submit" disabled={loggingIn} style={{ width: "100%", marginBottom: "10px" }}>{loggingIn ? "Checking..." : "Login"}</Button>
-                  <Button type="button" variant="ghost" onClick={() => setShowForgotPwd(true)} style={{ width: "100%", color: "#64748b" }}>Forgot Passcode?</Button>
-              </form>
+              !isVerifyStep ? (
+                  <form onSubmit={handleLogin}>
+                      <p className="login-subtitle">Enter passcode to access billing panel</p>
+                      <Input type="password" value={passcode} onChange={(e) => setPasscode(e.target.value)} placeholder="Enter passcode" style={{ marginBottom: "10px" }} />
+                      <Button type="submit" disabled={loggingIn} style={{ width: "100%", marginBottom: "10px" }}>{loggingIn ? "Checking..." : "Login"}</Button>
+                      <Button type="button" variant="ghost" onClick={() => setShowForgotPwd(true)} style={{ width: "100%", color: "#64748b" }}>Forgot Passcode?</Button>
+                  </form>
+              ) : (
+                  <form onSubmit={handleVerifyOtp}>
+                      <p className="login-subtitle">Enter the 6-digit code sent to your email</p>
+                      <Input type="text" value={loginOtpCode} onChange={(e) => setLoginOtpCode(e.target.value)} placeholder="Enter OTP" style={{ marginBottom: "10px" }} required />
+                      <Button type="submit" disabled={loggingIn} style={{ width: "100%", marginBottom: "10px", backgroundColor: "#16a34a" }}>{loggingIn ? "Verifying..." : "Verify & Login"}</Button>
+                      <Button type="button" variant="ghost" onClick={() => setIsVerifyStep(false)} style={{ width: "100%", color: "#64748b" }}>Back to Passcode</Button>
+                  </form>
+              )
           ) : (
               <div>
                   <p className="login-subtitle">Reset your passcode securely</p>
