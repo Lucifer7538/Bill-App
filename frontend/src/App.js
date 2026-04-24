@@ -3827,7 +3827,7 @@ const checkIsBlank = () => {
                           </div>
                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                            <input type="checkbox" checked={settings.show_branches_on_invoice ?? true} onChange={(e) => setSettings({ ...settings, show_branches_on_invoice: e.target.checked })} style={{ width: "20px", height: "20px", cursor: "pointer" }} />
-                             <strong style={{ color: "#92400e" }}>Show 'Visit Our Branches' locations on Tax Invoices</strong>
+                             <strong style={{ color: "#92400e" }}>Show 'Visit Our Branches' locations on Tax Invoices</strong> 
                            </div>
                               <p style={{ fontSize: "0.75rem", color: "#b45309", marginTop: "5px", marginLeft: "30px", marginBottom: 0 }}>If OFF, the branch list will be completely hidden on legal Tax Invoices (but will still show on Estimates).</p>
                           </div>
