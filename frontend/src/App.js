@@ -24,7 +24,6 @@ const createItem = (defaultHsn = "", desc = "", wt = "", mc = "", fixedAmt = "")
   mc_override: mc
 });
 const defaultSettings = {
-  show_visit_branches: true,
   shop_name: "Jalaram Jewellers", 
   tagline: "The Silver Specialist", 
   phone_numbers: ["+91 9583221115", "+91 9776177296", "+91 7538977527"], 
@@ -182,7 +181,7 @@ const FontSelectOptions = ({ customFonts }) => (
   </>
 );
 
-const FooterLinksAndQRs = ({ branch, allBranches, showBranches = true }) => {
+const FooterLinksAndQRs = ({ branch, allBranches }) => {
   if (!branch) return null;
   return (
     <div style={{ marginTop: "25px", borderTop: "1px dashed #e2e8f0", paddingTop: "20px" }}>
@@ -195,16 +194,12 @@ const FooterLinksAndQRs = ({ branch, allBranches, showBranches = true }) => {
           {branch.about_url && (<a href={branch.about_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#3b82f6", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>ℹ️ About Us</a>)}
         </div>
         
-        {showBranches && (
-          <>
-            <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Visit Our Branches:</p>
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
-              {(allBranches || []).map(b => b.location_url && (
-                <a key={b.id} href={b.location_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#0f172a", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>📍 {b.name}</a>
-              ))}
-            </div>
-          </>
-        )}
+        <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Visit Our Branches:</p>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+          {(allBranches || []).map(b => b.location_url && (
+            <a key={b.id} href={b.location_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#0f172a", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>📍 {b.name}</a>
+          ))}
+        </div>
       </div>
       
       <div className="print-only" style={{ display: 'flex', justifyContent: 'center', gap: '15px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
@@ -232,7 +227,7 @@ const FooterLinksAndQRs = ({ branch, allBranches, showBranches = true }) => {
                 <p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>About Us</p>
             </div>
         )}
-        {showBranches && (allBranches || []).map(b => b.location_url && (
+        {(allBranches || []).map(b => b.location_url && (
             <div key={`qr-${b.id}`} style={{ textAlign: 'center' }}>
                 <img src={`https://quickchart.io/qr?text=${encodeURIComponent(b.location_url)}&size=100`} alt={`${b.name} QR`} crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} />
                 <p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>{b.name}</p>
@@ -397,9 +392,6 @@ export default function App() {
   const [otpSent, setOtpSent] = useState(false);
   const [sendingOtp, setSendingOtp] = useState(false);
   const [resettingPwd, setResettingPwd] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
-  const [showLoginOtp, setShowLoginOtp] = useState(false);
-  const [loginOtpCode, setLoginOtpCode] = useState("");
 
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [gatewayPassed, setGatewayPassed] = useState(false);
@@ -721,7 +713,7 @@ export default function App() {
       setPublicLoading(true);
       const fetchPublicBill = async () => {
         try {
-          const res = await axios.get(`${API}/bills/public/id/${viewDoc}`);
+          const res = await axios.get(`${API}/bills/public/${viewDoc}`);
           setPublicBill(res.data.bill);
           const sData = { ...defaultSettings, ...res.data.settings };
           if (!sData.branches) sData.branches = defaultSettings.branches;
@@ -1537,49 +1529,20 @@ const checkIsBlank = () => {
       event.preventDefault(); 
       setLoggingIn(true); 
       try { 
-          // Step 1: Send Passcode and Remember Me choice
-          await axios.post(`${API}/auth/login`, { passcode }, { timeout: 15000 });
-          toast.success("Passcode correct! Check admin email for 2FA code.");
-          setShowLoginOtp(true); // Switch screen to ask for OTP
+          const response = await axios.post(`${API}/auth/login`, { passcode }, { timeout: 15000 }); 
+          localStorage.setItem("jj_auth_token", response.data.access_token); 
+          setToken(response.data.access_token); 
+          setPasscode(""); 
+          toast.success("Logged in successfully"); 
       } catch (error) { 
           if (error?.response?.status === 401) { 
               toast.error("Wrong passcode."); 
           } else { 
-              toast.error("Server error. Please try again."); 
+              toast.error("Server is waking up. Please wait 15-20 seconds and try again."); 
           } 
       } finally { 
           setLoggingIn(false); 
       } 
-  };
-
-  const handleVerify2FA = async (event) => {
-      event.preventDefault();
-      setLoggingIn(true);
-      try {
-          // Step 2: Send the OTP to get the actual access token
-          const response = await axios.post(`${API}/auth/verify-login`, { otp: loginOtpCode });
-          localStorage.setItem("jj_auth_token", response.data.access_token); 
-          setToken(response.data.access_token); 
-          setPasscode(""); 
-          setLoginOtpCode("");
-          setShowLoginOtp(false);
-          toast.success("Login Successful!"); 
-      } catch (error) {
-          toast.error("Invalid or expired 2FA code.");
-      } finally {
-          setLoggingIn(false);
-      }
-  };
-
-  const handleLogoutAllDevices = async () => {
-      if (!window.confirm("⚠️ This will log out every device currently using the app. Are you sure?")) return;
-      try {
-          await axios.post(`${API}/auth/logout-all`, {}, { headers: authHeaders });
-          toast.success("All devices logged out securely.");
-          handleLogout(); // Log yourself out too
-      } catch (error) {
-          toast.error("Failed to log out devices.");
-      }
   };
 
   const handleLogout = () => { 
@@ -1902,11 +1865,7 @@ const checkIsBlank = () => {
   };
   
   const shareWhatsApp = () => { 
-    if (!currentBillId) {
-        toast.error("Please save the bill before sharing!");
-        return;
-    }
-    const link = `${window.location.origin}/?view=${currentBillId}`; 
+    const link = `${window.location.origin}/?view=${documentNumber}`; 
     const text = `*Hello* ${customer.name || "Customer"},\n Thank you for visiting Jalaram Jewellers\n\n Official ${mode === "invoice" ? "Invoice" : "Estimate"} Bill\n Here Is Your Bill No. ${documentNumber}\n Amount: ₹${money(computed.grandTotal)}.\n\n Here You can view and download it securely\n Link: ${link}\n\n *Stay Connected With us*\n WhatsApp Group\n Link (https://bit.ly/Jalaram-Group-WP)\n Instagram\n Link (https://bit.ly/Jalaram-IG)\n\n*We value Your Feedback*\n Dear ${customer.name || "Customer"}, Please Give us a minute to Rate our Behaviour and Service. Give us your Valuable Feedback so we can make your experience even better:\n ${activeBillBranch.map_url}\n\n   Thank you,\n${settings.shop_name} : The Silver Specialist\n\n  `; 
     
     let cleanedPhone = customer.phone.replace(/\D/g, ""); 
@@ -1916,11 +1875,7 @@ const checkIsBlank = () => {
   };
   
   const shareEmail = () => { 
-      if (!currentBillId) {
-          toast.error("Please save the bill before sharing!");
-          return;
-      }
-      const link = `${window.location.origin}/?view=${currentBillId}`; 
+      const link = `${window.location.origin}/?view=${documentNumber}`; 
       const subject = `${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber}`; 
       const body = `Dear ${customer.name || "Customer"},\n\nHere is your ${mode === "invoice" ? "Invoice" : "Estimate"} ${documentNumber} for ₹${money(computed.grandTotal)}.\n\nYou can view and download it securely here: ${link}\n\nThank you,\n${settings.shop_name}`; 
       window.location.href = `mailto:${customer.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; 
@@ -2233,7 +2188,6 @@ const checkIsBlank = () => {
               <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(publicComputed.roundOff)}</strong></div>
               {num(publicComputed.savedCredit) > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(publicComputed.savedCredit)}</strong></div>}
               <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(publicComputed.grandTotal)}</strong></div>
-               <div style={{ textAlign: "right", fontSize: "0.8rem", color: "#64748b", marginTop: "2px", fontWeight: "bold" }}>E. & O.E.</div>
 
               {isSale ? (
                 <div className="totals-row" style={{ color: isPaid ? "#16a34a" : "#b45309", marginTop: "10px" }}>
@@ -2296,9 +2250,10 @@ const checkIsBlank = () => {
               )}
             </div>
             
-            <FooterLinksAndQRs branch={pbBranch} allBranches={publicSettings?.branches} showBranches={publicSettings?.show_visit_branches !== false && publicBill.mode === "invoice"} />
+            <FooterLinksAndQRs branch={pbBranch} allBranches={publicSettings?.branches} />
           </div>
           <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
+        </section>
       </div>
     );
   }
@@ -2386,24 +2341,13 @@ const checkIsBlank = () => {
         <div className="login-card">
           <h1 className="login-title">{settings?.shop_name || "Jalaram Jewellers"}</h1>
           
-         {!showForgotPwd ? (
-              !showLoginOtp ? (
-                  <form onSubmit={handleLogin}>
-                      <p className="login-subtitle">Enter passcode to access billing panel</p>
-                      <Input type="password" value={passcode} onChange={(e) => setPasscode(e.target.value)} placeholder="Enter passcode" style={{ marginBottom: "15px" }} required />
-
-                      <Button type="submit" disabled={loggingIn} style={{ width: "100%", marginBottom: "15px", padding: "20px", fontSize: "1.1rem" }}>{loggingIn ? "Verifying..." : "Continue to 2FA"}</Button>
-                      <Button type="button" variant="ghost" onClick={() => setShowForgotPwd(true)} style={{ width: "100%", color: "#64748b" }}>Forgot Passcode?</Button>
-                  </form>
-              ) : (
-                  <form onSubmit={handleVerify2FA}>
-                      <p className="login-subtitle">Enter the 6-digit code sent to the admin email.</p>
-                      <Input type="text" value={loginOtpCode} onChange={(e) => setLoginOtpCode(e.target.value)} placeholder="Enter 2FA Code" style={{ marginBottom: "15px", textAlign: "center", letterSpacing: "5px", fontSize: "1.2rem", fontWeight: "bold" }} required autoFocus />
-                      
-                      <Button type="submit" disabled={loggingIn} style={{ width: "100%", marginBottom: "15px", backgroundColor: "#16a34a", padding: "20px", fontSize: "1.1rem" }}>{loggingIn ? "Checking..." : "Verify & Login"}</Button>
-                      <Button type="button" variant="ghost" onClick={() => { setShowLoginOtp(false); setLoginOtpCode(""); }} style={{ width: "100%" }}>Cancel & Go Back</Button>
-                  </form>
-              )
+          {!showForgotPwd ? (
+              <form onSubmit={handleLogin}>
+                  <p className="login-subtitle">Enter passcode to access billing panel</p>
+                  <Input type="password" value={passcode} onChange={(e) => setPasscode(e.target.value)} placeholder="Enter passcode" style={{ marginBottom: "10px" }} />
+                  <Button type="submit" disabled={loggingIn} style={{ width: "100%", marginBottom: "10px" }}>{loggingIn ? "Checking..." : "Login"}</Button>
+                  <Button type="button" variant="ghost" onClick={() => setShowForgotPwd(true)} style={{ width: "100%", color: "#64748b" }}>Forgot Passcode?</Button>
+              </form>
           ) : (
               <div>
                   <p className="login-subtitle">Reset your passcode securely</p>
@@ -2559,7 +2503,6 @@ const checkIsBlank = () => {
                     <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(b.totals?.round_off !== undefined ? b.totals.round_off : 0)}</strong></div>
                     {num(b.saved_credit) > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(b.saved_credit)}</strong></div>}
                     <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(b.totals?.grand_total || 0)}</strong></div>
-                     <div style={{ textAlign: "right", fontSize: "0.8rem", color: "#64748b", marginTop: "2px", fontWeight: "bold" }}>E. & O.E.</div>
                     
                     {b.tx_type === "sale" || !b.tx_type ? (
                       <div className="totals-row" style={{ color: b.is_payment_done ? "#16a34a" : "#b45309", marginTop: "10px" }}>
@@ -2609,15 +2552,14 @@ const checkIsBlank = () => {
                          <ul className="policies-list">
                             <li>6 Months of repair and polishing warranty only on silver ornaments.</li>
                             <li>You can replace purchased items within 7 days for manufacturing defects.</li>
-                        </ul>
-                   </>
-                 )}
-               </div>
-               <FooterLinksAndQRs branch={billBranch} allBranches={settings.branches} showBranches={settings.show_visit_branches !== false && b.mode === "invoice"} />
-             </div>
-             <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
-            </div>
-          </section>
+                         </ul>
+                      </>
+                    )}
+                  </div>
+                  <FooterLinksAndQRs branch={billBranch} allBranches={settings.branches} />
+                </div>
+                <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
+             </section>
            );
         })}
       </div>
@@ -2827,7 +2769,6 @@ const checkIsBlank = () => {
                 <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(computed.roundOff)}</strong></div>
                 {computed.savedCredit > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(computed.savedCredit)}</strong></div>}
                 <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(computed.grandTotal)}</strong></div>
-                 <div style={{ textAlign: "right", fontSize: "0.8rem", color: "#64748b", marginTop: "2px", fontWeight: "bold" }}>E. & O.E.</div>
 
                 {txType === "sale" ? (
                   <div className="totals-row" style={{ color: isPaymentDone ? "#16a34a" : "#b45309", marginTop: "10px" }}>
@@ -2886,13 +2827,16 @@ const checkIsBlank = () => {
                         <li>6 Months of repair and polishing warranty only on silver ornaments.</li>
                         <li>You can replace purchased items within 7 days for manufacturing defects.</li>
                      </ul>
-                   </>
-                 )}
-               </div>
-               <FooterLinksAndQRs branch={billBranch} allBranches={settings.branches} showBranches={settings.show_visit_branches !== false && mode === "invoice"} />
-             </div>
-             <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
-          </section>
+                  </>
+                )}
+              </div>
+              
+              <FooterLinksAndQRs branch={activeBillBranch} allBranches={settings.branches} />
+
+            </div>
+            <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
+          </div>
+        </section>
 
         <aside className="controls no-print" style={{ flex: isMobileSplit ? "none" : "2", overflowY: isMobileSplit ? "visible" : "auto", overflowX: "hidden", padding: "20px", backgroundColor: "white", borderLeft: isMobileSplit ? "none" : "1px solid #cbd5e1", borderTop: isMobileSplit ? "1px solid #cbd5e1" : "none", height: isMobileSplit ? "max-content" : "100%" }}>
           
@@ -3790,15 +3734,10 @@ const checkIsBlank = () => {
 
                 <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
                   <h4 style={{ margin: "0 0 15px 0" }}>Security</h4>
-                  <label className="select-label">Admin Email (For Passcode Reset & 2FA)</label>
-                  <Input type="email" value={settings.admin_email || ""} onChange={(e) => setSettings({ ...settings, admin_email: e.target.value })} placeholder="admin@domain.com" style={{ marginBottom: "20px" }} />
-                  
-                  <div style={{ borderTop: "1px dashed #cbd5e1", paddingTop: "20px" }}>
-                    <h4 style={{ color: "#b91c1c", margin: "0 0 10px 0" }}>Active Sessions</h4>
-                    <p style={{ fontSize: "0.85rem", color: "#64748b", marginBottom: "10px" }}>If you left the app logged in on a public computer or a former staff member's phone, you can instantly terminate all active sessions.</p>
-                    <Button onClick={handleLogoutAllDevices} style={{ width: "100%", backgroundColor: "#7f1d1d", color: "white" }}>⚠️ Logout From All Devices Everywhere</Button>
-                  </div>
+                  <label className="select-label">Admin Email (For Password Reset OTP)</label>
+                  <Input type="email" value={settings.admin_email || ""} onChange={(e) => setSettings({ ...settings, admin_email: e.target.value })} placeholder="admin@domain.com" />
                 </div>
+
                 <div style={{ padding: "15px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px solid #bbf7d0" }}>
                   <h4 style={{ margin: "0 0 15px 0", color: "#16a34a" }}>Loyalty Points System</h4>
                   <label className="select-label">Points Earned Per 1 Gram</label>
@@ -3863,17 +3802,11 @@ const checkIsBlank = () => {
             {settingsTab === "advanced" && (
               <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
 
-                <div style={{ padding: "15px", backgroundColor: "#fffbeb", borderRadius: "8px", border: "1px solid #fde68a", marginBottom: "15px" }}>
+                  <div style={{ padding: "15px", backgroundColor: "#fffbeb", borderRadius: "8px", border: "1px solid #fde68a", marginBottom: "15px" }}>
                   <h4 style={{ margin: "0 0 10px 0", color: "#92400e" }}>Billing Features</h4>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                      <input type="checkbox" checked={settings.enable_exchange_field || false} onChange={(e) => setSettings({ ...settings, enable_exchange_field: e.target.checked })} style={{ width: "20px", height: "20px", cursor: "pointer" }} />
-                      <strong style={{ color: "#92400e" }}>Enable 'Exchange Amount' Field on Bills</strong>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                      <input type="checkbox" checked={settings.show_visit_branches !== false} onChange={(e) => setSettings({ ...settings, show_visit_branches: e.target.checked })} style={{ width: "20px", height: "20px", cursor: "pointer" }} />
-                      <strong style={{ color: "#92400e" }}>Show 'Visit Our Branches' Section on Bills</strong>
-                    </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <input type="checkbox" checked={settings.enable_exchange_field || false} onChange={(e) => setSettings({ ...settings, enable_exchange_field: e.target.checked })} style={{ width: "20px", height: "20px", cursor: "pointer" }} />
+                    <strong style={{ color: "#92400e" }}>Enable 'Exchange Amount' Field on Bills</strong>
                   </div>
                 </div>
 
