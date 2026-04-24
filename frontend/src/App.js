@@ -181,14 +181,12 @@ const FontSelectOptions = ({ customFonts }) => (
     {customFonts?.map(f => (<option key={f.name} value={`'${f.name}'`}>{f.name} (Custom)</option>))}
   </>
 );
-</div>
-const FooterLinksAndQRs = ({ branch, allBranches, mode, settings }) => {
+  const FooterLinksAndQRs = ({ branch, allBranches, mode, settings }) => {
   if (!branch) return null;
   
-  // Always show on Estimates. Hide on Invoices if the toggle is turned off.
+  // Show on Estimates always. Hide on Invoices if the toggle is turned off.
   const showFooterDetails = mode === "estimate" || settings?.show_branches_on_invoice !== false;
-  
-  // This ONE line acts as the gatekeeper. If false, the entire footer area vanishes!
+
   if (!showFooterDetails) return null;
 
   return (
