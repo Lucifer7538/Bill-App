@@ -181,7 +181,20 @@ const FontSelectOptions = ({ customFonts }) => (
     {customFonts?.map(f => (<option key={f.name} value={`'${f.name}'`}>{f.name} (Custom)</option>))}
   </>
 );
-  const FooterLinksAndQRs = ({ branch, allBranches, mode, settings }) => {
+const FontSelectOptions = ({ customFonts }) => (
+  <>
+    <option value="sans-serif">Sans-serif</option>
+    <option value="Arial, Helvetica, sans-serif">Arial</option>
+    <option value="'Times New Roman', Times, serif">Times New Roman</option>
+    <option value="'Courier New', Courier, monospace">Courier New</option>
+    <option value="Georgia, serif">Georgia</option>
+    <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+    <option value="'Brush Script MT', cursive">Brush Script MT (Cursive)</option>
+    {customFonts?.map(f => (<option key={f.name} value={`'${f.name}'`}>{f.name} (Custom)</option>))}
+  </>
+);
+
+const FooterLinksAndQRs = ({ branch, allBranches, mode, settings }) => {
   if (!branch) return null;
   
   // Show on Estimates always. Hide on Invoices if the toggle is turned off.
@@ -237,48 +250,6 @@ const FontSelectOptions = ({ customFonts }) => (
             </div>
         )}
         {(allBranches || []).map(b => b.location_url && (
-            <div key={`qr-${b.id}`} style={{ textAlign: 'center' }}>
-                <img src={`https://quickchart.io/qr?text=${encodeURIComponent(b.location_url)}&size=100`} alt={`${b.name} QR`} crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} />
-                <p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>{b.name}</p>
-            </div>
-        ))}
-      </div>
-      
-    </div>
-  );
-};
-
-      </div>
-      
-      {/* PRINTED QR CODES */}
-      <div className="print-only" style={{ display: 'flex', justifyContent: 'center', gap: '15px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        {branch.whatsapp_url && (
-            <div style={{ textAlign: 'center' }}>
-                <img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.whatsapp_url)}&size=100`} alt="WA QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} />
-                <p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>WhatsApp</p>
-            </div>
-        )}
-        {branch.instagram_url && (
-            <div style={{ textAlign: 'center' }}>
-                <img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.instagram_url)}&size=100`} alt="Insta QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} />
-                <p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>Instagram</p>
-            </div>
-        )}
-        {branch.map_url && (
-            <div style={{ textAlign: 'center' }}>
-                <img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.map_url)}&size=100`} alt="Feedback QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} />
-                <p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>Feedback</p>
-            </div>
-        )}
-        {branch.about_url && (
-            <div style={{ textAlign: 'center' }}>
-                <img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.about_url)}&size=100`} alt="About QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} />
-                <p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>About Us</p>
-            </div>
-        )}
-        
-        {/* THIS PART RESPECTS THE TOGGLE */}
-        {showBranches && (allBranches || []).map(b => b.location_url && (
             <div key={`qr-${b.id}`} style={{ textAlign: 'center' }}>
                 <img src={`https://quickchart.io/qr?text=${encodeURIComponent(b.location_url)}&size=100`} alt={`${b.name} QR`} crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} />
                 <p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>{b.name}</p>
