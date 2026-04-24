@@ -62,7 +62,7 @@ const defaultSettings = {
   mdr_gst: 18,
   admin_email: "jalaramjewellers26@gmail.com",
   formula_note: "Line total = Weight x (Silver rate per gram + Making charge per gram)", 
-  show_branches_on_estimates: true,
+  show_branches_on_invoice: true,
   logo_data_url: "", 
   about_qr_data_url: STATIC_ABOUT_QR_URL, 
   custom_fonts: [],
@@ -184,63 +184,36 @@ const FontSelectOptions = ({ customFonts }) => (
 
 const FooterLinksAndQRs = ({ branch, allBranches, mode, settings }) => {
   if (!branch) return null;
-  const showBranches = mode === "invoice" || settings?.show_branches_on_estimates !== false;
   
+  // Show on Estimates always. Hide on Invoices if the toggle is turned off.
+  const showBranches = mode === "estimate" || settings?.show_branches_on_invoice !== false;
+  
+  // If branches are hidden, we don't need to render this section at all anymore!
+  if (!showBranches) return null;
+
   return (
     <div style={{ marginTop: "25px", borderTop: "1px dashed #e2e8f0", paddingTop: "20px" }}>
+      
+      {/* ON-SCREEN BUTTONS */}
       <div className="no-print" data-html2canvas-ignore="true">
-        <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Connect & Review:</p>
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center', marginBottom: '15px' }}>
-          {branch.whatsapp_url && (<a href={branch.whatsapp_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#25D366", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>💬 WhatsApp</a>)}
-          {branch.instagram_url && (<a href={branch.instagram_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", background: "linear-gradient(45deg, #f09433 0%, #dc2743 50%, #bc1888 100%)", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>📸 Instagram</a>)}
-          {branch.map_url && (<a href={branch.map_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#facc15", color: "#854d0e", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>⭐ Feedback</a>)}
-          {branch.about_url && (<a href={branch.about_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#3b82f6", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>ℹ️ About Us</a>)}
+        <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Visit Our Branches:</p>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+          {(allBranches || []).map(b => b.location_url && (
+            <a key={b.id} href={b.location_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#0f172a", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>📍 {b.name}</a>
+          ))}
         </div>
-        
-        {showBranches && (
-          <>
-            <p style={{ fontSize: "0.9rem", color: "#666", marginBottom: "10px", fontWeight: "bold", textAlign: "center" }}>Visit Our Branches:</p>
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
-              {(allBranches || []).map(b => b.location_url && (
-                <a key={b.id} href={b.location_url} target="_blank" rel="noopener noreferrer" style={{ flex: '1 1 120px', padding: "10px", backgroundColor: "#0f172a", color: "white", textAlign: "center", textDecoration: "none", fontWeight: "bold", borderRadius: "8px" }}>📍 {b.name}</a>
-              ))}
-            </div>
-          </>
-        )}
       </div>
       
+      {/* PRINTED QR CODES */}
       <div className="print-only" style={{ display: 'flex', justifyContent: 'center', gap: '15px', flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        {branch.whatsapp_url && (
-            <div style={{ textAlign: 'center' }}>
-                <img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.whatsapp_url)}&size=100`} alt="WA QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} />
-                <p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>WhatsApp</p>
-            </div>
-        )}
-        {branch.instagram_url && (
-            <div style={{ textAlign: 'center' }}>
-                <img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.instagram_url)}&size=100`} alt="Insta QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} />
-                <p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>Instagram</p>
-            </div>
-        )}
-        {branch.map_url && (
-            <div style={{ textAlign: 'center' }}>
-                <img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.map_url)}&size=100`} alt="Feedback QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} />
-                <p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>Feedback</p>
-            </div>
-        )}
-        {branch.about_url && (
-            <div style={{ textAlign: 'center' }}>
-                <img src={`https://quickchart.io/qr?text=${encodeURIComponent(branch.about_url)}&size=100`} alt="About QR" crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} />
-                <p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>About Us</p>
-            </div>
-        )}
-        {showBranches && (allBranches || []).map(b => b.location_url && (
+        {(allBranches || []).map(b => b.location_url && (
             <div key={`qr-${b.id}`} style={{ textAlign: 'center' }}>
                 <img src={`https://quickchart.io/qr?text=${encodeURIComponent(b.location_url)}&size=100`} alt={`${b.name} QR`} crossOrigin="anonymous" style={{ width: '70px', height: '70px', display: 'block', margin: '0 auto' }} />
                 <p style={{ fontSize: '0.7rem', margin: '4px 0 0 0', fontWeight: 'bold' }}>{b.name}</p>
             </div>
         ))}
       </div>
+      
     </div>
   );
 };
@@ -3853,10 +3826,10 @@ const checkIsBlank = () => {
                         <strong style={{ color: "#92400e" }}>Enable 'Exchange Amount' Field on Bills</strong>
                           </div>
                          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                         <input type="checkbox" checked={settings.show_branches_on_estimates ?? true} onChange={(e) => setSettings({ ...settings, show_branches_on_estimates: e.target.checked })} style={{ width: "20px", height: "20px", cursor: "pointer" }} />
-                          <strong style={{ color: "#92400e" }}>Show 'Visit Our Branches' locations on Estimates</strong>
+                           <input type="checkbox" checked={settings.show_branches_on_invoice ?? true} onChange={(e) => setSettings({ ...settings, show_branches_on_invoice: e.target.checked })} style={{ width: "20px", height: "20px", cursor: "pointer" }} />
+                             <strong style={{ color: "#92400e" }}>Show 'Visit Our Branches' locations on Tax Invoices</strong>
                            </div>
-                           <p style={{ fontSize: "0.75rem", color: "#b45309", marginTop: "5px", marginLeft: "30px", marginBottom: 0 }}>If OFF, the branch list will only appear on your legal Tax Invoices.</p>
+                              <p style={{ fontSize: "0.75rem", color: "#b45309", marginTop: "5px", marginLeft: "30px", marginBottom: 0 }}>If OFF, the branch list will be completely hidden on legal Tax Invoices (but will still show on Estimates).</p>
                           </div>
 
                {/* --- PRINTER / PAPER SIZE SETTINGS --- */}
