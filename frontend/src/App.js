@@ -181,7 +181,6 @@ const FontSelectOptions = ({ customFonts }) => (
     {customFonts?.map(f => (<option key={f.name} value={`'${f.name}'`}>{f.name} (Custom)</option>))}
   </>
 );
-
 const FooterLinksAndQRs = ({ branch, allBranches, mode, settings }) => {
   if (!branch) return null;
   
@@ -249,6 +248,7 @@ const FooterLinksAndQRs = ({ branch, allBranches, mode, settings }) => {
     </div>
   );
 };
+
       </div>
       
       {/* PRINTED QR CODES */}
