@@ -169,18 +169,7 @@ const registerFont = (name, dataUrl) => {
     document.head.appendChild(style); 
 };
 
-const FontSelectOptions = ({ customFonts }) => (
-  <>
-    <option value="sans-serif">Sans-serif</option>
-    <option value="Arial, Helvetica, sans-serif">Arial</option>
-    <option value="'Times New Roman', Times, serif">Times New Roman</option>
-    <option value="'Courier New', Courier, monospace">Courier New</option>
-    <option value="Georgia, serif">Georgia</option>
-    <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
-    <option value="'Brush Script MT', cursive">Brush Script MT (Cursive)</option>
-    {customFonts?.map(f => (<option key={f.name} value={`'${f.name}'`}>{f.name} (Custom)</option>))}
-  </>
-);
+
 const FontSelectOptions = ({ customFonts }) => (
   <>
     <option value="sans-serif">Sans-serif</option>
