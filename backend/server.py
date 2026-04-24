@@ -655,7 +655,7 @@ async def storage(_=Depends(require_auth)):
 
 @api_router.get("/bills/public/id/{bill_id}")
 async def get_public(bill_id: str):
-    # Search the database using the unique UUID, totally ignoring the document number
+    # This searches for the hidden UUID we put in the link!
     bill = await bills_collection.find_one({"id": bill_id}, {"_id": 0})
     
     if not bill:
