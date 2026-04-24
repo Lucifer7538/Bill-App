@@ -86,9 +86,9 @@ const defaultSettings = {
     { id: "print_bill", action: "Print Bill", keys: "alt + b", isSystem: true },
     { id: "iot_qr", action: "Send QR to ESP32", keys: "alt + q", isSystem: true } 
   ],
-  branches: [
-    { id: "B1", name: "Branch 1 (Old Town)", address: "Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2", location_url: "", map_url: "", whatsapp_url: "", instagram_url: "", about_url: "", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", gstin: "21AAUFJ1925F1ZH", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 },
-    { id: "B2", name: "Branch 2 (Unit-2)", address: "Branch - 2 : Shop No.14, BMC Market Complex, Market Building, Near Petrol Pump, Unit-2, BBSR-9", location_url: "", map_url: "", whatsapp_url: "", instagram_url: "", about_url: "", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", gstin: "21AAUFJ1925F1ZH", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0 }
+ branches: [
+    { id: "B1", name: "Branch 1 (Old Town)", address: "Branch- 1 : Plot No.525, Vivekananda Marg, Near Indian Bank, Old Town, BBSR-2", location_url: "", map_url: "", whatsapp_url: "", instagram_url: "", about_url: "", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", gstin: "21AAUFJ1925F1ZH", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0, invoice_phone: "" },
+    { id: "B2", name: "Branch 2 (Unit-2)", address: "Branch - 2 : Shop No.14, BMC Market Complex, Market Building, Near Petrol Pump, Unit-2, BBSR-9", location_url: "", map_url: "", whatsapp_url: "", instagram_url: "", about_url: "", invoice_upi_id: "eazypay.0000048595@icici", estimate_upi_id: "7538977527@ybl", gstin: "21AAUFJ1925F1ZH", cash_balance: 0, estimate_bank_balance: 0, invoice_bank_balance: 0, invoice_phone: "" }
   ]
 };
 
@@ -2181,8 +2181,8 @@ const checkIsBlank = () => {
               <div className="contact-address" style={{ fontFamily: publicSettings?.address_font || "sans-serif", display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '8px', alignItems: publicSettings?.address_align === 'left' ? 'flex-start' : publicSettings?.address_align === 'right' ? 'flex-end' : 'center', textAlign: publicSettings?.address_align || "center" }}>
                   <a href={pbBranch.location_url && pbBranch.location_url !== "#" ? pbBranch.location_url : "#"} target="_blank" rel="noopener noreferrer" style={{ color: publicSettings?.address_color || "#475569", fontSize: `${publicSettings?.address_size || 14}px`, textDecoration: 'none' }}>{pbBranch.address}</a>
               </div>
-              <div style={{ width: "100%", textAlign: publicSettings?.phone_align || "center", fontFamily: publicSettings?.phone_font || "sans-serif", fontSize: `${publicSettings?.phone_size || 13}px`, marginBottom: "4px" }}>
-                {(publicSettings?.phone_numbers || []).join(" | ")}
+              <div style={{ width: "100%", textAlign: publicSettings?.phone_align || "center", fontFamily: publicSettings?.phone_font || "sans-serif", fontSize: `${publicSettings?.phone_size || 13}px`, marginBottom: "4px", fontWeight: "bold" }}>
+                {publicBill.mode === "invoice" && pbBranch.invoice_phone ? pbBranch.invoice_phone : (publicSettings?.phone_numbers || []).join(" | ")}
               </div>
               <div style={{ width: "100%", textAlign: publicSettings?.email_align || "center", fontFamily: publicSettings?.email_font || "sans-serif", fontSize: `${publicSettings?.email_size || 13}px`, marginBottom: "4px" }}>
                 <a href={`mailto:${publicSettings?.email}`} style={{ color: publicSettings?.email_color || "#475569", textDecoration: 'none' }}>{publicSettings?.email}</a>
@@ -2508,8 +2508,8 @@ const checkIsBlank = () => {
                     <div className="contact-address" style={{ fontFamily: settings.address_font || "sans-serif", textAlign: settings.address_align || "center" }}>
                         <span style={{ color: settings.address_color || "#475569", fontSize: `${settings.address_size || 14}px` }}>{billBranch.address}</span>
                     </div>
-                    <div style={{ width: "100%", textAlign: settings.phone_align || "center", fontFamily: settings.phone_font || "sans-serif", fontSize: `${settings.phone_size || 13}px`, marginBottom: "4px" }}>
-                      {(settings.phone_numbers || []).join(" | ")}
+                    <div style={{ width: "100%", textAlign: settings.phone_align || "center", fontFamily: settings.phone_font || "sans-serif", fontSize: `${settings.phone_size || 13}px`, marginBottom: "4px", fontWeight: "bold" }}>
+                      {b.mode === "invoice" && billBranch.invoice_phone ? billBranch.invoice_phone : (settings.phone_numbers || []).join(" | ")}
                     </div>
                     {b.mode === "invoice" && billBranch.gstin && <p style={{ margin: "4px 0", textAlign: "center", fontWeight: "bold" }}>GSTIN: {billBranch.gstin}</p>}
                   </div>
@@ -2772,8 +2772,8 @@ const checkIsBlank = () => {
                 <div className="contact-address" style={{ fontFamily: settings.address_font || "sans-serif", display: 'flex', flexDirection: 'column', gap: '3px', marginBottom: '8px', alignItems: settings.address_align === 'left' ? 'flex-start' : settings.address_align === 'right' ? 'flex-end' : 'center', textAlign: settings.address_align || "center" }}>
                     <a href={activeBillBranch.location_url && activeBillBranch.location_url !== "#" ? activeBillBranch.location_url : "#"} target="_blank" rel="noopener noreferrer" style={{ color: settings.address_color || "#475569", fontSize: `${settings.address_size || 14}px`, textDecoration: 'none' }}>{activeBillBranch.address}</a>
                 </div>
-                <div style={{ width: "100%", textAlign: settings.phone_align || "center", fontFamily: settings.phone_font || "sans-serif", fontSize: `${settings.phone_size || 13}px`, marginBottom: "4px" }}>
-                  {(settings.phone_numbers || []).join(" | ")}
+                <div style={{ width: "100%", textAlign: settings.phone_align || "center", fontFamily: settings.phone_font || "sans-serif", fontSize: `${settings.phone_size || 13}px`, marginBottom: "4px", fontWeight: "bold" }}>
+                  {mode === "invoice" && activeBillBranch.invoice_phone ? activeBillBranch.invoice_phone : (settings.phone_numbers || []).join(" | ")}
                 </div>
                 <div style={{ width: "100%", textAlign: settings.email_align || "center", fontFamily: settings.email_font || "sans-serif", fontSize: `${settings.email_size || 13}px`, marginBottom: "4px" }}>
                   <a href={`mailto:${settings.email}`} style={{ color: settings.email_color || "#475569", textDecoration: 'none' }}>{settings.email}</a>
@@ -3831,6 +3831,8 @@ const checkIsBlank = () => {
                       
                       <label className="select-label">GSTIN Number (Optional)</label>
                       <Input value={branch.gstin || ""} onChange={(e) => updateBranch(index, 'gstin', e.target.value)} placeholder="Leave blank if no GST" style={{ marginBottom: "10px" }} />
+                      <label className="select-label">Tax Invoice Phone Number (Replaces the 3 global numbers)</label>
+                      <Input value={branch.invoice_phone || ""} onChange={(e) => updateBranch(index, 'invoice_phone', e.target.value)} placeholder="e.g. +91 9876543210" style={{ marginBottom: "10px" }} />
                       
                       <div style={{ display: "flex", gap: "10px", marginTop: "5px" }}>
                          <div style={{ flex: 1 }}>
