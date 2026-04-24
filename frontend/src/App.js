@@ -181,6 +181,7 @@ const FontSelectOptions = ({ customFonts }) => (
     {customFonts?.map(f => (<option key={f.name} value={`'${f.name}'`}>{f.name} (Custom)</option>))}
   </>
 );
+</div>
 const FooterLinksAndQRs = ({ branch, allBranches, mode, settings }) => {
   if (!branch) return null;
   
