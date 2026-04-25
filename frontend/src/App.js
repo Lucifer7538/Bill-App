@@ -3491,7 +3491,8 @@ const checkIsBlank = () => {
         </section>
       )}
 
-      {/* RECENT BILLS DRAWER */}
+   
+     {/* RECENT BILLS DRAWER */}
       {showRecentBills && (
         <section className="side-drawer no-print" style={{ position: "fixed", top: 0, bottom: 0, right: 0, width: "100vw", maxWidth: "550px", backgroundColor: "white", zIndex: 100, boxShadow: "-5px 0 25px rgba(0,0,0,0.2)", overflowY: "auto" }}>
           <div className="drawer-header" style={{ position: "sticky", top: 0, backgroundColor: "white", zIndex: 10, paddingBottom: "15px", borderBottom: "1px solid #e2e8f0" }}>
@@ -3500,14 +3501,15 @@ const checkIsBlank = () => {
           </div>
 
           <div style={{ padding: "15px" }}>
-        {/* --- RECYCLE BIN TOGGLE --- */}
+            {/* RECYCLE BIN TOGGLE */}
             <Button 
                 variant={showRecycleBin ? "default" : "outline"} 
-                style={{ width: "100%", marginBottom: "20px", backgroundColor: showRecycleBin ? "#ef4444" : "white", color: showRecycleBin ? "white" : "#ef4444", borderColor: "#ef4444" }}
+                style={{ width: "100%", marginBottom: "15px", backgroundColor: showRecycleBin ? "#ef4444" : "white", color: showRecycleBin ? "white" : "#ef4444", borderColor: "#ef4444" }}
                 onClick={() => setShowRecycleBin(!showRecycleBin)}
             >
                 🗑️ {showRecycleBin ? "Back to Active Bills" : "View Recycle Bin (Deleted Bills)"}
             </Button>
+
             <div style={{ marginBottom: "20px" }}>
               <Button onClick={handleBulkDownload} disabled={isBulkDownloading || (filteredRecentBills || []).length === 0} style={{ width: "100%", backgroundColor: "#0f172a", height: "auto", padding: "10px", display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", justifyContent: "center", fontSize: "1rem", boxSizing: "border-box" }}>
                 {isBulkDownloading ? "Generating PDF... Please Wait" : <><Download size={18} /> Download {(filteredRecentBills || []).length} Bills as PDF</>}
@@ -3528,18 +3530,12 @@ const checkIsBlank = () => {
                   <option value="ALL">All Time</option><option value="THIS_MONTH">This Month</option><option value="LAST_MONTH">Last Month</option><option value="CUSTOM">Custom Range</option>
                 </select>
               </div>
-              {recentDateFilter === "CUSTOM" && (
-                <div style={{ display: "flex", gap: "10px" }}>
-                  <Input type="date" value={customStartDate} onChange={(e) => setCustomStartDate(e.target.value)} style={{ flex: 1 }} />
-                  <Input type="date" value={customEndDate} onChange={(e) => setCustomEndDate(e.target.value)} style={{ flex: 1 }} />
-                </div>
-              )}
             </div>
 
-           {showRecycleBin ? (
+            {showRecycleBin ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 <h4 style={{ color: "#991b1b", marginTop: 0, marginBottom: "5px" }}>Recycle Bin</h4>
-                <p style={{ fontSize: "0.85rem", color: "#64748b", marginTop: 0 }}>These bills were safely removed from your analytics and live dashboard.</p>
+                <p style={{ fontSize: "0.85rem", color: "#64748b", marginTop: 0 }}>These bills were safely removed from your dashboard.</p>
                 {(settings.deleted_bills || []).length === 0 ? (<p style={{ textAlign: "center", color: "#64748b", padding: "20px" }}>Recycle bin is empty.</p>) : (
                   (settings.deleted_bills || []).map((bill, index) => (
                     <div key={index} className="recent-bill-card" style={{ padding: "15px", border: "1px dashed #fca5a5", borderRadius: "8px", backgroundColor: "#fef2f2" }}>
@@ -3551,28 +3547,9 @@ const checkIsBlank = () => {
                       <p style={{ margin: "0 0 12px 0", fontSize: "0.9rem", color: "#b91c1c" }}>Total: ₹{money(bill.totals?.grand_total || 0)}</p>
                       
                       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                        <Button 
-                            size="sm" 
-                            style={{ flex: 1, backgroundColor: "#16a34a", color: "white" }} 
-                            onClick={() => handleRestoreDeletedBill(bill)}
-                        >
-                            🔄 Restore
-                        </Button>
-                        <Button 
-                            size="sm" 
-                            style={{ flex: 1, backgroundColor: "#0f172a", color: "white" }} 
-                            onClick={() => handleEditFromBin(bill)}
-                        >
-                            ✏️ Edit
-                        </Button>
-                        <Button 
-                            size="sm" 
-                            variant="outline" 
-                            style={{ borderColor: "#ef4444", color: "#ef4444", flex: "0 0 60px" }} 
-                            onClick={() => handlePermanentWipe(bill.id)}
-                        >
-                            🗑️ Wipe
-                        </Button>
+                        <Button size="sm" style={{ flex: 1, backgroundColor: "#16a34a", color: "white" }} onClick={() => handleRestoreDeletedBill(bill)}>🔄 Restore</Button>
+                        <Button size="sm" style={{ flex: 1, backgroundColor: "#0f172a", color: "white" }} onClick={() => handleEditFromBin(bill)}>✏️ Edit</Button>
+                        <Button size="sm" variant="outline" style={{ borderColor: "#ef4444", color: "#ef4444", flex: "0 0 60px" }} onClick={() => handlePermanentWipe(bill.id)}>🗑️ Wipe</Button>
                       </div>
                     </div>
                   ))
@@ -3605,6 +3582,9 @@ const checkIsBlank = () => {
                 )}
               </div>
             )}
+          </div>
+        </section>
+      )}
 
     {/* INVENTORY MANAGER DRAWER */}
       {showInventory && (
