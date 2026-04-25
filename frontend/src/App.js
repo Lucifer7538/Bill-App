@@ -1390,8 +1390,10 @@ const checkIsBlank = () => {
 
         if (currentBillId === bill.id) { 
             await clearBill(mode, billBranchId); 
+            // If we deleted the currently open bill, apply the recycled number to the screen
             if (recycledNum) setDocumentNumber(recycledNum);
         } else if (recycledNum) {
+            // Save the recycled number to the cloud for the next blank bill
             const recycleKey = `recycled_${bill.mode}_${bill.branch_id}`;
             newSettings = { ...newSettings, [recycleKey]: recycledNum };
         }
@@ -1402,7 +1404,8 @@ const checkIsBlank = () => {
         
         toast.success(`${bill.document_number} moved to Recycle Bin.`); 
         await loadSettings(); 
-    } catch { 
+    } catch (error) { // ✅ Added (error) here
+        console.error(error); // ✅ Good practice to log it
         toast.error("Failed to delete the bill."); 
     }
   };
