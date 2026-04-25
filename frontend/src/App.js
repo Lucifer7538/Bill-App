@@ -1074,7 +1074,9 @@ export default function App() {
     
     setItems((prev) => { 
         if (prev.length === 1 && !prev[0].description && !prev[0].weight && !prev[0].hsn) {
-            return [{ ...prev[0], hsn: newSettings.default_hsn }]; 
+            // --- NEW: apply default description on app startup if mode is invoice ---
+            const defaultDesc = mode === "invoice" ? "Silver Ornaments" : "";
+            return [{ ...prev[0], hsn: newSettings.default_hsn, description: defaultDesc }]; 
         }
         return prev; 
     });
@@ -1260,6 +1262,10 @@ const checkIsBlank = () => {
   const clearBill = async (nextMode = mode, nextBranch = billBranchId) => {
     setCurrentBillId(null); 
     setEditingDocNumber(null); 
+    const defaultDesc = nextMode === "invoice" ? "Silver Ornaments" : "";
+    setItems([createItem(settings.default_hsn, defaultDesc)]); 
+    
+    setCustomer({ name: "", phone: "", address: "", email: "", points: 0, credit: 0 });
     setItems([createItem(settings.default_hsn)]); 
     setCustomer({ name: "", phone: "", address: "", email: "", points: 0, credit: 0 });
     setSuggestions([]); 
@@ -3166,7 +3172,16 @@ const checkIsBlank = () => {
                 <Button type="button" variant="outline" onClick={() => { setItems((prev) => prev.filter((row) => row.id !== item.id)); markDirty(); }} disabled={(items || []).length === 1}>Remove</Button>
               </div>
             ))}
-            <Button type="button" onClick={() => { setItems((prev) => [...prev, createItem(settings.default_hsn)]); markDirty(); }}>Add Item</Button>
+            <Button 
+               type="button" 
+                onClick={() => { 
+                const defaultDesc = mode === "invoice" ? "Silver Ornaments" : "";
+                 setItems((prev) => [...prev, createItem(settings.default_hsn, defaultDesc)]); 
+                 markDirty(); 
+               }}
+              >
+             Add Item
+           </Button>
           </div>
 
           <div className="control-card">
