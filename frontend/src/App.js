@@ -1367,14 +1367,16 @@ const checkIsBlank = () => {
     goToBillTop();
   };
 
-if (!window.confirm(`Are you sure you want to move ${bill.document_number} to the Recycle Bin?`)) return;
+  // ✅ THIS LINE WAS MISSING!
+  const handleDeleteBill = async (bill) => {
+    if (!window.confirm(`Are you sure you want to move ${bill.document_number} to the Recycle Bin?`)) return;
+    
     try { 
         // --- NEW: Backup to Cloud Settings (Recycle Bin) BEFORE deleting ---
         const currentDeleted = settings.deleted_bills || [];
         const updatedDeleted = [{ ...bill, deleted_at: today() }, ...currentDeleted];
-        const newSettings = { ...settings, deleted_bills: updatedDeleted };
-        setSettings(newSettings);
-        await axios.put(`${API}/settings`, newSettings, { headers: authHeaders });
+        let newSettings = { ...settings, deleted_bills: updatedDeleted };
+        
         // -------------------------------------------------------------------
         setRecentBillsList((prev) => prev.filter((b) => b.document_number !== bill.document_number)); 
         
@@ -1394,19 +1396,21 @@ if (!window.confirm(`Are you sure you want to move ${bill.document_number} to th
         } else if (recycledNum) {
             // If we deleted from the drawer, save the recycled number to the cloud for the next blank bill
             const recycleKey = `recycled_${bill.mode}_${bill.branch_id}`;
-            const newSettings = { ...settings, [recycleKey]: recycledNum };
-            setSettings(newSettings);
-            await axios.put(`${API}/settings`, newSettings, { headers: authHeaders });
+            newSettings = { ...newSettings, [recycleKey]: recycledNum };
         }
         // -----------------------------
         
-        toast.success(`${bill.document_number} deleted successfully.`); 
+        setSettings(newSettings);
+        await axios.put(`${API}/settings`, newSettings, { headers: authHeaders });
+        
+        toast.success(`${bill.document_number} moved to Recycle Bin.`); 
         await loadSettings(); 
     } catch { 
         toast.error("Failed to delete the bill."); 
     }
   };
 
+    // ... [rest of the code continues normally]
   const handleQuickPaymentToggle = async (bill) => {
     if (bill.tx_type === "booking" || bill.tx_type === "service") { 
         toast.info("Please open the bill and click Edit to manage Booking/Service balances."); 
