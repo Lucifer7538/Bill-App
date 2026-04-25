@@ -927,8 +927,8 @@ export default function App() {
     await new Promise(resolve => setTimeout(resolve, 800));
     
     try {
-      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-      const pageWidth = pdf.internal.pageSize.getWidth();
+      let pdf = null;
+      const pdfWidth = 210;
       
       for (let i = 0; i < filteredRecentBills.length; i++) {
         const bill = filteredRecentBills[i];
@@ -950,6 +950,7 @@ export default function App() {
               clonedNode.style.minWidth = "800px"; 
               clonedNode.style.maxWidth = "800px"; 
               clonedNode.style.height = "max-content";
+              clonedNode.style.overflow = "visible"; // Prevents internal clipping
               clonedNode.style.padding = "20px"; 
               clonedNode.style.boxSizing = "border-box";
               
@@ -970,13 +971,21 @@ export default function App() {
         });
         
         const imgData = canvas.toDataURL("image/png", 1.0);
-        const pageHeight = (canvas.height * pageWidth) / canvas.width;
+        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
         
-        if (i > 0) pdf.addPage();
-        pdf.addImage(imgData, "PNG", 0, 0, pageWidth, pageHeight);
+        // FIX: Dynamically size each page based on the length of that specific bill
+        const pageFormat = [pdfWidth, Math.max(297, pdfHeight)];
+        
+        if (!pdf) {
+          pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: pageFormat });
+        } else {
+          pdf.addPage(pageFormat);
+        }
+        
+        pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
       }
       
-      pdf.save(`Jalaram_Bills_Export_${today()}.pdf`); 
+      if(pdf) pdf.save(`Jalaram_Bills_Export_${today()}.pdf`); 
       toast.success("Bulk PDF Downloaded!");
     } catch (error) { 
         toast.error("Error generating bulk PDF."); 
@@ -1912,7 +1921,7 @@ const checkIsBlank = () => {
     }
   };
 
-  const downloadPdf = async (elementId, filename) => { 
+ const downloadPdf = async (elementId, filename) => { 
     toast.info("Preparing PDF..."); 
     const node = document.getElementById(elementId); 
     if (!node) return; 
@@ -1936,6 +1945,7 @@ const checkIsBlank = () => {
             clonedNode.style.margin = "0"; 
             clonedNode.style.padding = "20px"; 
             clonedNode.style.height = "max-content"; 
+            clonedNode.style.overflow = "visible"; // Prevents internal clipping
             clonedNode.style.boxSizing = "border-box"; 
             
             const noPrint = clonedNode.querySelectorAll('.no-print'); 
@@ -1955,11 +1965,13 @@ const checkIsBlank = () => {
       }); 
       
       const imageData = canvas.toDataURL("image/png", 1.0); 
-      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" }); 
-      const pageWidth = pdf.internal.pageSize.getWidth(); 
-      const pageHeight = (canvas.height * pageWidth) / canvas.width; 
+      const pdfWidth = 210; // Standard width in mm
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width; 
       
-      pdf.addImage(imageData, "PNG", 0, 0, pageWidth, pageHeight); 
+      // FIX: Dynamically set the PDF format so it stretches to fit the receipt
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: [pdfWidth, Math.max(297, pdfHeight)] }); 
+      
+      pdf.addImage(imageData, "PNG", 0, 0, pdfWidth, pdfHeight); 
       pdf.save(`${filename}.pdf`); 
       toast.success("PDF Downloaded Successfully"); 
     } catch (error) { 
