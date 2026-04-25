@@ -1230,7 +1230,7 @@ export default function App() {
         bonusPoints: bonusPointsVal 
     };
   }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff, redeemedPoints, appliedCredit, savedCredit, bonusPoints]);
-  }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff, redeemedPoints, appliedCredit, savedCredit, bonusPoints]);
+ 
 
   const updateItem = (id, key, value) => { 
       markDirty(); 
@@ -1255,7 +1255,7 @@ const checkIsBlank = () => {
     const defaultDesc = nextMode === "invoice" ? "Silver Ornaments" : "";
     setItems([createItem(settings.default_hsn, defaultDesc)]); 
     
-    setCustomer({ name: "", phone: "", address: "", email: "", points: 0, credit: 0 });
+    
     setItems([createItem(settings.default_hsn)]); 
     setCustomer({ name: "", phone: "", address: "", email: "", points: 0, credit: 0 });
     setSuggestions([]); 
