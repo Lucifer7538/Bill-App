@@ -2689,7 +2689,7 @@ const checkIsBlank = () => {
                     
                     {b.tx_type === "sale" || !b.tx_type ? (
                       <div className="totals-row" style={{ color: b.is_payment_done ? "#16a34a" : "#b45309", marginTop: "10px" }}>
-                        <span>{b.is_payment_done ? "PAID VIA" : "PAYMENT STATUS"}</span>
+                        <span>{b.is_payment_done ? "PAID Through" : "PAYMENT STATUS"}</span>
                         <strong>{b.is_payment_done ? (b.payment_method === "Split" ? `SPLIT (C:₹${money(b.split_cash)}, U:₹${money(Math.max(0, (b.totals?.grand_total || 0) - num(b.split_cash)))})` : (b.payment_method || "CASH").toUpperCase()) : "PENDING"}</strong>
                       </div>
                     ) : (
@@ -2967,7 +2967,7 @@ const checkIsBlank = () => {
                   {mode === "invoice" && <div style={{ textAlign: "right", fontSize: "0.65rem", color: "#64748b", marginTop: "2px", fontWeight: "bold" }}>E. & O.E.</div>}
                 {txType === "sale" ? (
                   <div className="totals-row" style={{ color: isPaymentDone ? "#16a34a" : "#b45309", marginTop: "10px" }}>
-                    <span>{isPaymentDone ? "PAID VIA" : "PAYMENT STATUS"}</span>
+                    <span>{isPaymentDone ? "PAID Through" : "PAYMENT STATUS"}</span>
                     <strong>{isPaymentDone ? (paymentMethod === "Split" ? `SPLIT (Cash: ₹${money(splitCash)}, UPI: ₹${money(Math.max(0, computed.grandTotal - num(splitCash)))})` : (paymentMethod || "CASH").toUpperCase()) : "PENDING"}</strong>
                   </div>
                 ) : (
