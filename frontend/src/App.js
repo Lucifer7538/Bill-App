@@ -1481,6 +1481,47 @@ const checkIsBlank = () => {
     }
   };
 
+  // --- NEW LOGIC: RESTORE & EDIT DELETED BILLS ---
+  const handleRestoreDeletedBill = async (bill) => {
+    if (!window.confirm(`Restore ${bill.document_number} exactly as it was?`)) return;
+    try {
+        const { deleted_at, ...billData } = bill; 
+        await axios.post(`${API}/bills/save`, billData, { headers: authHeaders });
+        const updatedDeleted = (settings.deleted_bills || []).filter(b => b.id !== bill.id);
+        const newSettings = { ...settings, deleted_bills: updatedDeleted };
+        setSettings(newSettings);
+        await axios.put(`${API}/settings`, newSettings, { headers: authHeaders });
+        const updatedBills = await axios.get(`${API}/bills/recent`, { headers: authHeaders });
+        setRecentBillsList(updatedBills.data);
+        toast.success(`${bill.document_number} restored to active bills!`);
+    } catch (error) {
+        toast.error("Restoration failed. Bill number might already be in use.");
+    }
+  };
+
+  const handleEditFromBin = async (bill) => {
+      loadBillForEditing(bill);
+      const updatedDeleted = (settings.deleted_bills || []).filter(b => b.id !== bill.id);
+      const newSettings = { ...settings, deleted_bills: updatedDeleted };
+      setSettings(newSettings);
+      await axios.put(`${API}/settings`, newSettings, { headers: authHeaders });
+      setShowRecycleBin(false);
+      setShowRecentBills(false);
+      toast.info("Bill loaded from Bin. Edit and Save to reactivate.");
+  };
+
+  const handlePermanentWipe = async (id) => {
+    if (!window.confirm("Permanently delete this backup? This cannot be undone.")) return;
+    const updatedDeleted = (settings.deleted_bills || []).filter(b => b.id !== id);
+    const newSettings = { ...settings, deleted_bills: updatedDeleted };
+    setSettings(newSettings);
+    await axios.put(`${API}/settings`, newSettings, { headers: authHeaders });
+    toast.success("Bill purged from bin.");
+  };
+
+  // This is your existing line below:
+
+
   const handleModeChange = async (nextMode) => {
     if (mode === nextMode) return;
     if (currentBillId) { 
@@ -3495,7 +3536,7 @@ const checkIsBlank = () => {
               )}
             </div>
 
-            {showRecycleBin ? (
+           {showRecycleBin ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 <h4 style={{ color: "#991b1b", marginTop: 0, marginBottom: "5px" }}>Recycle Bin</h4>
                 <p style={{ fontSize: "0.85rem", color: "#64748b", marginTop: 0 }}>These bills were safely removed from your analytics and live dashboard.</p>
@@ -3507,7 +3548,32 @@ const checkIsBlank = () => {
                         <span style={{ fontSize: "0.85rem", color: "#ef4444", fontWeight: "bold" }}>Deleted: {bill.deleted_at}</span>
                       </div>
                       <p style={{ margin: "0 0 5px 0", fontWeight: "bold" }}>{bill.customer_name || bill.customer?.name || "Unknown Customer"}</p>
-                      <p style={{ margin: "0", fontSize: "0.9rem", color: "#b91c1c" }}>Total: ₹{money(bill.totals?.grand_total || 0)}</p>
+                      <p style={{ margin: "0 0 12px 0", fontSize: "0.9rem", color: "#b91c1c" }}>Total: ₹{money(bill.totals?.grand_total || 0)}</p>
+                      
+                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                        <Button 
+                            size="sm" 
+                            style={{ flex: 1, backgroundColor: "#16a34a", color: "white" }} 
+                            onClick={() => handleRestoreDeletedBill(bill)}
+                        >
+                            🔄 Restore
+                        </Button>
+                        <Button 
+                            size="sm" 
+                            style={{ flex: 1, backgroundColor: "#0f172a", color: "white" }} 
+                            onClick={() => handleEditFromBin(bill)}
+                        >
+                            ✏️ Edit
+                        </Button>
+                        <Button 
+                            size="sm" 
+                            variant="outline" 
+                            style={{ borderColor: "#ef4444", color: "#ef4444", flex: "0 0 60px" }} 
+                            onClick={() => handlePermanentWipe(bill.id)}
+                        >
+                            🗑️ Wipe
+                        </Button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -3539,9 +3605,6 @@ const checkIsBlank = () => {
                 )}
               </div>
             )}
-          </div>
-        </section>
-      )}
 
     {/* INVENTORY MANAGER DRAWER */}
       {showInventory && (
