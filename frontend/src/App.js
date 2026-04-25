@@ -1197,16 +1197,6 @@ export default function App() {
     const sgst = mode === "invoice" ? taxable * (sgstPct / 100) : 0; 
     const igst = mode === "invoice" ? taxable * (igstPct / 100) : 0;
     const gstApplied = mode === "invoice" ? cgst + sgst + igst : 0;
-
-    const mdrDebitPct = num(settings.mdr_debit !== undefined ? settings.mdr_debit : 0.9);
-    const mdrCreditPct = num(settings.mdr_credit !== undefined ? settings.mdr_credit : 1.5);
-    
-    let mdrBase = 0;
-    if (paymentMethod === "Debit Card") mdrBase = (taxable + gstApplied) * (mdrDebitPct / 100);
-    if (paymentMethod === "Credit Card") mdrBase = (taxable + gstApplied) * (mdrCreditPct / 100);
-    
-    const mdrBankGstPct = num(settings.mdr_gst !== undefined ? settings.mdr_gst : 18);
-    const mdr = mdrBase + (mdrBase * (mdrBankGstPct / 100));
     
     const bonusPointsVal = num(bonusPoints);
     const earnedPoints = Math.floor(totalWeight * ptPerGram) + bonusPointsVal;
@@ -1216,7 +1206,7 @@ export default function App() {
     const appliedCreditVal = num(appliedCredit);
     const savedCreditVal = num(savedCredit);
 
-    const baseTotal = taxable + gstApplied + mdr - num(discount) - num(exchange) - appliedRedeemedValue - appliedCreditVal + savedCreditVal;
+    const baseTotal = taxable + gstApplied - num(discount) - num(exchange) - appliedRedeemedValue - appliedCreditVal + savedCreditVal;
     const autoRound = Math.round(baseTotal) - baseTotal;
     const roundOff = manualRoundOff === "" ? autoRound : num(manualRoundOff);
     const grandTotal = baseTotal + roundOff;
@@ -1229,7 +1219,6 @@ export default function App() {
         cgst, 
         sgst, 
         igst, 
-        mdr, 
         roundOff, 
         grandTotal, 
         totalWeight, 
@@ -1240,6 +1229,7 @@ export default function App() {
         savedCredit: savedCreditVal, 
         bonusPoints: bonusPointsVal 
     };
+  }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff, redeemedPoints, appliedCredit, savedCredit, bonusPoints]);
   }, [items, mode, settings, paymentMethod, discount, exchange, manualRoundOff, redeemedPoints, appliedCredit, savedCredit, bonusPoints]);
 
   const updateItem = (id, key, value) => { 
@@ -2010,8 +2000,8 @@ const checkIsBlank = () => {
   const todaysTotalEstBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'estimate').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
   const todaysTotalInvBank = (todayBills || []).filter(b => b.is_payment_done && b.mode === 'invoice').reduce((sum, b) => sum + (['UPI', 'Card'].includes(b.payment_method) ? (b.totals?.grand_total || 0) : b.payment_method === 'Split' ? num(b.split_upi) : 0), 0);
 
-  const publicComputed = useMemo(() => {
-    if (!publicBill || !publicSettings) return { items: [], taxable: 0, cgst: 0, sgst: 0, igst: 0, mdr: 0, roundOff: 0, grandTotal: 0, discount: 0, exchange: 0 };
+ const publicComputed = useMemo(() => {
+    if (!publicBill || !publicSettings) return { items: [], taxable: 0, cgst: 0, sgst: 0, igst: 0, roundOff: 0, grandTotal: 0, discount: 0, exchange: 0 };
     const baseSilverRate = num(publicSettings.silver_rate_per_gram); 
     const baseMCPerGram = num(publicSettings.making_charge_per_gram); 
     const flatMCBelow5g = num(publicSettings.flat_mc_below_5g);
@@ -2059,16 +2049,6 @@ const checkIsBlank = () => {
     const discount = num(publicBill.discount || publicBill.totals?.discount || 0); 
     const exchange = num(publicBill.exchange || publicBill.totals?.exchange || 0);
 
-    const mdrDebitPct = num(publicSettings?.mdr_debit !== undefined ? publicSettings.mdr_debit : 0.9);
-    const mdrCreditPct = num(publicSettings?.mdr_credit !== undefined ? publicSettings.mdr_credit : 1.5);
-    
-    let mdrBase = 0;
-    if (publicBill.payment_method === "Debit Card") mdrBase = (taxable + gstApplied) * (mdrDebitPct / 100);
-    if (publicBill.payment_method === "Credit Card") mdrBase = (taxable + gstApplied) * (mdrCreditPct / 100);
-    
-    const mdrBankGstPct = num(publicSettings?.mdr_gst !== undefined ? publicSettings.mdr_gst : 18);
-    const mdr = mdrBase + (mdrBase * (mdrBankGstPct / 100));
-    
     const bonusPointsVal = num(publicBill.bonus_points || 0);
     const earnedPoints = publicBill.earned_points !== undefined ? num(publicBill.earned_points) : (Math.floor(totalWeight * ptPerGram) + bonusPointsVal);
     const redeemedPoints = num(publicBill.redeemed_points || 0);
@@ -2076,7 +2056,7 @@ const checkIsBlank = () => {
     const appliedCreditVal = num(publicBill.applied_credit || 0);
     const savedCreditVal = num(publicBill.saved_credit || 0);
 
-    const baseTotal = taxable + gstApplied + mdr - discount - exchange - redeemedValue - appliedCreditVal + savedCreditVal; 
+    const baseTotal = taxable + gstApplied - discount - exchange - redeemedValue - appliedCreditVal + savedCreditVal; 
     const autoRound = Math.round(baseTotal) - baseTotal;
     const roundOff = publicBill.round_off !== undefined && publicBill.round_off !== null ? num(publicBill.round_off) : (publicBill.totals?.round_off !== undefined && publicBill.totals?.round_off !== null ? num(publicBill.totals?.round_off) : autoRound);
     const grandTotal = publicBill.totals?.grand_total !== undefined && publicBill.totals?.grand_total !== null ? num(publicBill.totals.grand_total) : (baseTotal + roundOff);
@@ -2087,7 +2067,6 @@ const checkIsBlank = () => {
         cgst: publicBill.totals?.cgst ?? cgst, 
         sgst: publicBill.totals?.sgst ?? sgst, 
         igst: publicBill.totals?.igst ?? igst, 
-        mdr: publicBill.totals?.mdr ?? mdr, 
         roundOff, 
         grandTotal, 
         discount, 
@@ -2098,6 +2077,7 @@ const checkIsBlank = () => {
         appliedCredit: appliedCreditVal, 
         savedCredit: savedCreditVal 
     };
+
   }, [publicBill, publicSettings]);
 
   // ... your other code above (like publicComputed) ...
@@ -2365,14 +2345,14 @@ const checkIsBlank = () => {
               )}
               {num(publicComputed.redeemedPoints) > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED ({publicComputed.redeemedPoints} pts)</span><strong style={{color:"#16a34a"}}>- ₹{money(publicComputed.redeemedValue)}</strong></div>}
               {num(publicComputed.appliedCredit) > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>STORE CREDIT APPLIED</span><strong style={{color:"#16a34a"}}>- ₹{money(publicComputed.appliedCredit)}</strong></div>}
-              <div className="totals-row"><span>MDR / Bank Fee</span><strong>₹{money(publicComputed.mdr)}</strong></div>
+             
               <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(publicComputed.roundOff)}</strong></div>
               {num(publicComputed.savedCredit) > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(publicComputed.savedCredit)}</strong></div>}
               <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(publicComputed.grandTotal)}</strong></div>
                {publicBill.mode === "invoice" && <div style={{ textAlign: "right", fontSize: "0.65rem", color: "#64748b", marginTop: "2px", fontWeight: "bold" }}>E. & O.E.</div>}
               {isSale ? (
                 <div className="totals-row" style={{ color: isPaid ? "#16a34a" : "#b45309", marginTop: "10px" }}>
-                  <span>{isPaid ? "PAID VIA" : "PAYMENT STATUS"}</span>
+                  <span>{isPaid ? "PAID Throung" : "PAYMENT STATUS"}</span>
                   <strong>{isPaid ? (publicBill.payment_method === "Split" ? `SPLIT (C:₹${money(publicBill.split_cash)}, U:₹${money(Math.max(0, publicComputed.grandTotal - num(publicBill.split_cash)))})` : (publicBill.payment_method || "CASH").toUpperCase()) : "PENDING"}</strong>
                 </div>
               ) : (
@@ -2689,7 +2669,7 @@ const checkIsBlank = () => {
                     )}
                     {num(b.redeemed_points) > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED ({b.redeemed_points} pts)</span><strong style={{color:"#16a34a"}}>- ₹{money(num(b.redeemed_points) * rsPerPt)}</strong></div>}
                     {num(b.applied_credit) > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>STORE CREDIT APPLIED</span><strong style={{color:"#16a34a"}}>- ₹{money(b.applied_credit)}</strong></div>}
-                    <div className="totals-row"><span>MDR / Bank Fee</span><strong>₹{money(b.totals?.mdr || 0)}</strong></div>
+                
                     <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(b.totals?.round_off !== undefined ? b.totals.round_off : 0)}</strong></div>
                     {num(b.saved_credit) > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(b.saved_credit)}</strong></div>}
                     <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(b.totals?.grand_total || 0)}</strong></div>
@@ -2956,7 +2936,7 @@ const checkIsBlank = () => {
                 )}
                 {computed.redeemedPoints > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>POINTS REDEEMED ({computed.redeemedPoints} pts)</span><strong style={{color:"#16a34a"}}>- ₹{money(computed.redeemedValue)}</strong></div>}
                 {computed.appliedCredit > 0 && <div className="totals-row"><span style={{color:"#16a34a"}}>STORE CREDIT APPLIED</span><strong style={{color:"#16a34a"}}>- ₹{money(computed.appliedCredit)}</strong></div>}
-                <div className="totals-row"><span>MDR / Bank Fee</span><strong>₹{money(computed.mdr)}</strong></div>
+                
                 <div className="totals-row"><span>ROUNDED OFF</span><strong>₹{money(computed.roundOff)}</strong></div>
                 {computed.savedCredit > 0 && <div className="totals-row"><span>STORE CREDIT SAVED</span><strong>+ ₹{money(computed.savedCredit)}</strong></div>}
                 <div className="totals-row total-highlight"><span>GRAND TOTAL</span><strong>₹{money(computed.grandTotal)}</strong></div>
@@ -3927,8 +3907,8 @@ const checkIsBlank = () => {
                   <label className="select-label">Default HSN Code</label>
                   <Input value={settings.default_hsn} onChange={(e) => setSettings({ ...settings, default_hsn: e.target.value })} />
                 </div>
-              <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
-                  <h4 style={{ margin: "0 0 15px 0" }}>Taxes & MDR</h4>
+             <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
+                  <h4 style={{ margin: "0 0 15px 0" }}>Taxes</h4>
                   <div style={{ display: "flex", gap: "10px", marginBottom: "10px", flexWrap: "wrap" }}>
                       <div style={{ flex: "1 1 100px" }}>
                           <label className="select-label">CGST (%)</label>
@@ -3943,21 +3923,7 @@ const checkIsBlank = () => {
                           <Input type="number" step="0.1" value={settings.igst_percent || 0} onChange={(e) => setSettings({ ...settings, igst_percent: Number(e.target.value) })} />
                       </div>
                   </div>
-                  <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                      <div style={{ flex: "1 1 100px" }}>
-                          <label className="select-label">Debit Card MDR (%)</label>
-                          <Input type="number" step="0.1" value={settings.mdr_debit || 0.9} onChange={(e) => setSettings({ ...settings, mdr_debit: Number(e.target.value) })} />
-                      </div>
-                      <div style={{ flex: "1 1 100px" }}>
-                          <label className="select-label">Credit Card MDR (%)</label>
-                          <Input type="number" step="0.1" value={settings.mdr_credit || 1.5} onChange={(e) => setSettings({ ...settings, mdr_credit: Number(e.target.value) })} />
-                      </div>
-                      <div style={{ flex: "1 1 100px" }}>
-                          <label className="select-label">Bank GST on MDR (%)</label>
-                          <Input type="number" step="0.1" value={settings.mdr_gst || 18} onChange={(e) => setSettings({ ...settings, mdr_gst: Number(e.target.value) })} />
-                      </div>
-                  </div>
-                </div>
+              </div>
 
                 <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1" }}>
                   <h4 style={{ margin: "0 0 15px 0" }}>Security</h4>
