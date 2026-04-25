@@ -870,8 +870,21 @@ export default function App() {
     }
   }, [showAnalytics, token, isPublicView, authHeaders]);
 
-  const filteredRecentBills = useMemo(() => {
+ const filteredRecentBills = useMemo(() => {
     return (recentBillsList || []).filter(bill => {
+      // --- NEW: INSTANT FRONTEND SEARCH FILTER ---
+      if (billSearchQuery && billSearchQuery.trim() !== "") {
+          const query = billSearchQuery.toLowerCase().trim();
+          const docNum = (bill.document_number || "").toLowerCase();
+          const custName = (bill.customer_name || bill.customer?.name || "").toLowerCase();
+          const custPhone = (bill.customer_phone || bill.customer?.phone || "").toLowerCase();
+          
+          if (!docNum.includes(query) && !custName.includes(query) && !custPhone.includes(query)) {
+              return false; // Skip this bill if it doesn't match the typed search
+          }
+      }
+      // -------------------------------------------
+
       if (recentModeFilter !== "ALL" && bill.mode !== recentModeFilter) return false;
       
       if (recentDateFilter === "THIS_MONTH") {
@@ -896,8 +909,8 @@ export default function App() {
       }
       return true;
     });
-  }, [recentBillsList, recentModeFilter, recentDateFilter, customStartDate, customEndDate]);
-
+  // NOTE: billSearchQuery has been added to the dependency array below so it triggers instantly!
+  }, [recentBillsList, recentModeFilter, recentDateFilter, customStartDate, customEndDate, billSearchQuery]);
   const handleBulkDownload = async () => {
     if ((filteredRecentBills || []).length === 0) { 
         toast.error("No bills to download!"); 
