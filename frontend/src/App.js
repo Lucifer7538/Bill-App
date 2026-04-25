@@ -1367,20 +1367,19 @@ const checkIsBlank = () => {
     goToBillTop();
   };
 
-  // ✅ THIS LINE WAS MISSING!
   const handleDeleteBill = async (bill) => {
     if (!window.confirm(`Are you sure you want to move ${bill.document_number} to the Recycle Bin?`)) return;
     
     try { 
-        // --- NEW: Backup to Cloud Settings (Recycle Bin) BEFORE deleting ---
+        // 1. Backup to Cloud Settings (Recycle Bin) BEFORE deleting
         const currentDeleted = settings.deleted_bills || [];
         const updatedDeleted = [{ ...bill, deleted_at: today() }, ...currentDeleted];
         let newSettings = { ...settings, deleted_bills: updatedDeleted };
         
-        // -------------------------------------------------------------------
+        // 2. Remove from the active Recent Bills list
         setRecentBillsList((prev) => prev.filter((b) => b.document_number !== bill.document_number)); 
         
-        // --- FIXED RECYCLING LOGIC ---
+        // 3. Logic to recycle the bill number if we are deleting the very last bill generated
         const sameModeBills = recentBillsList.filter(b => b.mode === bill.mode && b.branch_id === bill.branch_id);
         const getNum = (docStr) => parseInt((docStr || "").replace(/\D/g, '')) || 0;
         const deletedNum = getNum(bill.document_number);
@@ -1391,15 +1390,15 @@ const checkIsBlank = () => {
 
         if (currentBillId === bill.id) { 
             await clearBill(mode, billBranchId); 
-            // If we deleted the open bill, immediately apply the recycled number to the screen!
+            // If we deleted the currently open bill, apply the recycled number to the screen
             if (recycledNum) setDocumentNumber(recycledNum);
         } else if (recycledNum) {
-            // If we deleted from the drawer, save the recycled number to the cloud for the next blank bill
+            // Save the recycled number to the cloud for the next blank bill
             const recycleKey = `recycled_${bill.mode}_${bill.branch_id}`;
             newSettings = { ...newSettings, [recycleKey]: recycledNum };
         }
-        // -----------------------------
         
+        // 4. Save everything to the database
         setSettings(newSettings);
         await axios.put(`${API}/settings`, newSettings, { headers: authHeaders });
         
@@ -1410,6 +1409,7 @@ const checkIsBlank = () => {
     }
   };
 
+ 
     // ... [rest of the code continues normally]
   const handleQuickPaymentToggle = async (bill) => {
     if (bill.tx_type === "booking" || bill.tx_type === "service") { 
