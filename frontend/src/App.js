@@ -1499,17 +1499,28 @@ const checkIsBlank = () => {
     }
   };
 
-  const handleEditFromBin = async (bill) => {
+ const handleEditFromBin = async (bill) => {
+      // 1. Load the bill data into the dashboard form
       loadBillForEditing(bill);
+      
+      // 2. CRITICAL FIX: We null these out so the button changes 
+      // from "Update & Migrate" to "Save Bill". 
+      // This allows a fresh record to be created in your database.
+      setCurrentBillId(null);
+      setEditingDocNumber(null);
+      
+      // 3. Remove this bill from the Recycle Bin immediately
       const updatedDeleted = (settings.deleted_bills || []).filter(b => b.id !== bill.id);
       const newSettings = { ...settings, deleted_bills: updatedDeleted };
       setSettings(newSettings);
       await axios.put(`${API}/settings`, newSettings, { headers: authHeaders });
+      
+      // 4. Close the drawers so you can see the dashboard
       setShowRecycleBin(false);
       setShowRecentBills(false);
-      toast.info("Bill loaded from Bin. Edit and Save to reactivate.");
+      
+      toast.info("Bill loaded from Bin. Modify if needed, then click 'Save Bill' to restore.");
   };
-
   const handlePermanentWipe = async (id) => {
     if (!window.confirm("Permanently delete this backup? This cannot be undone.")) return;
     const updatedDeleted = (settings.deleted_bills || []).filter(b => b.id !== id);
