@@ -459,6 +459,7 @@ export default function App() {
   const [settingsTab, setSettingsTab] = useState("design"); 
   const [showAbout, setShowAbout] = useState(false);
   const [showRecentBills, setShowRecentBills] = useState(false);
+  const [showRecycleBin, setShowRecycleBin] = useState(false);
   
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [analyticsFilter, setAnalyticsFilter] = useState("THIS_MONTH");
@@ -1366,10 +1367,15 @@ const checkIsBlank = () => {
     goToBillTop();
   };
 
- const handleDeleteBill = async (bill) => {
-    if (!window.confirm(`Are you sure you want to permanently delete ${bill.document_number}?`)) return;
+if (!window.confirm(`Are you sure you want to move ${bill.document_number} to the Recycle Bin?`)) return;
     try { 
-        await axios.delete(`${API}/bills/${bill.document_number}`, { headers: authHeaders }); 
+        // --- NEW: Backup to Cloud Settings (Recycle Bin) BEFORE deleting ---
+        const currentDeleted = settings.deleted_bills || [];
+        const updatedDeleted = [{ ...bill, deleted_at: today() }, ...currentDeleted];
+        const newSettings = { ...settings, deleted_bills: updatedDeleted };
+        setSettings(newSettings);
+        await axios.put(`${API}/settings`, newSettings, { headers: authHeaders });
+        // -------------------------------------------------------------------
         setRecentBillsList((prev) => prev.filter((b) => b.document_number !== bill.document_number)); 
         
         // --- FIXED RECYCLING LOGIC ---
@@ -3445,7 +3451,17 @@ const checkIsBlank = () => {
             <Button type="button" variant="outline" className="drawer-back-btn" onClick={() => setShowRecentBills(false)} style={{ marginLeft: "20px" }}><ArrowLeft className="drawer-back-icon" style={{ marginRight: "5px" }} /><span>Close Menu</span></Button>
           </div>
 
+        
+
           <div style={{ padding: "15px" }}>
+        {/* --- RECYCLE BIN TOGGLE --- */}
+            <Button 
+                variant={showRecycleBin ? "default" : "outline"} 
+                style={{ width: "100%", marginBottom: "20px", backgroundColor: showRecycleBin ? "#ef4444" : "white", color: showRecycleBin ? "white" : "#ef4444", borderColor: "#ef4444" }}
+                onClick={() => setShowRecycleBin(!showRecycleBin)}
+            >
+                🗑️ {showRecycleBin ? "Back to Active Bills" : "View Recycle Bin (Deleted Bills)"}
+            </Button>
             <div style={{ marginBottom: "20px" }}>
               <Button onClick={handleBulkDownload} disabled={isBulkDownloading || (filteredRecentBills || []).length === 0} style={{ width: "100%", backgroundColor: "#0f172a", height: "auto", padding: "10px", display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", justifyContent: "center", fontSize: "1rem", boxSizing: "border-box" }}>
                 {isBulkDownloading ? "Generating PDF... Please Wait" : <><Download size={18} /> Download {(filteredRecentBills || []).length} Bills as PDF</>}
@@ -3474,7 +3490,24 @@ const checkIsBlank = () => {
               )}
             </div>
 
-            {loadingRecent ? (<p style={{ textAlign: "center", padding: "20px" }}>Loading recent bills...</p>) : (
+            {showRecycleBin ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <h4 style={{ color: "#991b1b", marginTop: 0, marginBottom: "5px" }}>Recycle Bin</h4>
+                <p style={{ fontSize: "0.85rem", color: "#64748b", marginTop: 0 }}>These bills were safely removed from your analytics and live dashboard.</p>
+                {(settings.deleted_bills || []).length === 0 ? (<p style={{ textAlign: "center", color: "#64748b", padding: "20px" }}>Recycle bin is empty.</p>) : (
+                  (settings.deleted_bills || []).map((bill, index) => (
+                    <div key={index} className="recent-bill-card" style={{ padding: "15px", border: "1px dashed #fca5a5", borderRadius: "8px", backgroundColor: "#fef2f2" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                        <strong style={{ fontSize: "1.1rem", color: "#991b1b", textDecoration: "line-through" }}>{bill.document_number}</strong>
+                        <span style={{ fontSize: "0.85rem", color: "#ef4444", fontWeight: "bold" }}>Deleted: {bill.deleted_at}</span>
+                      </div>
+                      <p style={{ margin: "0 0 5px 0", fontWeight: "bold" }}>{bill.customer_name || bill.customer?.name || "Unknown Customer"}</p>
+                      <p style={{ margin: "0", fontSize: "0.9rem", color: "#b91c1c" }}>Total: ₹{money(bill.totals?.grand_total || 0)}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            ) : loadingRecent ? (<p style={{ textAlign: "center", padding: "20px" }}>Loading recent bills...</p>) : (
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 {(filteredRecentBills || []).length === 0 ? (<p style={{ textAlign: "center", color: "#64748b", padding: "20px" }}>No bills found matching criteria.</p>) : (
                   (filteredRecentBills || []).map((bill) => (
