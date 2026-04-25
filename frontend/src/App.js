@@ -2320,11 +2320,11 @@ const checkIsBlank = () => {
             <p><strong>Date:</strong> {publicBill.date}</p>
           </div>
 
-          <div className="customer-box">
-              <p><strong>Name:</strong> {customer.name || "-"}</p>
-              <p><strong>Address:</strong> {customer.address || "-"}</p>
-              <p><strong>Phone:</strong> {customer.phone || "-"}</p>
-              <p><strong>GSTIN:</strong> {customer.gstin || "N/A"}</p>
+         <div className="customer-box">
+              <p><strong>Name:</strong> {publicBill.customer_name || publicBill.customer?.name || "-"}</p>
+              <p><strong>Address:</strong> {publicBill.customer_address || publicBill.customer?.address || "-"}</p>
+              <p><strong>Phone:</strong> {publicBill.customer_phone || publicBill.customer?.phone || "-"}</p>
+              <p><strong>GSTIN:</strong> {publicBill.customer_gstin || "N/A"}</p>
             </div>
 
           <BillTable mode={publicBill.mode} items={publicComputed.items} />
@@ -2417,13 +2417,13 @@ const checkIsBlank = () => {
           <footer className="sheet-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "30px", paddingTop: "20px" }}>
               {/* Left Side: Signature Box with Shop Name on Top */}
               <div style={{ textAlign: "center", width: "220px" }}>
-                <p style={{ margin: "0 0 5px 0", fontWeight: "900", fontSize: "1rem", color: "#000" }}>For {settings?.shop_name || "JALARAM JEWELLERS"}</p>
+                <p style={{ margin: "0 0 5px 0", fontWeight: "900", fontSize: "1rem", color: "#000", textTransform: "uppercase" }}>For {settings?.shop_name || "JALARAM JEWELLERS"}</p>
                 <div style={{ height: "65px", border: "1px solid #cbd5e1", borderRadius: "4px", backgroundColor: "#f8fafc", marginBottom: "5px" }}></div>
                 <p style={{ margin: 0, fontWeight: "bold", color: "#334155" }}>Authorised Signature</p>
               </div>
 
               {/* Right Side: Thanking You */}
-              <div style={{ textAlign: "right", paddingRight: "20px" }}>
+              <div style={{ textAlign: "right", paddingRight: "20px", paddingBottom: "10px" }}>
                 <h3 style={{ margin: 0, fontFamily: "'Brush Script MT', cursive", fontSize: "2.2rem", color: "#f97316" }}>Thanking you</h3>
               </div>
             </footer>
@@ -2657,12 +2657,12 @@ const checkIsBlank = () => {
                   <p><strong>Date:</strong> {b.date}</p>
                 </div>
 
-               <div className="customer-box">
-              <p><strong>Name:</strong> {customer.name || "-"}</p>
-              <p><strong>Address:</strong> {customer.address || "-"}</p>
-              <p><strong>Phone:</strong> {customer.phone || "-"}</p>
-              <p><strong>GSTIN:</strong> {customer.gstin || "N/A"}</p>
-              </div>
+              <div className="customer-box">
+                  <p><strong>Name:</strong> {b.customer_name || b.customer?.name || "-"}</p>
+                  <p><strong>Address:</strong> {b.customer_address || b.customer?.address || "-"}</p>
+                  <p><strong>Phone:</strong> {b.customer_phone || b.customer?.phone || "-"}</p>
+                  <p><strong>GSTIN:</strong> {b.customer_gstin || "N/A"}</p>
+                </div>
                 <BillTable mode={b.mode} items={printedItems} />
 
                 <div className="sheet-bottom-stack">
@@ -2925,11 +2925,11 @@ const checkIsBlank = () => {
             </div>
 
             <div className="customer-box">
-              <p><strong>Name:</strong> {customer.name || "-"}</p>
-              <p><strong>Address:</strong> {customer.address || "-"}</p>
-              <p><strong>Phone:</strong> {customer.phone || "-"}</p>
+              <p><strong>Name:</strong> {customer.name || "-"}</p>
+              <p><strong>Address:</strong> {customer.address || "-"}</p>
+              <p><strong>Phone:</strong> {customer.phone || "-"}</p>
               <p><strong>GSTIN:</strong> {customer.gstin || "N/A"}</p>
-            </div>
+            </div>
 
             <BillTable mode={mode} items={computed.items} />
 
