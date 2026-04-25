@@ -2075,10 +2075,6 @@ const checkIsBlank = () => {
       }
   };
 
-  const getUpiAmount = () => {
-      if (txType === "sale") {
-          if (isPaymentDone) return 0;
-  // ... rest of your getUpiAmount function ...
 
   const getUpiAmount = () => {
       if (txType === "sale") {
