@@ -4041,8 +4041,10 @@ const checkIsBlank = () => {
               </div>
             )}
 
-            {settingsTab === "advanced" && (
+           {settingsTab === "advanced" && (
               <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+                
+                {/* --- 1. INVOICE PROTECTION --- */}
                 <div style={{ padding: "15px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px solid #bbf7d0" }}>
                   <h4 style={{ margin: "0 0 10px 0", color: "#166534" }}>Invoice Protection</h4>
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -4058,20 +4060,32 @@ const checkIsBlank = () => {
                     When enabled, barcode scans will keep "Silver Ornaments" and force your default HSN code.
                   </p>
                 </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
 
-                  <div style={{ padding: "15px", backgroundColor: "#fffbeb", borderRadius: "8px", border: "1px solid #fde68a", marginBottom: "15px" }}>
-                    <h4 style={{ margin: "0 0 10px 0", color: "#92400e" }}>Billing Features</h4>
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
-                       <input type="checkbox" checked={settings.enable_exchange_field || false} onChange={(e) => setSettings({ ...settings, enable_exchange_field: e.target.checked })} style={{ width: "20px", height: "20px", cursor: "pointer" }} />
-                        <strong style={{ color: "#92400e" }}>Enable 'Exchange Amount' Field on Bills</strong>
-                          </div>
-                         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                           <input type="checkbox" checked={settings.show_branches_on_invoice ?? true} onChange={(e) => setSettings({ ...settings, show_branches_on_invoice: e.target.checked })} style={{ width: "20px", height: "20px", cursor: "pointer" }} />
-                            <strong style={{ color: "#92400e" }}>Show Marketing Footer (Branches, Socials, Feedback) on Tax Invoices</strong>
-                          </div>
-                             <p style={{ fontSize: "0.75rem", color: "#b45309", marginTop: "5px", marginLeft: "30px", marginBottom: 0 }}>If OFF, the entire bottom section will be hidden on Tax Invoices to keep them strictly legal (will still show on Estimates).</p>
-                          </div>
+                {/* --- 2. BILLING FEATURES --- */}
+                <div style={{ padding: "15px", backgroundColor: "#fffbeb", borderRadius: "8px", border: "1px solid #fde68a" }}>
+                  <h4 style={{ margin: "0 0 10px 0", color: "#92400e" }}>Billing Features</h4>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
+                    <input type="checkbox" checked={settings.enable_exchange_field || false} onChange={(e) => setSettings({ ...settings, enable_exchange_field: e.target.checked })} style={{ width: "20px", height: "20px", cursor: "pointer" }} />
+                    <strong style={{ color: "#92400e" }}>Enable 'Exchange Amount' Field on Bills</strong>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <input type="checkbox" checked={settings.show_branches_on_invoice ?? true} onChange={(e) => setSettings({ ...settings, show_branches_on_invoice: e.target.checked })} style={{ width: "20px", height: "20px", cursor: "pointer" }} />
+                    <strong style={{ color: "#92400e" }}>Show Marketing Footer (Branches, Socials, Feedback) on Tax Invoices</strong>
+                  </div>
+                  <p style={{ fontSize: "0.75rem", color: "#b45309", marginTop: "5px", marginLeft: "30px", marginBottom: 0 }}>If OFF, the entire bottom section will be hidden on Tax Invoices to keep them strictly legal.</p>
+                </div>
+
+                {/* --- 3. SCANNER POWER --- */}
+                <div style={{ padding: "15px", backgroundColor: "#fdf4ff", borderRadius: "8px", border: "1px solid #f5d0fe" }}>
+                  <h4 style={{ color: "#86198f", margin: "0 0 10px 0" }}>Barcode Scanner Power</h4>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <input type="checkbox" checked={settings.enable_barcode_system || false} onChange={(e) => setSettings({ ...settings, enable_barcode_system: e.target.checked })} style={{ width: "20px", height: "20px" }} />
+                    <strong style={{ color: "#86198f" }}>Enable Laser Scanner Listening</strong>
+                  </div>
+                </div>
+
+              </div>
+            )}
 
                {/* --- PRINTER / PAPER SIZE SETTINGS --- */}
                 <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1", marginBottom: "15px" }}>
