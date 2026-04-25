@@ -1985,7 +1985,7 @@ const checkIsBlank = () => {
       return;
     }
     const link = `${window.location.origin}/?view=${currentBillId}`; 
-    const text = `*Hello* ${customer.name || "Customer"},\n Thank you for visiting Jalaram Jewellers\n\n Official ${mode === "invoice" ? "Invoice" : "Estimate"} Bill\n Here Is Your Bill No. ${documentNumber}\n Amount: ₹${money(computed.grandTotal)}.\n\n Here You can view and download it securely\n Link: ${link}\n\n ${activeBillBranch.map_url}\n\n   Thank you,\n${settings.shop_name} : The Silver Specialist\n\n  `; 
+    const text = `*Hello* ${customer.name || "Customer"},\n Thank you for visiting Jalaram Jewellers\n\n Official ${mode === "invoice" ? "Invoice" : "Estimate"} Bill\n Here Is Your Bill No. ${documentNumber}\n Amount: ₹${money(computed.grandTotal)}.\n\n Here You can view and download it securely\n Link: ${link}\n\n   Thank you,\n${settings.shop_name} : The Silver Specialist\n\n  `; 
     
     let cleanedPhone = customer.phone.replace(/\D/g, ""); 
     if (cleanedPhone.length === 10) cleanedPhone = `91${cleanedPhone}`; 
