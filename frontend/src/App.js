@@ -2018,6 +2018,68 @@ const checkIsBlank = () => {
     };
   }, [publicBill, publicSettings]);
 
+  // ... your other code above (like publicComputed) ...
+
+  const handleAddGroupToInventory = async (groupName, groupItems) => {
+      // 1. Calculate totals from the barcode group
+      const addedQty = groupItems.length;
+      const totalWeightGrams = groupItems.reduce((sum, item) => sum + num(item.weight), 0);
+
+      if (totalWeightGrams <= 0 && addedQty <= 0) {
+          toast.error(`Cannot add ${groupName}. No valid weight or quantity found.`);
+          return;
+      }
+
+      // 2. Fetch current inventory and logs
+      let currentInv = [...(settings.inventory || [])];
+      let currentLogs = [...(settings.inventory_logs || [])];
+
+      // 3. Check if item already exists in the selected branch
+      const existingIndex = currentInv.findIndex(i => i.name.toLowerCase() === groupName.toLowerCase().trim() && i.branch_id === globalBranchId);
+
+      if (existingIndex !== -1) {
+          currentInv[existingIndex].weightInGrams += totalWeightGrams;
+          currentInv[existingIndex].quantity = (currentInv[existingIndex].quantity || 0) + addedQty;
+      } else {
+          currentInv.push({
+              id: Date.now().toString(),
+              name: groupName.trim(),
+              weightInGrams: totalWeightGrams,
+              quantity: addedQty,
+              branch_id: globalBranchId
+          });
+      }
+
+      // 4. Create a log entry for the history tab
+      const newLog = {
+          id: Date.now().toString(),
+          date: today(),
+          name: groupName.trim(),
+          weight: String(totalWeightGrams),
+          unit: "g",
+          quantity: addedQty,
+          branch_id: globalBranchId
+      };
+      
+      currentLogs.unshift(newLog);
+
+      // 5. Update state and push to the cloud
+      const newSettings = { ...settings, inventory: currentInv, inventory_logs: currentLogs };
+      setSettings(newSettings);
+
+      try {
+          await axios.put(`${API}/settings`, newSettings, { headers: authHeaders });
+          toast.success(`Success! Added ${addedQty} Pcs of ${groupName} (${totalWeightGrams}g) to Inventory.`);
+      } catch (error) {
+          toast.error("Failed to sync new stock to the cloud.");
+      }
+  };
+
+  const getUpiAmount = () => {
+      if (txType === "sale") {
+          if (isPaymentDone) return 0;
+  // ... rest of your getUpiAmount function ...
+
   const getUpiAmount = () => {
       if (txType === "sale") {
           if (isPaymentDone) return 0;
@@ -4035,12 +4097,26 @@ const checkIsBlank = () => {
                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2px dashed #e2e8f0", paddingBottom: "10px", marginBottom: "10px", flexWrap: "wrap", gap: "10px" }}>
                             <strong style={{ fontSize: "1.1rem" }}>📦 {groupName}</strong>
                             <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
-                               <label style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "0.9rem", cursor: "pointer", color: "#475569", fontWeight: "bold" }}>
-                                 <input type="checkbox" checked={printWithPrice} onChange={(e) => setPrintWithPrice(e.target.checked)} style={{ width: "16px", height: "16px" }} />
-                                 Print with Price
-                               </label>
-                               <Button size="sm" style={{ backgroundColor: "#0f172a" }} onClick={() => { setActivePrintGroup(groupName); setPrintType("barcode"); setTimeout(() => window.print(), 300); }}>Print {items.length} Barcodes</Button>
+                              <label style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "0.9rem", cursor: "pointer", color: "#475569", fontWeight: "bold" }}>
+                               <input type="checkbox" checked={printWithPrice} onChange={(e) => setPrintWithPrice(e.target.checked)} style={{ width: "16px", height: "16px" }} />
+                                Print with Price
+                                </label>
+                                <Button 
+                                size="sm" 
+                                style={{ backgroundColor: "#16a34a", color: "white" }} 
+                               onClick={() => handleAddGroupToInventory(groupName, items)}
+                                >
+                                📦 Add {items.length} Pcs to Stock
+                                 </Button>
+                                <Button 
+                                  size="sm" 
+                                    style={{ backgroundColor: "#0f172a" }} 
+                                      onClick={() => { setActivePrintGroup(groupName); setPrintType("barcode"); setTimeout(() => window.print(), 300); }}
+                                     >
+                                   Print {items.length} Barcodes
+                               </Button>
                             </div>
+                      
                           </div>
                           <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
                             {items.map((it, idx) => <span key={idx} style={{ backgroundColor: "#f1f5f9", padding: "4px 8px", borderRadius: "4px", fontSize: "0.85rem" }}>{it.weight ? `${it.weight}g` : "Fixed"}</span>)}
