@@ -64,8 +64,7 @@ const defaultSettings = {
   formula_note: "Line total = Weight x (Silver rate per gram + Making charge per gram)", 
   show_branches_on_invoice: true,
   logo_data_url: "", 
-  about_qr_data_url: STATIC_ABOUT_QR_URL,
-  lock_invoice_defaults: false,
+  about_qr_data_url: STATIC_ABOUT_QR_URL, 
   custom_fonts: [],
   master_items: [], 
   inventory: [], 
@@ -546,24 +545,12 @@ export default function App() {
               const mcVal = masterMatch?.mc ? String(masterMatch.mc) : "";
               const amtVal = masterMatch?.fixed_amount ? String(masterMatch.fixed_amount) : "";
               
-              // NEW LOCK LOGIC
-              const isLocked = mode === "invoice" && settings.lock_invoice_defaults;
-              const finalDesc = isLocked ? `Silver Ornaments - ${scName}` : scName;
-              const finalHsn = isLocked ? settings.default_hsn : (masterMatch?.hsn || settings.default_hsn);
-
-              if (!last.description || last.description === "Silver Ornaments") {
-                const narr = [...prev];
-                narr[narr.length - 1] = { 
-                  ...last, 
-                  description: finalDesc, 
-                  weight: scWt, 
-                  hsn: finalHsn,
-                  mc_override: mcVal, 
-                  amount_override: amtVal 
-                };
-                return narr;
+              if (!last.description && !last.weight) {
+                 const narr = [...prev]; 
+                 narr[narr.length - 1] = { ...last, description: scName, weight: scWt, mc_override: mcVal, amount_override: amtVal };
+                 return narr;
               }
-              return [...prev, createItem(finalHsn, finalDesc, scWt, mcVal, amtVal)];
+              return [...prev, createItem(settings.default_hsn, scName, scWt, mcVal, amtVal)];
             });
             toast.success(`Scanned: ${scName}`);
           }
@@ -573,8 +560,8 @@ export default function App() {
     };
 
     window.addEventListener('keydown', handleScanner, true);
-   return () => window.removeEventListener('keydown', handleScanner, true);
-  }, [settings.enable_barcode_system, settings.master_items, settings.default_hsn, settings.lock_invoice_defaults, mode]);
+    return () => window.removeEventListener('keydown', handleScanner, true);
+  }, [settings.enable_barcode_system, settings.master_items, settings.default_hsn]);
   
   // --- NEW: HYBRID INTERNET SPELL CHECKER ENGINE ---
   useEffect(() => {
@@ -4041,51 +4028,21 @@ const checkIsBlank = () => {
               </div>
             )}
 
-           {settingsTab === "advanced" && (
+            {settingsTab === "advanced" && (
               <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-                
-                {/* --- 1. INVOICE PROTECTION --- */}
-                <div style={{ padding: "15px", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px solid #bbf7d0" }}>
-                  <h4 style={{ margin: "0 0 10px 0", color: "#166534" }}>Invoice Protection</h4>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <input 
-                      type="checkbox" 
-                      checked={settings.lock_invoice_defaults || false} 
-                      onChange={(e) => setSettings({ ...settings, lock_invoice_defaults: e.target.checked })} 
-                      style={{ width: "20px", height: "20px", cursor: "pointer" }} 
-                    />
-                    <strong style={{ color: "#166534" }}>🔒 Lock "Silver Ornaments" & HSN on Invoices</strong>
-                  </div>
-                  <p style={{ fontSize: "0.75rem", color: "#15803d", marginTop: "5px" }}>
-                    When enabled, barcode scans will keep "Silver Ornaments" and force your default HSN code.
-                  </p>
-                </div>
 
-                {/* --- 2. BILLING FEATURES --- */}
-                <div style={{ padding: "15px", backgroundColor: "#fffbeb", borderRadius: "8px", border: "1px solid #fde68a" }}>
-                  <h4 style={{ margin: "0 0 10px 0", color: "#92400e" }}>Billing Features</h4>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
-                    <input type="checkbox" checked={settings.enable_exchange_field || false} onChange={(e) => setSettings({ ...settings, enable_exchange_field: e.target.checked })} style={{ width: "20px", height: "20px", cursor: "pointer" }} />
-                    <strong style={{ color: "#92400e" }}>Enable 'Exchange Amount' Field on Bills</strong>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <input type="checkbox" checked={settings.show_branches_on_invoice ?? true} onChange={(e) => setSettings({ ...settings, show_branches_on_invoice: e.target.checked })} style={{ width: "20px", height: "20px", cursor: "pointer" }} />
-                    <strong style={{ color: "#92400e" }}>Show Marketing Footer (Branches, Socials, Feedback) on Tax Invoices</strong>
-                  </div>
-                  <p style={{ fontSize: "0.75rem", color: "#b45309", marginTop: "5px", marginLeft: "30px", marginBottom: 0 }}>If OFF, the entire bottom section will be hidden on Tax Invoices to keep them strictly legal.</p>
-                </div>
-
-                {/* --- 3. SCANNER POWER --- */}
-                <div style={{ padding: "15px", backgroundColor: "#fdf4ff", borderRadius: "8px", border: "1px solid #f5d0fe" }}>
-                  <h4 style={{ color: "#86198f", margin: "0 0 10px 0" }}>Barcode Scanner Power</h4>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <input type="checkbox" checked={settings.enable_barcode_system || false} onChange={(e) => setSettings({ ...settings, enable_barcode_system: e.target.checked })} style={{ width: "20px", height: "20px" }} />
-                    <strong style={{ color: "#86198f" }}>Enable Laser Scanner Listening</strong>
-                  </div>
-                </div>
-
-              </div>
-            )}
+                  <div style={{ padding: "15px", backgroundColor: "#fffbeb", borderRadius: "8px", border: "1px solid #fde68a", marginBottom: "15px" }}>
+                    <h4 style={{ margin: "0 0 10px 0", color: "#92400e" }}>Billing Features</h4>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
+                       <input type="checkbox" checked={settings.enable_exchange_field || false} onChange={(e) => setSettings({ ...settings, enable_exchange_field: e.target.checked })} style={{ width: "20px", height: "20px", cursor: "pointer" }} />
+                        <strong style={{ color: "#92400e" }}>Enable 'Exchange Amount' Field on Bills</strong>
+                          </div>
+                         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                           <input type="checkbox" checked={settings.show_branches_on_invoice ?? true} onChange={(e) => setSettings({ ...settings, show_branches_on_invoice: e.target.checked })} style={{ width: "20px", height: "20px", cursor: "pointer" }} />
+                            <strong style={{ color: "#92400e" }}>Show Marketing Footer (Branches, Socials, Feedback) on Tax Invoices</strong>
+                          </div>
+                             <p style={{ fontSize: "0.75rem", color: "#b45309", marginTop: "5px", marginLeft: "30px", marginBottom: 0 }}>If OFF, the entire bottom section will be hidden on Tax Invoices to keep them strictly legal (will still show on Estimates).</p>
+                          </div>
 
                {/* --- PRINTER / PAPER SIZE SETTINGS --- */}
                 <div style={{ padding: "15px", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #cbd5e1", marginBottom: "15px" }}>
