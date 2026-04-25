@@ -459,6 +459,7 @@ export default function App() {
   const [settingsTab, setSettingsTab] = useState("design"); 
   const [showAbout, setShowAbout] = useState(false);
   const [showRecentBills, setShowRecentBills] = useState(false);
+  const [showRecycleBin, setShowRecycleBin] = useState(false);
   
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [analyticsFilter, setAnalyticsFilter] = useState("THIS_MONTH");
@@ -872,6 +873,19 @@ export default function App() {
 
   const filteredRecentBills = useMemo(() => {
     return (recentBillsList || []).filter(bill => {
+      // --- NEW: INSTANT FRONTEND SEARCH FILTER ---
+      if (billSearchQuery && billSearchQuery.trim() !== "") {
+          const query = billSearchQuery.toLowerCase().trim();
+          const docNum = (bill.document_number || "").toLowerCase();
+          const custName = (bill.customer_name || bill.customer?.name || "").toLowerCase();
+          const custPhone = (bill.customer_phone || bill.customer?.phone || "").toLowerCase();
+          
+          if (!docNum.includes(query) && !custName.includes(query) && !custPhone.includes(query)) {
+              return false; // Skip this bill if it doesn't match the typed search
+          }
+      }
+      // -------------------------------------------
+
       if (recentModeFilter !== "ALL" && bill.mode !== recentModeFilter) return false;
       
       if (recentDateFilter === "THIS_MONTH") {
@@ -896,7 +910,8 @@ export default function App() {
       }
       return true;
     });
-  }, [recentBillsList, recentModeFilter, recentDateFilter, customStartDate, customEndDate]);
+  // NOTE: billSearchQuery has been added to the dependency array below so it triggers instantly!
+  }, [recentBillsList, recentModeFilter, recentDateFilter, customStartDate, customEndDate, billSearchQuery]);
 
   const handleBulkDownload = async () => {
     if ((filteredRecentBills || []).length === 0) { 
@@ -1354,10 +1369,19 @@ const checkIsBlank = () => {
   };
 
  const handleDeleteBill = async (bill) => {
-    if (!window.confirm(`Are you sure you want to permanently delete ${bill.document_number}?`)) return;
+    if (!window.confirm(`Are you sure you want to move ${bill.document_number} to the Recycle Bin?`)) return;
     try { 
+        // --- NEW: Backup to Cloud Settings (Recycle Bin) BEFORE deleting ---
+        const currentDeleted = settings.deleted_bills || [];
+        const updatedDeleted = [{ ...bill, deleted_at: today() }, ...currentDeleted];
+        const newSettings = { ...settings, deleted_bills: updatedDeleted };
+        setSettings(newSettings);
+        await axios.put(`${API}/settings`, newSettings, { headers: authHeaders });
+        // -------------------------------------------------------------------
+
         await axios.delete(`${API}/bills/${bill.document_number}`, { headers: authHeaders }); 
-        setRecentBillsList((prev) => prev.filter((b) => b.document_number !== bill.document_number)); 
+        setRecentBillsList((prev) => prev.filter((b) => b.document_number !== bill.document_number));
+ 
         
         // --- FIXED RECYCLING LOGIC ---
         const sameModeBills = recentBillsList.filter(b => b.mode === bill.mode && b.branch_id === bill.branch_id);
@@ -2017,6 +2041,66 @@ const checkIsBlank = () => {
         savedCredit: savedCreditVal 
     };
   }, [publicBill, publicSettings]);
+
+  // ... your other code above (like publicComputed) ...
+
+  const handleAddGroupToInventory = async (groupName, groupItems) => {
+      // 1. Calculate totals from the barcode group
+      const addedQty = groupItems.length;
+      const totalWeightGrams = groupItems.reduce((sum, item) => sum + num(item.weight), 0);
+
+      if (totalWeightGrams <= 0 && addedQty <= 0) {
+          toast.error(`Cannot add ${groupName}. No valid weight or quantity found.`);
+          return;
+      }
+
+      // 2. Fetch current inventory and logs
+      let currentInv = [...(settings.inventory || [])];
+      let currentLogs = [...(settings.inventory_logs || [])];
+
+      // 3. Check if item already exists in the selected branch
+      const existingIndex = currentInv.findIndex(i => i.name.toLowerCase() === groupName.toLowerCase().trim() && i.branch_id === globalBranchId);
+
+      if (existingIndex !== -1) {
+          currentInv[existingIndex].weightInGrams += totalWeightGrams;
+          currentInv[existingIndex].quantity = (currentInv[existingIndex].quantity || 0) + addedQty;
+      } else {
+          currentInv.push({
+              id: Date.now().toString(),
+              name: groupName.trim(),
+              weightInGrams: totalWeightGrams,
+              quantity: addedQty,
+              branch_id: globalBranchId
+          });
+      }
+
+      // 4. Create a log entry for the history tab
+      const newLog = {
+          id: Date.now().toString(),
+          date: today(),
+          name: groupName.trim(),
+          weight: String(totalWeightGrams),
+          unit: "g",
+          quantity: addedQty,
+          branch_id: globalBranchId
+      };
+      
+      currentLogs.unshift(newLog);
+
+      // 5. Update state and push to the cloud
+      const newSettings = { ...settings, inventory: currentInv, inventory_logs: currentLogs };
+      setSettings(newSettings);
+
+      try {
+          await axios.put(`${API}/settings`, newSettings, { headers: authHeaders });
+          toast.success(`Success! Added ${addedQty} Pcs of ${groupName} (${totalWeightGrams}g) to Inventory.`);
+      } catch (error) {
+          toast.error("Failed to sync new stock to the cloud.");
+      }
+  };
+
+  
+  // ... rest of your getUpiAmount function ...
 
   const getUpiAmount = () => {
       if (txType === "sale") {
@@ -3375,6 +3459,14 @@ const checkIsBlank = () => {
           </div>
 
           <div style={{ padding: "15px" }}>
+        {/* --- RECYCLE BIN TOGGLE --- */}
+            <Button 
+                variant={showRecycleBin ? "default" : "outline"} 
+                style={{ width: "100%", marginBottom: "20px", backgroundColor: showRecycleBin ? "#ef4444" : "white", color: showRecycleBin ? "white" : "#ef4444", borderColor: "#ef4444" }}
+                onClick={() => setShowRecycleBin(!showRecycleBin)}
+            >
+                🗑️ {showRecycleBin ? "Back to Active Bills" : "View Recycle Bin (Deleted Bills)"}
+            </Button>
             <div style={{ marginBottom: "20px" }}>
               <Button onClick={handleBulkDownload} disabled={isBulkDownloading || (filteredRecentBills || []).length === 0} style={{ width: "100%", backgroundColor: "#0f172a", height: "auto", padding: "10px", display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", justifyContent: "center", fontSize: "1rem", boxSizing: "border-box" }}>
                 {isBulkDownloading ? "Generating PDF... Please Wait" : <><Download size={18} /> Download {(filteredRecentBills || []).length} Bills as PDF</>}
@@ -3403,7 +3495,24 @@ const checkIsBlank = () => {
               )}
             </div>
 
-            {loadingRecent ? (<p style={{ textAlign: "center", padding: "20px" }}>Loading recent bills...</p>) : (
+            {showRecycleBin ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <h4 style={{ color: "#991b1b", marginTop: 0, marginBottom: "5px" }}>Recycle Bin</h4>
+                <p style={{ fontSize: "0.85rem", color: "#64748b", marginTop: 0 }}>These bills were safely removed from your analytics and live dashboard.</p>
+                {(settings.deleted_bills || []).length === 0 ? (<p style={{ textAlign: "center", color: "#64748b", padding: "20px" }}>Recycle bin is empty.</p>) : (
+                  (settings.deleted_bills || []).map((bill, index) => (
+                    <div key={index} className="recent-bill-card" style={{ padding: "15px", border: "1px dashed #fca5a5", borderRadius: "8px", backgroundColor: "#fef2f2" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                        <strong style={{ fontSize: "1.1rem", color: "#991b1b", textDecoration: "line-through" }}>{bill.document_number}</strong>
+                        <span style={{ fontSize: "0.85rem", color: "#ef4444", fontWeight: "bold" }}>Deleted: {bill.deleted_at}</span>
+                      </div>
+                      <p style={{ margin: "0 0 5px 0", fontWeight: "bold" }}>{bill.customer_name || bill.customer?.name || "Unknown Customer"}</p>
+                      <p style={{ margin: "0", fontSize: "0.9rem", color: "#b91c1c" }}>Total: ₹{money(bill.totals?.grand_total || 0)}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+            ) : loadingRecent ? (<p style={{ textAlign: "center", padding: "20px" }}>Loading recent bills...</p>) : (
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 {(filteredRecentBills || []).length === 0 ? (<p style={{ textAlign: "center", color: "#64748b", padding: "20px" }}>No bills found matching criteria.</p>) : (
                   (filteredRecentBills || []).map((bill) => (
@@ -4035,12 +4144,25 @@ const checkIsBlank = () => {
                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "2px dashed #e2e8f0", paddingBottom: "10px", marginBottom: "10px", flexWrap: "wrap", gap: "10px" }}>
                             <strong style={{ fontSize: "1.1rem" }}>📦 {groupName}</strong>
                             <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
-                               <label style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "0.9rem", cursor: "pointer", color: "#475569", fontWeight: "bold" }}>
-                                 <input type="checkbox" checked={printWithPrice} onChange={(e) => setPrintWithPrice(e.target.checked)} style={{ width: "16px", height: "16px" }} />
-                                 Print with Price
-                               </label>
-                               <Button size="sm" style={{ backgroundColor: "#0f172a" }} onClick={() => { setActivePrintGroup(groupName); setPrintType("barcode"); setTimeout(() => window.print(), 300); }}>Print {items.length} Barcodes</Button>
-                            </div>
+                             <label style={{ display: "flex", alignItems: "center", gap: "5px", fontSize: "0.9rem", cursor: "pointer", color: "#475569", fontWeight: "bold" }}>
+                              <input type="checkbox" checked={printWithPrice} onChange={(e) => setPrintWithPrice(e.target.checked)} style={{ width: "16px", height: "16px" }} />
+                               Print with Price
+                              </label>
+                               <Button 
+                                 size="sm" 
+                                  style={{ backgroundColor: "#16a34a", color: "white" }} 
+                                   onClick={() => handleAddGroupToInventory(groupName, items)}
+                                   >
+                                    📦 Add {items.length} Pcs to Stock
+                                      </Button>
+                                        <Button 
+                                        size="sm" 
+                                     style={{ backgroundColor: "#0f172a" }} 
+                                   onClick={() => { setActivePrintGroup(groupName); setPrintType("barcode"); setTimeout(() => window.print(), 300); }}
+                                 >
+                               Print {items.length} Barcodes
+                            </Button>
+                          </div>
                           </div>
                           <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
                             {items.map((it, idx) => <span key={idx} style={{ backgroundColor: "#f1f5f9", padding: "4px 8px", borderRadius: "4px", fontSize: "0.85rem" }}>{it.weight ? `${it.weight}g` : "Fixed"}</span>)}
