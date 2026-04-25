@@ -1307,7 +1307,7 @@ const checkIsBlank = () => {
     await clearBill(mode, billBranchId);
   };
 
-  const loadBillForEditing = (bill) => {
+ const loadBillForEditing = (bill) => {
     setCurrentBillId(bill.id); 
     setEditingDocNumber(bill.document_number); 
     setMode(bill.mode); 
@@ -1390,10 +1390,8 @@ const checkIsBlank = () => {
 
         if (currentBillId === bill.id) { 
             await clearBill(mode, billBranchId); 
-            // If we deleted the currently open bill, apply the recycled number to the screen
             if (recycledNum) setDocumentNumber(recycledNum);
         } else if (recycledNum) {
-            // Save the recycled number to the cloud for the next blank bill
             const recycleKey = `recycled_${bill.mode}_${bill.branch_id}`;
             newSettings = { ...newSettings, [recycleKey]: recycledNum };
         }
@@ -1408,7 +1406,6 @@ const checkIsBlank = () => {
         toast.error("Failed to delete the bill."); 
     }
   };
-
  
     // ... [rest of the code continues normally]
   const handleQuickPaymentToggle = async (bill) => {
