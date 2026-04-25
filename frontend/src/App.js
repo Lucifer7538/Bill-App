@@ -3508,19 +3508,16 @@ const checkIsBlank = () => {
                       <p style={{ margin: "0 0 5px 0", fontWeight: "bold" }}>{bill.customer_name || bill.customer?.name || "Unknown Customer"}</p>
                       <p style={{ margin: "0 0 10px 0", fontSize: "0.9rem", color: "#b91c1c" }}>Total: ₹{money(bill.totals?.grand_total || 0)}</p>
                       
-                      {/* --- NEW: EDIT, RESTORE & PERMANENT DELETE BUTTONS --- */}
                       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
                         <Button 
                             size="sm" 
                             style={{ flex: "1 1 100%", backgroundColor: "#0f172a", color: "white", marginBottom: "4px" }}
                             onClick={() => {
-                                // 1. Quietly remove it from the Recycle Bin
                                 const newDeleted = settings.deleted_bills.filter(b => b.document_number !== bill.document_number);
                                 const newSettings = { ...settings, deleted_bills: newDeleted };
                                 setSettings(newSettings);
                                 axios.put(`${API}/settings`, newSettings, { headers: authHeaders });
 
-                                // 2. Push it to the main editor screen
                                 loadBillForEditing(bill);
                                 toast.info(`Editing ${bill.document_number} from Recycle Bin. Click 'Update' to save it back to active bills.`);
                             }}
