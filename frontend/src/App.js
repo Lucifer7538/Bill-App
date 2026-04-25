@@ -2414,17 +2414,18 @@ const checkIsBlank = () => {
             
             <FooterLinksAndQRs branch={pbBranch} allBranches={publicSettings?.branches} mode={publicBill.mode} settings={publicSettings} />
           </div>
-         {/* --- MINIMALIST SIGNATURE FOOTER START (PUBLIC) --- */}
-          <footer className="sheet-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "30px", paddingTop: "20px", backgroundColor: "white", color: "black", breakInside: "avoid" }}>
+       
+          {/* --- CLEAN SIGNATURE FOOTER START (PUBLIC) --- */}
+          <footer className="sheet-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "30px", paddingTop: "20px", paddingBottom: "10px", backgroundColor: "transparent", color: "black", breakInside: "avoid" }}>
             <div style={{ textAlign: "left", paddingLeft: "10px" }}>
-              <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: "bold", color: "#0f172a" }}>Thanking you.</h3>
+              <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: "bold", color: "#000", fontFamily: "sans-serif" }}>Thanking you.</h3>
             </div>
             <div style={{ width: "250px", textAlign: "center" }}>
-              <p style={{ margin: "0 0 45px 0", fontWeight: "bold", fontSize: "1rem", color: "#0f172a" }}>For {publicSettings?.shop_name || "JALARAM JEWELLERS"}</p>
-              <p style={{ margin: 0, fontSize: "0.9rem", fontWeight: "bold", color: "#334155" }}>Authorised Signature</p>
+              <p style={{ margin: "0 0 50px 0", fontWeight: "bold", fontSize: "1rem", color: "#000", fontFamily: "sans-serif" }}>For {publicSettings?.shop_name || "JALARAM JEWELLERS"}</p>
+              <p style={{ margin: 0, fontSize: "0.9rem", fontWeight: "bold", color: "#000", fontFamily: "sans-serif" }}>Authorised Signature</p>
             </div>
           </footer>
-          {/* --- MINIMALIST SIGNATURE FOOTER END (PUBLIC) --- */}
+          {/* --- CLEAN SIGNATURE FOOTER END (PUBLIC) --- */}
         </section>
       </div>
     );
@@ -2740,17 +2741,18 @@ const checkIsBlank = () => {
                   </div>
                   <FooterLinksAndQRs branch={billBranch} allBranches={settings.branches} mode={b.mode} settings={settings} />
                 </div>
-                {/* --- MINIMALIST SIGNATURE FOOTER START --- */}
-            <footer className="sheet-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "30px", paddingTop: "20px", backgroundColor: "white", color: "black", breakInside: "avoid" }}>
-              <div style={{ textAlign: "left", paddingLeft: "10px" }}>
-                <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: "bold", color: "#0f172a" }}>Thanking you.</h3>
-              </div>
-              <div style={{ width: "250px", textAlign: "center" }}>
-                <p style={{ margin: "0 0 45px 0", fontWeight: "bold", fontSize: "1rem", color: "#0f172a" }}>For {settings?.shop_name || "JALARAM JEWELLERS"}</p>
-                <p style={{ margin: 0, fontSize: "0.9rem", fontWeight: "bold", color: "#334155" }}>Authorised Signature</p>
-              </div>
-            </footer>
-            {/* --- MINIMALIST SIGNATURE FOOTER END --- */}
+            
+                {/* --- CLEAN SIGNATURE FOOTER START (BULK) --- */}
+                <footer className="sheet-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "30px", paddingTop: "20px", paddingBottom: "10px", backgroundColor: "transparent", color: "black", breakInside: "avoid" }}>
+                  <div style={{ textAlign: "left", paddingLeft: "10px" }}>
+                    <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: "bold", color: "#000", fontFamily: "sans-serif" }}>Thanking you.</h3>
+                  </div>
+                  <div style={{ width: "250px", textAlign: "center" }}>
+                    <p style={{ margin: "0 0 50px 0", fontWeight: "bold", fontSize: "1rem", color: "#000", fontFamily: "sans-serif" }}>For {settings?.shop_name || "JALARAM JEWELLERS"}</p>
+                    <p style={{ margin: 0, fontSize: "0.9rem", fontWeight: "bold", color: "#000", fontFamily: "sans-serif" }}>Authorised Signature</p>
+                  </div>
+                </footer>
+                {/* --- CLEAN SIGNATURE FOOTER END (BULK) --- */}
              </section>
            );
         })}
@@ -3026,31 +3028,18 @@ const checkIsBlank = () => {
               
               <FooterLinksAndQRs branch={activeBillBranch} allBranches={settings.branches} mode={mode} settings={settings} />
 
-            </div>
-            {/* --- CUSTOM SIGNATURE FOOTER START --- */}
-<footer className="sheet-footer" style={{ position: "relative", marginTop: "40px", minHeight: "140px", display: "flex", overflow: "hidden", WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}>
-  
-  {/* Left Orange Banner */}
-  <div style={{ flex: 1, backgroundColor: "#f29221", display: "flex", alignItems: "flex-end", padding: "15px 30px", position: "relative", zIndex: 1, WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}>
-    <h3 style={{ margin: 0, fontFamily: "'Brush Script MT', cursive, sans-serif", fontSize: "2.5rem", color: "white", textShadow: "1px 1px 2px rgba(0,0,0,0.2)" }}>Thanking you</h3>
-  </div>
-
-  {/* Angled Green and Black Stripes */}
-  <div style={{ position: "absolute", bottom: 0, right: "320px", width: "80px", height: "200px", backgroundColor: "#1e8f52", transform: "skewX(-35deg)", transformOrigin: "bottom", zIndex: 2, WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}></div>
-  <div style={{ position: "absolute", bottom: 0, right: "290px", width: "50px", height: "200px", backgroundColor: "#000000", transform: "skewX(-35deg)", transformOrigin: "bottom", zIndex: 3, WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}></div>
-
-  {/* Right Side Signature Box */}
-  <div style={{ width: "350px", backgroundColor: "white", position: "relative", zIndex: 4, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "15px 20px" }}>
-    <p style={{ margin: "0 0 20px 0", fontWeight: "900", fontSize: "1.1rem", color: "#000", letterSpacing: "0.5px" }}>For {settings?.shop_name || "JALARAM JEWELLERS"}</p>
-    
-    {/* This is the empty space where the red box was in your sketch */}
-    <div style={{ width: "200px", height: "40px" }}></div>
-    
-    <p style={{ margin: 0, fontWeight: "bold", fontFamily: "'Times New Roman', Times, serif", fontSize: "1rem", color: "#000" }}>Authorised Signature</p>
-  </div>
-
-</footer>
-{/* --- CUSTOM SIGNATURE FOOTER END --- */}
+           </div>
+              {/* --- CLEAN SIGNATURE FOOTER START (MAIN) --- */}
+              <footer className="sheet-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "30px", paddingTop: "20px", paddingBottom: "10px", backgroundColor: "transparent", color: "black", breakInside: "avoid" }}>
+                <div style={{ textAlign: "left", paddingLeft: "10px" }}>
+                  <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: "bold", color: "#000", fontFamily: "sans-serif" }}>Thanking you.</h3>
+                </div>
+                <div style={{ width: "250px", textAlign: "center" }}>
+                  <p style={{ margin: "0 0 50px 0", fontWeight: "bold", fontSize: "1rem", color: "#000", fontFamily: "sans-serif" }}>For {settings?.shop_name || "JALARAM JEWELLERS"}</p>
+                  <p style={{ margin: 0, fontSize: "0.9rem", fontWeight: "bold", color: "#000", fontFamily: "sans-serif" }}>Authorised Signature</p>
+                </div>
+              </footer>
+              {/* --- CLEAN SIGNATURE FOOTER END (MAIN) --- */}
           </div>
         </section>
 
