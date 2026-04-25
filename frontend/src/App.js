@@ -3494,7 +3494,7 @@ const checkIsBlank = () => {
               )}
             </div>
 
-            {showRecycleBin ? (
+           {showRecycleBin ? (
               <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                 <h4 style={{ color: "#991b1b", marginTop: 0, marginBottom: "5px" }}>Recycle Bin</h4>
                 <p style={{ fontSize: "0.85rem", color: "#64748b", marginTop: 0 }}>These bills were safely removed from your analytics and live dashboard.</p>
@@ -3506,7 +3506,74 @@ const checkIsBlank = () => {
                         <span style={{ fontSize: "0.85rem", color: "#ef4444", fontWeight: "bold" }}>Deleted: {bill.deleted_at}</span>
                       </div>
                       <p style={{ margin: "0 0 5px 0", fontWeight: "bold" }}>{bill.customer_name || bill.customer?.name || "Unknown Customer"}</p>
-                      <p style={{ margin: "0", fontSize: "0.9rem", color: "#b91c1c" }}>Total: ₹{money(bill.totals?.grand_total || 0)}</p>
+                      <p style={{ margin: "0 0 10px 0", fontSize: "0.9rem", color: "#b91c1c" }}>Total: ₹{money(bill.totals?.grand_total || 0)}</p>
+                      
+                      {/* --- NEW: EDIT, RESTORE & PERMANENT DELETE BUTTONS --- */}
+                      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                        <Button 
+                            size="sm" 
+                            style={{ flex: "1 1 100%", backgroundColor: "#0f172a", color: "white", marginBottom: "4px" }}
+                            onClick={() => {
+                                // 1. Quietly remove it from the Recycle Bin
+                                const newDeleted = settings.deleted_bills.filter(b => b.document_number !== bill.document_number);
+                                const newSettings = { ...settings, deleted_bills: newDeleted };
+                                setSettings(newSettings);
+                                axios.put(`${API}/settings`, newSettings, { headers: authHeaders });
+
+                                // 2. Push it to the main editor screen
+                                loadBillForEditing(bill);
+                                toast.info(`Editing ${bill.document_number} from Recycle Bin. Click 'Update' to save it back to active bills.`);
+                            }}
+                        >
+                            ✏️ Edit & Restore to Dashboard
+                        </Button>
+                        <div style={{ display: "flex", gap: "8px", width: "100%" }}>
+                            <Button 
+                                size="sm" 
+                                style={{ flex: 1, backgroundColor: "#16a34a", color: "white" }}
+                                onClick={async () => {
+                                    if(!window.confirm(`Restore ${bill.document_number} back to active bills without editing?`)) return;
+                                    try {
+                                        const newDeleted = settings.deleted_bills.filter(b => b.document_number !== bill.document_number);
+                                        const restoredBill = { ...bill };
+                                        delete restoredBill.deleted_at;
+
+                                        await axios.post(`${API}/bills/save`, restoredBill, { headers: authHeaders });
+                                        
+                                        const newSettings = { ...settings, deleted_bills: newDeleted };
+                                        setSettings(newSettings);
+                                        await axios.put(`${API}/settings`, newSettings, { headers: authHeaders });
+
+                                        setRecentBillsList([restoredBill, ...recentBillsList]);
+                                        toast.success(`${bill.document_number} restored successfully!`);
+                                    } catch (e) {
+                                        toast.error("Failed to restore bill.");
+                                    }
+                                }}
+                            >
+                                ♻️ Quick Restore
+                            </Button>
+                            <Button 
+                                size="sm" 
+                                variant="outline"
+                                style={{ flex: 1, borderColor: "#7f1d1d", color: "#7f1d1d" }}
+                                onClick={async () => {
+                                    if(window.prompt(`Type DELETE to permanently erase ${bill.document_number}`) !== "DELETE") return;
+                                    try {
+                                        const newDeleted = settings.deleted_bills.filter(b => b.document_number !== bill.document_number);
+                                        const newSettings = { ...settings, deleted_bills: newDeleted };
+                                        setSettings(newSettings);
+                                        await axios.put(`${API}/settings`, newSettings, { headers: authHeaders });
+                                        toast.success(`${bill.document_number} permanently deleted.`);
+                                    } catch (e) {
+                                        toast.error("Failed to delete permanently.");
+                                    }
+                                }}
+                            >
+                                ❌ Hard Delete
+                            </Button>
+                        </div>
+                      </div>
                     </div>
                   ))
                 )}
