@@ -419,7 +419,7 @@ export default function App() {
   const [isNumberLoading, setIsNumberLoading] = useState(false);
   const [billDate, setBillDate] = useState(today());
 
-  const [customer, setCustomer] = useState({ name: "", phone: "", address: "", email: "", points: 0, credit: 0 });
+  const [customer, setCustomer] = useState({ name: "", phone: "", address: "", email: "", gstin: "", points: 0, credit: 0 });
   const [bonusPoints, setBonusPoints] = useState("");
   const [suggestions, setSuggestions] = useState([]);
   const [items, setItems] = useState([createItem()]);
@@ -2321,10 +2321,11 @@ const checkIsBlank = () => {
           </div>
 
           <div className="customer-box">
-            <p><strong>Name:</strong> {publicBill.customer_name || publicBill.customer?.name || "-"}</p>
-            <p><strong>Address:</strong> {publicBill.customer_address || publicBill.customer?.address || "-"}</p>
-            <p><strong>Phone:</strong> {publicBill.customer_phone || publicBill.customer?.phone || "-"}</p>
-          </div>
+              <p><strong>Name:</strong> {customer.name || "-"}</p>
+              <p><strong>Address:</strong> {customer.address || "-"}</p>
+              <p><strong>Phone:</strong> {customer.phone || "-"}</p>
+              <p><strong>GSTIN:</strong> {customer.gstin || "N/A"}</p>
+            </div>
 
           <BillTable mode={publicBill.mode} items={publicComputed.items} />
 
@@ -2413,7 +2414,19 @@ const checkIsBlank = () => {
             
             <FooterLinksAndQRs branch={pbBranch} allBranches={publicSettings?.branches} mode={publicBill.mode} settings={publicSettings} />
           </div>
-          <footer className="sheet-footer"><p>Authorised Signature</p><p>Thanking you.</p></footer>
+          <footer className="sheet-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "30px", paddingTop: "20px" }}>
+              {/* Left Side: Signature Box with Shop Name on Top */}
+              <div style={{ textAlign: "center", width: "220px" }}>
+                <p style={{ margin: "0 0 5px 0", fontWeight: "900", fontSize: "1rem", color: "#000" }}>For {settings?.shop_name || "JALARAM JEWELLERS"}</p>
+                <div style={{ height: "65px", border: "1px solid #cbd5e1", borderRadius: "4px", backgroundColor: "#f8fafc", marginBottom: "5px" }}></div>
+                <p style={{ margin: 0, fontWeight: "bold", color: "#334155" }}>Authorised Signature</p>
+              </div>
+
+              {/* Right Side: Thanking You */}
+              <div style={{ textAlign: "right", paddingRight: "20px" }}>
+                <h3 style={{ margin: 0, fontFamily: "'Brush Script MT', cursive", fontSize: "2.2rem", color: "#f97316" }}>Thanking you</h3>
+              </div>
+            </footer>
         </section>
       </div>
     );
@@ -2644,12 +2657,12 @@ const checkIsBlank = () => {
                   <p><strong>Date:</strong> {b.date}</p>
                 </div>
 
-                <div className="customer-box">
-                  <p><strong>Name:</strong> {b.customer_name || b.customer?.name || "-"}</p>
-                  <p><strong>Address:</strong> {b.customer_address || b.customer?.address || "-"}</p>
-                  <p><strong>Phone:</strong> {b.customer_phone || b.customer?.phone || "-"}</p>
-                </div>
-
+               <div className="customer-box">
+              <p><strong>Name:</strong> {customer.name || "-"}</p>
+              <p><strong>Address:</strong> {customer.address || "-"}</p>
+              <p><strong>Phone:</strong> {customer.phone || "-"}</p>
+              <p><strong>GSTIN:</strong> {customer.gstin || "N/A"}</p>
+              </div>
                 <BillTable mode={b.mode} items={printedItems} />
 
                 <div className="sheet-bottom-stack">
@@ -2912,10 +2925,11 @@ const checkIsBlank = () => {
             </div>
 
             <div className="customer-box">
-              <p><strong>Name:</strong> {customer.name || "-"}</p>
-              <p><strong>Address:</strong> {customer.address || "-"}</p>
-              <p><strong>Phone:</strong> {customer.phone || "-"}</p>
-            </div>
+              <p><strong>Name:</strong> {customer.name || "-"}</p>
+              <p><strong>Address:</strong> {customer.address || "-"}</p>
+              <p><strong>Phone:</strong> {customer.phone || "-"}</p>
+              <p><strong>GSTIN:</strong> {customer.gstin || "N/A"}</p>
+            </div>
 
             <BillTable mode={mode} items={computed.items} />
 
@@ -3067,6 +3081,7 @@ const checkIsBlank = () => {
             <Input value={customer.phone} onChange={(e) => { setCustomer((prev) => ({ ...prev, phone: e.target.value })); markDirty(); }} placeholder="Phone" />
             <Input value={customer.address} onChange={(e) => { setCustomer((prev) => ({ ...prev, address: e.target.value })); markDirty(); }} placeholder="Address" />
             <Input value={customer.email} onChange={(e) => { setCustomer((prev) => ({ ...prev, email: e.target.value })); markDirty(); }} placeholder="Email" />
+            <Input value={customer.gstin || ""} onChange={(e) => { setCustomer((prev) => ({ ...prev, gstin: e.target.value })); markDirty(); }} placeholder="Customer GSTIN (Default: N/A)" />
             <Input type="text" value={billDate} onChange={(e) => { setBillDate(e.target.value); markDirty(); }} placeholder="DD-MM-YYYY" />
             <Input type="number" value={bonusPoints} onChange={(e) => { setBonusPoints(e.target.value); markDirty(); }} placeholder="🎁 Assign Bonus/Welcome Points (Optional)" style={{ marginTop: "5px", borderColor: "#22c55e", backgroundColor: "#f0fdf4" }} />
 
