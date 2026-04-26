@@ -913,7 +913,7 @@ export default function App() {
   // NOTE: billSearchQuery has been added to the dependency array below so it triggers instantly!
   }, [recentBillsList, recentModeFilter, recentDateFilter, customStartDate, customEndDate, billSearchQuery]);
 
-  const handleBulkDownload = async () => {
+ const handleBulkDownload = async () => {
     if ((filteredRecentBills || []).length === 0) { 
         toast.error("No bills to download!"); 
         return; 
@@ -950,7 +950,7 @@ export default function App() {
               clonedNode.style.minWidth = "800px"; 
               clonedNode.style.maxWidth = "800px"; 
               clonedNode.style.height = "max-content";
-              clonedNode.style.overflow = "visible"; // Prevents internal clipping
+              clonedNode.style.overflow = "visible"; 
               clonedNode.style.padding = "20px"; 
               clonedNode.style.boxSizing = "border-box";
               
@@ -970,10 +970,10 @@ export default function App() {
           }
         });
         
-        const imgData = canvas.toDataURL("image/png", 1.0);
+        // FIX: Use JPEG instead of PNG and set quality to 70% (0.7)
+        const imgData = canvas.toDataURL("image/jpeg", 0.7);
         const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
         
-        // FIX: Dynamically size each page based on the length of that specific bill
         const pageFormat = [pdfWidth, Math.max(297, pdfHeight)];
         
         if (!pdf) {
@@ -982,7 +982,8 @@ export default function App() {
           pdf.addPage(pageFormat);
         }
         
-        pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+        // FIX: Tell jsPDF to use JPEG format and apply "FAST" compression
+        pdf.addImage(imgData, "JPEG", 0, 0, pdfWidth, pdfHeight, undefined, "FAST");
       }
       
       if(pdf) pdf.save(`Jalaram_Bills_Export_${today()}.pdf`); 
@@ -1945,7 +1946,7 @@ const checkIsBlank = () => {
             clonedNode.style.margin = "0"; 
             clonedNode.style.padding = "20px"; 
             clonedNode.style.height = "max-content"; 
-            clonedNode.style.overflow = "visible"; // Prevents internal clipping
+            clonedNode.style.overflow = "visible"; 
             clonedNode.style.boxSizing = "border-box"; 
             
             const noPrint = clonedNode.querySelectorAll('.no-print'); 
@@ -1964,14 +1965,16 @@ const checkIsBlank = () => {
         } 
       }); 
       
-      const imageData = canvas.toDataURL("image/png", 1.0); 
-      const pdfWidth = 210; // Standard width in mm
+      // FIX: Use JPEG instead of PNG and set quality to 70% (0.7) for massive size reduction
+      const imageData = canvas.toDataURL("image/jpeg", 0.7); 
+      
+      const pdfWidth = 210; 
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width; 
       
-      // FIX: Dynamically set the PDF format so it stretches to fit the receipt
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: [pdfWidth, Math.max(297, pdfHeight)] }); 
       
-      pdf.addImage(imageData, "PNG", 0, 0, pdfWidth, pdfHeight); 
+      // FIX: Tell jsPDF to use JPEG format and apply "FAST" compression
+      pdf.addImage(imageData, "JPEG", 0, 0, pdfWidth, pdfHeight, undefined, "FAST"); 
       pdf.save(`${filename}.pdf`); 
       toast.success("PDF Downloaded Successfully"); 
     } catch (error) { 
@@ -2427,17 +2430,31 @@ const checkIsBlank = () => {
             <FooterLinksAndQRs branch={pbBranch} allBranches={publicSettings?.branches} mode={publicBill.mode} settings={publicSettings} />
           </div>
        
-          {/* --- CLEAN SIGNATURE FOOTER START (PUBLIC) --- */}
-          <footer className="sheet-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "30px", paddingTop: "20px", paddingBottom: "10px", backgroundColor: "transparent", color: "black", breakInside: "avoid" }}>
-            <div style={{ textAlign: "left", paddingLeft: "10px" }}>
-              <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: "bold", color: "#000", fontFamily: "sans-serif" }}>Thanking you.</h3>
+         {/* --- PRO MOBILE SIGNATURE FOOTER START (PUBLIC) --- */}
+          <footer className="sheet-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "30px", paddingTop: "20px", borderTop: "1px solid #cbd5e1", backgroundColor: "transparent", color: "black", breakInside: "avoid", width: "100%" }}>
+            
+            {/* Left Side: Thanking You */}
+            <div style={{ flex: 1, textAlign: "left", paddingBottom: "5px" }}>
+              <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: "bold", color: "#0f172a", fontFamily: "sans-serif" }}>Thanking you.</h3>
             </div>
-            <div style={{ width: "250px", textAlign: "center" }}>
-              <p style={{ margin: "0 0 50px 0", fontWeight: "bold", fontSize: "1rem", color: "#000", fontFamily: "sans-serif" }}>For {publicSettings?.shop_name || "JALARAM JEWELLERS"}</p>
-              <p style={{ margin: 0, fontSize: "0.9rem", fontWeight: "bold", color: "#000", fontFamily: "sans-serif" }}>Authorised Signature</p>
+
+            {/* Right Side: Signature Area */}
+            <div style={{ flex: 1.5, textAlign: "right" }}>
+              <p style={{ margin: "0 0 45px 0", fontWeight: "bold", fontSize: "1rem", color: "#0f172a", fontFamily: "sans-serif" }}>
+                For {publicSettings?.shop_name || "JALARAM JEWELLERS"}
+              </p>
+              
+              {/* Professional Signature Line */}
+              <div style={{ display: "inline-block", textAlign: "right" }}>
+                 <div style={{ borderBottom: "1px solid #0f172a", width: "140px", marginLeft: "auto", marginBottom: "5px" }}></div>
+                 <p style={{ margin: 0, fontSize: "0.85rem", fontWeight: "bold", color: "#334155", fontFamily: "sans-serif" }}>
+                   Authorised Signature
+                 </p>
+              </div>
             </div>
+
           </footer>
-          {/* --- CLEAN SIGNATURE FOOTER END (PUBLIC) --- */}
+          {/* --- PRO MOBILE SIGNATURE FOOTER END (PUBLIC) --- */}
         </section>
       </div>
     );
