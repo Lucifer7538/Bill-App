@@ -2454,7 +2454,7 @@ const checkIsBlank = () => {
             <FooterLinksAndQRs branch={pbBranch} allBranches={publicSettings?.branches} mode={publicBill.mode} settings={publicSettings} />
           </div>
        
-        {/* --- PRO MOBILE SIGNATURE FOOTER START (PUBLIC) --- */}
+       {/* --- PRO MOBILE SIGNATURE FOOTER START (PUBLIC) --- */}
           <footer className="sheet-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "30px", paddingTop: "20px", borderTop: "1px solid #cbd5e1", backgroundColor: "transparent", color: "black", breakInside: "avoid", width: "100%" }}>
             
             {/* Left Side: Thanking You */}
@@ -2803,7 +2803,7 @@ const checkIsBlank = () => {
                   <FooterLinksAndQRs branch={billBranch} allBranches={settings.branches} mode={b.mode} settings={settings} />
                 </div>
             
-               {/* --- CLEAN SIGNATURE FOOTER START (BULK) --- */}
+              {/* --- CLEAN SIGNATURE FOOTER START (BULK) --- */}
                 <footer className="sheet-footer" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "30px", paddingTop: "20px", paddingBottom: "10px", backgroundColor: "transparent", color: "black", breakInside: "avoid" }}>
                   <div style={{ textAlign: settings?.footer_thank_you_align || "left", paddingLeft: "10px", flex: 1 }}>
                     <h3 style={{ margin: 0, fontSize: `${settings?.footer_thank_you_size || 18}px`, fontWeight: "bold", color: settings?.footer_thank_you_color || "#000", fontFamily: settings?.footer_thank_you_font || "sans-serif" }}>
