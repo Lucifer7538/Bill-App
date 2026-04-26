@@ -988,3 +988,16 @@ body {
     print-color-adjust: exact;
   }
 }
+
+
+/* --- FIX: Stop browsers from adding lines under phone numbers in the PDF --- */
+a[x-apple-data-detectors],
+a[href^="tel"] {
+  color: inherit !important;
+  text-decoration: none !important;
+  font-size: inherit !important;
+  font-family: inherit !important;
+  font-weight: inherit !important;
+  line-height: inherit !important;
+  cursor: default !important;
+}
