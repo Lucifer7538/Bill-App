@@ -16,7 +16,6 @@ from fastapi.middleware.cors import CORSMiddleware
 import paho.mqtt.client as mqtt # --- NEW: MQTT LIBRARY ---
 import smtplib
 from email.mime.text import MIMEText
-import jwt
 import random
 
 OTP_STORE = {} # Temporary memory to store the forgot password codes
@@ -159,26 +158,15 @@ async def apply_ledger_diff(branch_id: str, diff_c: float, diff_eb: float, diff_
         "reason": reason, "cash_change": diff_c, "estimate_bank_change": diff_eb, "invoice_bank_change": diff_ib
     })
 
-JWT_SECRET = os.environ.get("JWT_SECRET", "jalaram-super-secret-key-change-this")
-JWT_ALGORITHM = "HS256"
-
 async def require_auth(authorization: str = Header(None)):
     if not authorization: raise HTTPException(401, "No Token")
     token = authorization.replace("Bearer ", "").strip()
     
-    try:
-        # Decode and verify the JWT (automatically checks expiration)
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        
-        # Security layer: Ensure token wasn't manually revoked
-        token_doc = await active_tokens_collection.find_one({"token": token})
-        if not token_doc: raise HTTPException(401, "Login Revoked")
-        
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(401, "Login Expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(401, "Invalid Token")
+    # Now the guard checks the database for the permanent token!
+    token_doc = await active_tokens_collection.find_one({"token": token})
+    if not token_doc: raise HTTPException(401, "Login Expired")
+    
+    return token
 
 @app.get("/")
 async def root(): return {"status": "online", "server": "Jalaram-Master-V12", "msg": "Backend is awake"}
@@ -246,15 +234,12 @@ async def verify_login_step_two(payload: dict):
     if str(stored_data["otp"]) != str(otp_attempt):
         raise HTTPException(401, "Invalid Verification Code.")
         
-    # Success! Create a secure JWT token with a 24-hour expiration
-    expiration = datetime.now(timezone.utc) + timedelta(hours=24)
-    t = jwt.encode({"admin": admin_email, "exp": expiration}, JWT_SECRET, algorithm=JWT_ALGORITHM)
-    
-    # Store in DB so we can revoke it later if needed (Logout All)
+    # Success! Create a permanent token in the database
+    t = str(uuid.uuid4())
     await active_tokens_collection.insert_one({"token": t, "created_at": now_iso()})
     
     del LOGIN_OTP_STORE[admin_email] # Burn the OTP
-    print("✅ DEBUG LOGIN - 2FA Success! User is securely logged in with JWT.")
+    print("✅ DEBUG LOGIN - 2FA Success! User is securely logged in permanently.")
     
     return {"access_token": t}
 
@@ -657,12 +642,7 @@ async def today(date: str, branch_id: str, _=Depends(require_auth)):
 
 @api_router.get("/customers/suggest")
 async def suggest(query: str = Query(...), _=Depends(require_auth)):
-    # Fix: Limit query length to 50 chars to prevent Regex Denial of Service (ReDoS)
-    clean_query = query.strip()[:50]
-    if len(clean_query) < 2:
-        return []
-        
-    regex = {"$regex": re.escape(clean_query), "$options": "i"}
+    regex = {"$regex": re.escape(query.strip()), "$options": "i"}
     return await customers_collection.find({"$or": [{"name": regex}, {"phone": regex}]}, {"_id": 0}).to_list(8)
 
 @api_router.get("/system/storage")
