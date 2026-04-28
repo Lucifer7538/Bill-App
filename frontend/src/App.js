@@ -1727,7 +1727,14 @@ const checkIsBlank = () => {
   const handleLogoUpload = async (event) => { 
       const file = event.target.files?.[0]; 
       if (!file) return; 
-      try { 
+      
+      // Fix: Prevent large files from crashing LocalStorage/Memory (Limit: 2MB)
+      if (file.size > 2 * 1024 * 1024) {
+          toast.error("File is too large! Please upload a logo smaller than 2MB.");
+          return;
+      }
+      
+      try {
           const dataUrl = await optimizeImageDataUrl(file); 
           localStorage.setItem("jj_logo_data_url", dataUrl); 
           setSettings((prev) => ({ ...prev, logo_data_url: dataUrl })); 
