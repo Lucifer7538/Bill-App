@@ -642,12 +642,7 @@ async def today(date: str, branch_id: str, _=Depends(require_auth)):
 
 @api_router.get("/customers/suggest")
 async def suggest(query: str = Query(...), _=Depends(require_auth)):
-    # Fix: Limit query length to 50 chars to prevent Regex Denial of Service (ReDoS)
-    clean_query = query.strip()[:50]
-    if len(clean_query) < 2:
-        return []
-        
-    regex = {"$regex": re.escape(clean_query), "$options": "i"}
+    regex = {"$regex": re.escape(query.strip()), "$options": "i"}
     return await customers_collection.find({"$or": [{"name": regex}, {"phone": regex}]}, {"_id": 0}).to_list(8)
 
 @api_router.get("/system/storage")
