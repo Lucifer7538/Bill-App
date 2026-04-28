@@ -721,7 +721,7 @@ export default function App() {
     if (!file) return;
     const fontName = file.name.split('.')[0];
     try {
-     const reader = new FileReader();
+      const reader = new FileReader();
       reader.onload = async (e) => {
         const dataUrl = e.target.result; 
         const newFont = { name: fontName, dataUrl };
@@ -730,18 +730,7 @@ export default function App() {
         localStorage.setItem("jj_custom_fonts", JSON.stringify(updatedFonts));
         registerFont(fontName, dataUrl); 
         toast.success(`Font "${fontName}" uploaded!`);
-        
-        // Fix: Clean up event listeners to free browser memory
-        reader.onload = null;
-        reader.onerror = null;
       };
-      
-      reader.onerror = () => {
-        toast.error("Error reading font file.");
-        reader.onload = null;
-        reader.onerror = null;
-      };
-      
       reader.readAsDataURL(file);
     } catch { 
         toast.error("Font upload failed."); 
@@ -1727,14 +1716,7 @@ const checkIsBlank = () => {
   const handleLogoUpload = async (event) => { 
       const file = event.target.files?.[0]; 
       if (!file) return; 
-      
-      // Fix: Prevent large files from crashing LocalStorage/Memory (Limit: 2MB)
-      if (file.size > 2 * 1024 * 1024) {
-          toast.error("File is too large! Please upload a logo smaller than 2MB.");
-          return;
-      }
-      
-      try {
+      try { 
           const dataUrl = await optimizeImageDataUrl(file); 
           localStorage.setItem("jj_logo_data_url", dataUrl); 
           setSettings((prev) => ({ ...prev, logo_data_url: dataUrl })); 
